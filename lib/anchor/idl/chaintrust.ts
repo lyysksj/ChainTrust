@@ -1,0 +1,899 @@
+/**
+ * Program IDL in camelCase format in order to be used in JS/TS.
+ *
+ * Note that this is only a type helper and is not the actual IDL. The original
+ * IDL can be found at `target/idl/chaintrust.json`.
+ */
+export type Chaintrust = {
+  "address": "HBxcCBx4ZPVnhGazehwZjF72J3neJsz5HyvGoPMTzUPt",
+  "metadata": {
+    "name": "chaintrust",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "ChainTrust on-chain company identity and reputation layer"
+  },
+  "instructions": [
+    {
+      "name": "addOfficialResponse",
+      "discriminator": [
+        172,
+        231,
+        96,
+        108,
+        195,
+        4,
+        178,
+        254
+      ],
+      "accounts": [
+        {
+          "name": "entry"
+        },
+        {
+          "name": "comment",
+          "writable": true
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "officialResponseUri",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "addWalletMapping",
+      "discriminator": [
+        110,
+        93,
+        50,
+        31,
+        236,
+        134,
+        105,
+        27
+      ],
+      "accounts": [
+        {
+          "name": "entry",
+          "writable": true
+        },
+        {
+          "name": "walletMapping",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  95,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "targetWallet"
+              },
+              {
+                "kind": "account",
+                "path": "entry"
+              }
+            ]
+          }
+        },
+        {
+          "name": "targetWallet"
+        },
+        {
+          "name": "userProfile",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "walletRole",
+          "type": "u8"
+        },
+        {
+          "name": "evidenceHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "evidenceUri",
+          "type": "string"
+        },
+        {
+          "name": "isOfficial",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "claimEntry",
+      "discriminator": [
+        255,
+        0,
+        113,
+        239,
+        102,
+        117,
+        114,
+        50
+      ],
+      "accounts": [
+        {
+          "name": "entry",
+          "writable": true
+        },
+        {
+          "name": "claimerProfile",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "createEntry",
+      "discriminator": [
+        248,
+        207,
+        142,
+        242,
+        66,
+        162,
+        150,
+        16
+      ],
+      "accounts": [
+        {
+          "name": "entry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "entryId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creatorProfile",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "primaryWallet",
+          "docs": [
+            "account must still be created separately to anchor it into the entry."
+          ]
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "entryId",
+          "type": {
+            "array": [
+              "u8",
+              8
+            ]
+          }
+        },
+        {
+          "name": "companyNameHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "projectNameHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "jurisdiction",
+          "type": "string"
+        },
+        {
+          "name": "domainHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "metadataUri",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "registerUser",
+      "discriminator": [
+        2,
+        241,
+        150,
+        223,
+        99,
+        214,
+        116,
+        97
+      ],
+      "accounts": [
+        {
+          "name": "userProfile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "username",
+          "type": "string"
+        },
+        {
+          "name": "displayName",
+          "type": "string"
+        },
+        {
+          "name": "metadataUri",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "submitComment",
+      "discriminator": [
+        112,
+        46,
+        212,
+        28,
+        214,
+        107,
+        241,
+        118
+      ],
+      "accounts": [
+        {
+          "name": "entry",
+          "writable": true
+        },
+        {
+          "name": "comment",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  109,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "entry"
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              },
+              {
+                "kind": "arg",
+                "path": "commentIndex"
+              }
+            ]
+          }
+        },
+        {
+          "name": "commenterProfile",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "commentIndex",
+          "type": "u32"
+        },
+        {
+          "name": "relationType",
+          "type": "u8"
+        },
+        {
+          "name": "contractScore",
+          "type": "u8"
+        },
+        {
+          "name": "teamScore",
+          "type": "u8"
+        },
+        {
+          "name": "productScore",
+          "type": "u8"
+        },
+        {
+          "name": "contentHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "evidenceHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "contentUri",
+          "type": "string"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "commentRecord",
+      "discriminator": [
+        152,
+        52,
+        102,
+        146,
+        208,
+        29,
+        42,
+        101
+      ]
+    },
+    {
+      "name": "companyEntry",
+      "discriminator": [
+        86,
+        82,
+        125,
+        42,
+        215,
+        225,
+        171,
+        247
+      ]
+    },
+    {
+      "name": "userProfile",
+      "discriminator": [
+        32,
+        37,
+        119,
+        205,
+        179,
+        180,
+        13,
+        194
+      ]
+    },
+    {
+      "name": "walletMapping",
+      "discriminator": [
+        113,
+        133,
+        85,
+        102,
+        21,
+        1,
+        246,
+        42
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "invalidUsername",
+      "msg": "Username is empty or exceeds max length"
+    },
+    {
+      "code": 6001,
+      "name": "invalidDisplayName",
+      "msg": "Display name is empty or exceeds max length"
+    },
+    {
+      "code": 6002,
+      "name": "invalidMetadataUri",
+      "msg": "Metadata URI exceeds max length"
+    },
+    {
+      "code": 6003,
+      "name": "invalidJurisdiction",
+      "msg": "Jurisdiction is empty or exceeds max length"
+    },
+    {
+      "code": 6004,
+      "name": "invalidContentUri",
+      "msg": "Content URI exceeds max length"
+    },
+    {
+      "code": 6005,
+      "name": "invalidEvidenceUri",
+      "msg": "Evidence URI exceeds max length"
+    },
+    {
+      "code": 6006,
+      "name": "invalidOfficialResponseUri",
+      "msg": "Official response URI exceeds max length"
+    },
+    {
+      "code": 6007,
+      "name": "invalidRelationType",
+      "msg": "Invalid relation type"
+    },
+    {
+      "code": 6008,
+      "name": "invalidScore",
+      "msg": "Score must be 0 or between 1 and 5"
+    },
+    {
+      "code": 6009,
+      "name": "invalidWalletRole",
+      "msg": "Invalid wallet role"
+    },
+    {
+      "code": 6010,
+      "name": "alreadyClaimed",
+      "msg": "Entry is already claimed"
+    },
+    {
+      "code": 6011,
+      "name": "notClaimed",
+      "msg": "Entry is not claimed yet"
+    },
+    {
+      "code": 6012,
+      "name": "notOfficial",
+      "msg": "Caller is not the official representative of this entry"
+    },
+    {
+      "code": 6013,
+      "name": "commentEntryMismatch",
+      "msg": "Comment does not belong to this entry"
+    },
+    {
+      "code": 6014,
+      "name": "commentCountOverflow",
+      "msg": "Comment count overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "commentRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "entry",
+            "type": "pubkey"
+          },
+          {
+            "name": "commenter",
+            "type": "pubkey"
+          },
+          {
+            "name": "commentIndex",
+            "type": "u32"
+          },
+          {
+            "name": "relationType",
+            "type": "u8"
+          },
+          {
+            "name": "contractScore",
+            "type": "u8"
+          },
+          {
+            "name": "teamScore",
+            "type": "u8"
+          },
+          {
+            "name": "productScore",
+            "type": "u8"
+          },
+          {
+            "name": "contentHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "evidenceHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "contentUri",
+            "type": "string"
+          },
+          {
+            "name": "officialResponseUri",
+            "type": "string"
+          },
+          {
+            "name": "submittedAt",
+            "type": "i64"
+          },
+          {
+            "name": "officialResponseAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "companyEntry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "entryId",
+            "type": {
+              "array": [
+                "u8",
+                8
+              ]
+            }
+          },
+          {
+            "name": "createdBy",
+            "type": "pubkey"
+          },
+          {
+            "name": "companyNameHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "projectNameHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "jurisdiction",
+            "type": "string"
+          },
+          {
+            "name": "domainHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "primaryWallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "isClaimed",
+            "type": "bool"
+          },
+          {
+            "name": "officialWallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "metadataUri",
+            "type": "string"
+          },
+          {
+            "name": "commentCount",
+            "type": "u32"
+          },
+          {
+            "name": "createdAt",
+            "type": "i64"
+          },
+          {
+            "name": "claimedAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "userProfile",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "username",
+            "type": "string"
+          },
+          {
+            "name": "displayName",
+            "type": "string"
+          },
+          {
+            "name": "metadataUri",
+            "type": "string"
+          },
+          {
+            "name": "registeredAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "walletMapping",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "targetWallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "entry",
+            "type": "pubkey"
+          },
+          {
+            "name": "walletRole",
+            "type": "u8"
+          },
+          {
+            "name": "evidenceHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "evidenceUri",
+            "type": "string"
+          },
+          {
+            "name": "addedBy",
+            "type": "pubkey"
+          },
+          {
+            "name": "isOfficial",
+            "type": "bool"
+          },
+          {
+            "name": "addedAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ],
+  "constants": [
+    {
+      "name": "commentSeed",
+      "type": "bytes",
+      "value": "[99, 111, 109, 109, 101, 110, 116]"
+    },
+    {
+      "name": "entrySeed",
+      "type": "bytes",
+      "value": "[101, 110, 116, 114, 121]"
+    },
+    {
+      "name": "userSeed",
+      "type": "bytes",
+      "value": "[117, 115, 101, 114]"
+    },
+    {
+      "name": "walletMapSeed",
+      "type": "bytes",
+      "value": "[119, 97, 108, 108, 101, 116, 95, 109, 97, 112]"
+    }
+  ]
+};

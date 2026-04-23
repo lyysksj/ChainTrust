@@ -1,0 +1,44 @@
+{
+  "name": "chaintrust",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "anchor:build": "cd anchor && anchor build",
+    "anchor:deploy:local": "cd anchor && anchor deploy --provider.cluster localnet",
+    "anchor:deploy:devnet": "cd anchor && anchor deploy --provider.cluster devnet",
+    "validator": "solana-test-validator --reset"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.30.1",
+    "@solana/wallet-adapter-base": "^0.9.23",
+    "@solana/wallet-adapter-react": "^0.15.35",
+    "@solana/wallet-adapter-react-ui": "^0.9.35",
+    "@solana/wallet-adapter-wallets": "^0.19.32",
+    "@solana/web3.js": "^1.95.8",
+    "bn.js": "^5.2.1",
+    "bs58": "^5.0.0",
+    "clsx": "^2.1.1",
+    "next": "14.2.15",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.4"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.6",
+    "@types/node": "^20.16.11",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "encoding": "^0.1.13",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "14.2.15",
+    "pino-pretty": "^11.2.2",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "typescript": "^5.6.3"
+  }
+}

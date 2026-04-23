@@ -1,0 +1,24 @@
+.codex
+.claude
+instruction.md
+ChainTrust_Product_Design.md
+ChainTrust_VibeCoding_Prompt.md
+
+node_modules/
+.next/
+out/
+.DS_Store
+*.log
+.env.local
+.env.*.local
+.env
+
+# Anchor
+anchor/target/
+anchor/.anchor/
+anchor/test-ledger/
+anchor/node_modules/
+test-ledger/
+
+# Mock storage
+data/mock-storage/

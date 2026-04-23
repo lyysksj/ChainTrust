@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(pnpm --version)",
+      "Bash(rustc --version)",
+      "Bash(cargo --version)",
+      "Bash(solana --version)",
+      "Bash(solana config *)",
+      "Read(//home/rock/.config/solana/**)",
+      "Bash(solana-keygen pubkey *)",
+      "Bash(anchor build *)",
+      "Bash(solana-install info *)",
+      "Bash(cargo-build-sbf --version)",
+      "Read(//home/rock/.local/share/solana/install/active_release/bin/sdk/sbf/**)",
+      "Bash(/home/rock/.cargo/bin/cargo generate-lockfile *)",
+      "Bash(/home/rock/.cargo/bin/cargo update *)",
+      "Bash(/home/rock/.cargo/bin/cargo tree *)",
+      "Read(//home/rock/.cache/solana/**)",
+      "Read(//home/rock/.cache/solana/v1.51/**)",
+      "Bash(~/.cache/solana/v1.51/platform-tools/rust/bin/cargo --version)",
+      "Bash(mkdir -p ~/.cache/solana/v1.54/platform-tools)",
+      "Bash(curl -sSL -o pt.tar.bz2 https://github.com/anza-xyz/platform-tools/releases/download/v1.54/platform-tools-linux-x86_64.tar.bz2)",
+      "Bash(tar -xjf pt.tar.bz2 -C platform-tools)",
+      "Bash(rm pt.tar.bz2)",
+      "Bash(platform-tools/rust/bin/cargo --version)"
+    ]
+  }
+}

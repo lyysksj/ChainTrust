@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Wallet adapter default styles */
+@import "@solana/wallet-adapter-react-ui/styles.css";
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: theme("colors.ink.50");
+  color: theme("colors.ink.800");
+  font-family: theme("fontFamily.sans");
+  -webkit-font-smoothing: antialiased;
+}
+
+.serif {
+  font-family: theme("fontFamily.serif");
+  letter-spacing: -0.01em;
+}
+
+.hairline {
+  border-top: 1px solid theme("colors.ink.200");
+}
+
+.mono {
+  font-family: theme("fontFamily.mono");
+  font-size: 0.8125rem;
+}
+
+.chip {
+  @apply inline-flex items-center gap-1 rounded-sm border border-ink-300 bg-white px-2 py-0.5 text-xs uppercase tracking-wider text-ink-600;
+}
+
+.chip-verified {
+  @apply border-verified text-verified;
+}
+
+.chip-claimed {
+  @apply border-claimed text-claimed;
+}
+
+.chip-unverified {
+  @apply border-ink-300 text-ink-500;
+}
+
+.chip-official {
+  @apply border-claimed bg-claimed/5 text-claimed;
+}
+
+.chip-community {
+  @apply border-ink-400 bg-ink-100 text-ink-600;
+}
+
+/* Override wallet adapter button to fit editorial aesthetic */
+.wallet-adapter-button-trigger {
+  background: theme("colors.ink.800") !important;
+  border-radius: 2px !important;
+  font-family: theme("fontFamily.sans") !important;
+  font-weight: 500 !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  padding: 0 14px !important;
+  font-size: 0.875rem !important;
+}
+.wallet-adapter-button-trigger:hover {
+  background: theme("colors.ink.700") !important;
+}
+
+/* Form controls */
+.input,
+.textarea,
+.select {
+  @apply w-full rounded-sm border border-ink-300 bg-white px-3 py-2 text-sm text-ink-800 placeholder-ink-400 outline-none transition focus:border-ink-600;
+}
+
+.textarea {
+  @apply min-h-[120px] resize-y;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center gap-1.5 rounded-sm bg-ink-800 px-4 py-2 text-sm font-medium text-white transition hover:bg-ink-700 disabled:cursor-not-allowed disabled:bg-ink-300;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center gap-1.5 rounded-sm border border-ink-300 bg-white px-4 py-2 text-sm font-medium text-ink-800 transition hover:border-ink-600 disabled:cursor-not-allowed disabled:text-ink-400;
+}
+
+.btn-outline {
+  @apply inline-flex items-center justify-center gap-1.5 rounded-sm border border-ink-800 px-4 py-2 text-sm font-medium text-ink-800 transition hover:bg-ink-800 hover:text-white;
+}
+
+.label {
+  @apply block text-xs font-medium uppercase tracking-wider text-ink-500;
+}
+
+.hint {
+  @apply text-xs text-ink-500;
+}
+
+.error {
+  @apply text-xs text-red-700;
+}
