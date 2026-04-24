@@ -99,6 +99,18 @@ export async function fetchCommentsByCommenter(
   ]);
 }
 
+export async function fetchAllEntries(program: Program<Chaintrust>) {
+  return program.account.companyEntry.all();
+}
+
+export async function fetchAllComments(program: Program<Chaintrust>) {
+  return program.account.commentRecord.all();
+}
+
+export async function fetchAllUsers(program: Program<Chaintrust>) {
+  return program.account.userProfile.all();
+}
+
 // --- write helpers ---
 
 export async function registerUser(
