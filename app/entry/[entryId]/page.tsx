@@ -18,6 +18,7 @@ import { CommentForm } from "@/components/comment-form";
 import { ClaimCard } from "@/components/claim-card";
 import { AttestationsCard } from "@/components/attestations-card";
 import { formatTimestamp, shortHash, shortKey } from "@/lib/utils/format";
+import { COUNTRIES } from "@/types";
 import type { CompanyEntry, EntryMetadata, CommentRecord, WalletMapping } from "@/types";
 
 type Params = { entryId: string };
@@ -119,7 +120,12 @@ export default function EntryPage({ params }: { params: Params }) {
     entry.isClaimed &&
     publicKey != null &&
     publicKey.toBase58() === entry.officialWallet.toBase58();
-  const domain = metadata?.domain ?? "";
+  const domain = metadata?.websites?.[0] ?? "";
+  const jurisdictionLabel =
+    COUNTRIES.find((c) => c.code === entry.jurisdiction)?.label ??
+    entry.jurisdiction;
+  const hasPrimaryWallet =
+    entry.primaryWallet.toBase58() !== PublicKey.default.toBase58();
 
   return (
     <div className="space-y-10">
@@ -132,12 +138,13 @@ export default function EntryPage({ params }: { params: Params }) {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="serif text-4xl font-semibold text-ink-800">
-              {metadata?.companyName ?? "(metadata pending)"}
+              {metadata?.projectName ?? metadata?.legalName ?? "(metadata pending)"}
             </h1>
-            {metadata?.projectName &&
-              metadata.projectName !== metadata.companyName && (
+            {metadata?.legalName &&
+              metadata.legalName !== metadata.projectName && (
                 <p className="mt-1 text-ink-600">
-                  Project: <span className="font-medium">{metadata.projectName}</span>
+                  Legal entity:{" "}
+                  <span className="font-medium">{metadata.legalName}</span>
                 </p>
               )}
           </div>
@@ -147,23 +154,48 @@ export default function EntryPage({ params }: { params: Params }) {
         </div>
 
         <dl className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
-          <Field label="Jurisdiction" value={entry.jurisdiction} />
-          <Field label="Primary domain" value={metadata?.domain || "—"} />
+          <Field label="Country" value={jurisdictionLabel} />
+          <Field
+            label="Websites"
+            value={
+              metadata?.websites?.length ? (
+                <div className="space-y-0.5">
+                  {metadata.websites.map((w) => (
+                    <div key={w}>
+                      <a
+                        href={w}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="break-all text-accent hover:underline"
+                      >
+                        {w}
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                "—"
+              )
+            }
+          />
           <Field
             label="Primary wallet"
-            value={<span className="mono">{shortKey(entry.primaryWallet)}</span>}
+            value={
+              hasPrimaryWallet ? (
+                <span className="mono">{shortKey(entry.primaryWallet)}</span>
+              ) : (
+                <span className="text-ink-400">Not set</span>
+              )
+            }
           />
-          <Field
-            label="Created"
-            value={formatTimestamp(entry.createdAt)}
-          />
+          <Field label="Created" value={formatTimestamp(entry.createdAt)} />
           <Field
             label="Created by"
             value={<span className="mono">{shortKey(entry.createdBy)}</span>}
           />
           <Field
-            label="Domain hash"
-            value={<span className="mono">{shortHash(entry.domainHash)}</span>}
+            label="EIN hash"
+            value={<span className="mono">{shortHash(entry.einHash)}</span>}
           />
         </dl>
 

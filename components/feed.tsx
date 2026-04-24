@@ -28,6 +28,7 @@ type FeedItem = {
   entryName: string | null;
   commenterName: string | null;
   body: CommentBody | null;
+  replyCount: number;
 };
 
 export function Feed() {
@@ -71,6 +72,16 @@ export function Feed() {
           userByWallet.set(acc.wallet.toBase58(), acc);
         }
 
+        // Count replies per parent_comment
+        const replyCounts = new Map<string, number>();
+        for (const c of rawComments) {
+          const acc = c.account as unknown as CommentRecord;
+          if (acc.parentComment) {
+            const key = acc.parentComment.toBase58();
+            replyCounts.set(key, (replyCounts.get(key) ?? 0) + 1);
+          }
+        }
+
         const metaByUri = new Map<string, EntryMetadata | null>();
         async function loadMeta(uri: string): Promise<EntryMetadata | null> {
           if (!uri) return null;
@@ -104,18 +115,20 @@ export function Feed() {
             try {
               return JSON.parse(text) as CommentBody;
             } catch {
-              return { headline: "(content)", body: text } as CommentBody;
+              return { body: text } as CommentBody;
             }
           } catch {
             return null;
           }
         }
 
-        const sorted = rawComments
+        // Feed shows top-level reviews only
+        const topLevel = rawComments
           .map((c) => ({
             publicKey: c.publicKey,
             account: c.account as unknown as CommentRecord,
           }))
+          .filter((c) => !c.account.parentComment)
           .sort(
             (a, b) =>
               Number(b.account.submittedAt) - Number(a.account.submittedAt),
@@ -123,7 +136,7 @@ export function Feed() {
           .slice(0, MAX_ITEMS);
 
         const hydrated = await Promise.all(
-          sorted.map(async (c) => {
+          topLevel.map(async (c) => {
             const entryInfo = entryByPda.get(c.account.entry.toBase58());
             const [meta, body] = await Promise.all([
               entryInfo ? loadMeta(entryInfo.metaUri) : Promise.resolve(null),
@@ -135,12 +148,13 @@ export function Feed() {
               comment: c.account,
               entryIdHex: entryInfo?.idHex ?? "",
               entryName:
-                meta?.companyName ?? meta?.projectName ?? null,
+                meta?.projectName ?? meta?.legalName ?? null,
               commenterName:
                 commenter?.displayName ||
                 commenter?.username ||
                 null,
               body,
+              replyCount: replyCounts.get(c.publicKey.toBase58()) ?? 0,
             } as FeedItem;
           }),
         );
@@ -202,17 +216,18 @@ export function Feed() {
 }
 
 function FeedCard({ item }: { item: FeedItem }) {
-  const { comment, entryIdHex, entryName, commenterName, body } = item;
-  const avg = useMemo(() => {
-    const scores = [
-      comment.contractScore,
-      comment.teamScore,
-      comment.productScore,
-    ].filter((s) => s > 0);
-    if (!scores.length) return null;
-    const sum = scores.reduce((a, b) => a + b, 0);
-    return (sum / scores.length).toFixed(1);
-  }, [comment]);
+  const {
+    comment,
+    entryIdHex,
+    entryName,
+    commenterName,
+    body,
+    replyCount,
+  } = item;
+  const thumbnails = useMemo(
+    () => (body?.images ?? []).slice(0, 3),
+    [body],
+  );
 
   return (
     <li className="border border-ink-200 bg-white">
@@ -248,15 +263,26 @@ function FeedCard({ item }: { item: FeedItem }) {
           </p>
         )}
 
+        {thumbnails.length > 0 && (
+          <div className="flex gap-2">
+            {thumbnails.map((uri) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={uri}
+                src={`/api/mock/fetch?uri=${encodeURIComponent(uri)}`}
+                alt="review attachment"
+                className="h-16 w-16 border border-ink-200 object-cover"
+              />
+            ))}
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-3 text-xs text-ink-500">
           <span className="chip chip-community">
             {RELATION_LABELS[comment.relationType] ?? "Other"}
           </span>
-          {avg && (
-            <span>
-              avg <span className="font-semibold text-ink-700">{avg}</span>/5
-            </span>
-          )}
+          <span>♥ {comment.likeCount}</span>
+          <span>💬 {replyCount}</span>
           {comment.officialResponseUri && (
             <span className="chip chip-official">Official response</span>
           )}
@@ -265,7 +291,7 @@ function FeedCard({ item }: { item: FeedItem }) {
               href={`/entry/${entryIdHex}`}
               className="ml-auto text-accent hover:underline"
             >
-              View full review →
+              View thread →
             </Link>
           )}
         </div>

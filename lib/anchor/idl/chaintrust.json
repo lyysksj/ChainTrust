@@ -248,7 +248,7 @@
         {
           "name": "primary_wallet",
           "docs": [
-            "account must still be created separately to anchor it into the entry."
+            "pass the System Program id as a sentinel when the user did not specify one."
           ]
         },
         {
@@ -290,6 +290,15 @@
           }
         },
         {
+          "name": "ein_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
           "name": "jurisdiction",
           "type": "string"
         },
@@ -307,6 +316,80 @@
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "like_comment",
+      "discriminator": [
+        129,
+        249,
+        45,
+        219,
+        85,
+        221,
+        49,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "comment",
+          "writable": true
+        },
+        {
+          "name": "like_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "comment"
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "liker_profile",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "register_user",
@@ -456,16 +539,115 @@
           "type": "u8"
         },
         {
-          "name": "contract_score",
-          "type": "u8"
+          "name": "content_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         },
         {
-          "name": "team_score",
-          "type": "u8"
+          "name": "evidence_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         },
         {
-          "name": "product_score",
-          "type": "u8"
+          "name": "content_uri",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "submit_reply",
+      "discriminator": [
+        160,
+        122,
+        237,
+        211,
+        113,
+        230,
+        144,
+        227
+      ],
+      "accounts": [
+        {
+          "name": "entry",
+          "writable": true
+        },
+        {
+          "name": "parent_comment"
+        },
+        {
+          "name": "comment",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  109,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "entry"
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              },
+              {
+                "kind": "arg",
+                "path": "comment_index"
+              }
+            ]
+          }
+        },
+        {
+          "name": "commenter_profile",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "comment_index",
+          "type": "u32"
         },
         {
           "name": "content_hash",
@@ -490,6 +672,56 @@
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "unlike_comment",
+      "discriminator": [
+        132,
+        141,
+        113,
+        33,
+        31,
+        153,
+        29,
+        27
+      ],
+      "accounts": [
+        {
+          "name": "comment",
+          "writable": true
+        },
+        {
+          "name": "like_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "comment"
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -517,6 +749,19 @@
         225,
         171,
         247
+      ]
+    },
+    {
+      "name": "LikeRecord",
+      "discriminator": [
+        179,
+        237,
+        53,
+        5,
+        91,
+        236,
+        161,
+        50
       ]
     },
     {
@@ -589,38 +834,53 @@
     },
     {
       "code": 6008,
-      "name": "InvalidScore",
-      "msg": "Score must be 0 or between 1 and 5"
-    },
-    {
-      "code": 6009,
       "name": "InvalidWalletRole",
       "msg": "Invalid wallet role"
     },
     {
-      "code": 6010,
+      "code": 6009,
       "name": "AlreadyClaimed",
       "msg": "Entry is already claimed"
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "NotClaimed",
       "msg": "Entry is not claimed yet"
     },
     {
-      "code": 6012,
+      "code": 6011,
       "name": "NotOfficial",
       "msg": "Caller is not the official representative of this entry"
     },
     {
-      "code": 6013,
+      "code": 6012,
       "name": "CommentEntryMismatch",
       "msg": "Comment does not belong to this entry"
     },
     {
-      "code": 6014,
+      "code": 6013,
       "name": "CommentCountOverflow",
       "msg": "Comment count overflow"
+    },
+    {
+      "code": 6014,
+      "name": "ParentEntryMismatch",
+      "msg": "Parent comment belongs to a different entry"
+    },
+    {
+      "code": 6015,
+      "name": "MaxReplyDepthExceeded",
+      "msg": "Reply depth exceeds the maximum allowed nesting"
+    },
+    {
+      "code": 6016,
+      "name": "CannotRespondToReply",
+      "msg": "Official response can only target a top-level review, not a reply"
+    },
+    {
+      "code": 6017,
+      "name": "LikeCountOverflow",
+      "msg": "Like count underflow / overflow"
     }
   ],
   "types": [
@@ -646,16 +906,18 @@
             "type": "u8"
           },
           {
-            "name": "contract_score",
+            "name": "parent_comment",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "depth",
             "type": "u8"
           },
           {
-            "name": "team_score",
-            "type": "u8"
-          },
-          {
-            "name": "product_score",
-            "type": "u8"
+            "name": "like_count",
+            "type": "u32"
           },
           {
             "name": "content_hash",
@@ -735,6 +997,15 @@
             }
           },
           {
+            "name": "ein_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
             "name": "jurisdiction",
             "type": "string"
           },
@@ -777,6 +1048,30 @@
           },
           {
             "name": "claimed_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LikeRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "comment",
+            "type": "pubkey"
+          },
+          {
+            "name": "liker",
+            "type": "pubkey"
+          },
+          {
+            "name": "liked_at",
             "type": "i64"
           },
           {
@@ -878,6 +1173,11 @@
       "name": "ENTRY_SEED",
       "type": "bytes",
       "value": "[101, 110, 116, 114, 121]"
+    },
+    {
+      "name": "LIKE_SEED",
+      "type": "bytes",
+      "value": "[108, 105, 107, 101]"
     },
     {
       "name": "USER_SEED",

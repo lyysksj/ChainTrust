@@ -254,7 +254,7 @@ export type Chaintrust = {
         {
           "name": "primaryWallet",
           "docs": [
-            "account must still be created separately to anchor it into the entry."
+            "pass the System Program id as a sentinel when the user did not specify one."
           ]
         },
         {
@@ -296,6 +296,15 @@ export type Chaintrust = {
           }
         },
         {
+          "name": "einHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
           "name": "jurisdiction",
           "type": "string"
         },
@@ -313,6 +322,80 @@ export type Chaintrust = {
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "likeComment",
+      "discriminator": [
+        129,
+        249,
+        45,
+        219,
+        85,
+        221,
+        49,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "comment",
+          "writable": true
+        },
+        {
+          "name": "likeRecord",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "comment"
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "likerProfile",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "registerUser",
@@ -462,16 +545,115 @@ export type Chaintrust = {
           "type": "u8"
         },
         {
-          "name": "contractScore",
-          "type": "u8"
+          "name": "contentHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         },
         {
-          "name": "teamScore",
-          "type": "u8"
+          "name": "evidenceHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         },
         {
-          "name": "productScore",
-          "type": "u8"
+          "name": "contentUri",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "submitReply",
+      "discriminator": [
+        160,
+        122,
+        237,
+        211,
+        113,
+        230,
+        144,
+        227
+      ],
+      "accounts": [
+        {
+          "name": "entry",
+          "writable": true
+        },
+        {
+          "name": "parentComment"
+        },
+        {
+          "name": "comment",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  109,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "entry"
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              },
+              {
+                "kind": "arg",
+                "path": "commentIndex"
+              }
+            ]
+          }
+        },
+        {
+          "name": "commenterProfile",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "commentIndex",
+          "type": "u32"
         },
         {
           "name": "contentHash",
@@ -496,6 +678,56 @@ export type Chaintrust = {
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "unlikeComment",
+      "discriminator": [
+        132,
+        141,
+        113,
+        33,
+        31,
+        153,
+        29,
+        27
+      ],
+      "accounts": [
+        {
+          "name": "comment",
+          "writable": true
+        },
+        {
+          "name": "likeRecord",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "comment"
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -523,6 +755,19 @@ export type Chaintrust = {
         225,
         171,
         247
+      ]
+    },
+    {
+      "name": "likeRecord",
+      "discriminator": [
+        179,
+        237,
+        53,
+        5,
+        91,
+        236,
+        161,
+        50
       ]
     },
     {
@@ -595,38 +840,53 @@ export type Chaintrust = {
     },
     {
       "code": 6008,
-      "name": "invalidScore",
-      "msg": "Score must be 0 or between 1 and 5"
-    },
-    {
-      "code": 6009,
       "name": "invalidWalletRole",
       "msg": "Invalid wallet role"
     },
     {
-      "code": 6010,
+      "code": 6009,
       "name": "alreadyClaimed",
       "msg": "Entry is already claimed"
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "notClaimed",
       "msg": "Entry is not claimed yet"
     },
     {
-      "code": 6012,
+      "code": 6011,
       "name": "notOfficial",
       "msg": "Caller is not the official representative of this entry"
     },
     {
-      "code": 6013,
+      "code": 6012,
       "name": "commentEntryMismatch",
       "msg": "Comment does not belong to this entry"
     },
     {
-      "code": 6014,
+      "code": 6013,
       "name": "commentCountOverflow",
       "msg": "Comment count overflow"
+    },
+    {
+      "code": 6014,
+      "name": "parentEntryMismatch",
+      "msg": "Parent comment belongs to a different entry"
+    },
+    {
+      "code": 6015,
+      "name": "maxReplyDepthExceeded",
+      "msg": "Reply depth exceeds the maximum allowed nesting"
+    },
+    {
+      "code": 6016,
+      "name": "cannotRespondToReply",
+      "msg": "Official response can only target a top-level review, not a reply"
+    },
+    {
+      "code": 6017,
+      "name": "likeCountOverflow",
+      "msg": "Like count underflow / overflow"
     }
   ],
   "types": [
@@ -652,16 +912,18 @@ export type Chaintrust = {
             "type": "u8"
           },
           {
-            "name": "contractScore",
+            "name": "parentComment",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "depth",
             "type": "u8"
           },
           {
-            "name": "teamScore",
-            "type": "u8"
-          },
-          {
-            "name": "productScore",
-            "type": "u8"
+            "name": "likeCount",
+            "type": "u32"
           },
           {
             "name": "contentHash",
@@ -741,6 +1003,15 @@ export type Chaintrust = {
             }
           },
           {
+            "name": "einHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
             "name": "jurisdiction",
             "type": "string"
           },
@@ -783,6 +1054,30 @@ export type Chaintrust = {
           },
           {
             "name": "claimedAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "likeRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "comment",
+            "type": "pubkey"
+          },
+          {
+            "name": "liker",
+            "type": "pubkey"
+          },
+          {
+            "name": "likedAt",
             "type": "i64"
           },
           {
@@ -884,6 +1179,11 @@ export type Chaintrust = {
       "name": "entrySeed",
       "type": "bytes",
       "value": "[101, 110, 116, 114, 121]"
+    },
+    {
+      "name": "likeSeed",
+      "type": "bytes",
+      "value": "[108, 105, 107, 101]"
     },
     {
       "name": "userSeed",

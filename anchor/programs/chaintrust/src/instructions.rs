@@ -42,7 +42,6 @@ pub fn register_user(
         metadata_uri.len() <= MAX_METADATA_URI_LEN,
         ChainTrustError::InvalidMetadataUri
     );
-    // Reject whitespace-only or non-ascii-alphanumeric-plus-underscore usernames
     require!(
         username
             .chars()
@@ -69,6 +68,7 @@ pub fn register_user(
     entry_id: [u8; 8],
     company_name_hash: [u8; 32],
     project_name_hash: [u8; 32],
+    ein_hash: [u8; 32],
     jurisdiction: String,
     domain_hash: [u8; 32],
     metadata_uri: String,
@@ -88,8 +88,8 @@ pub struct CreateEntry<'info> {
         constraint = creator_profile.wallet == signer.key(),
     )]
     pub creator_profile: Account<'info, UserProfile>,
-    /// CHECK: any wallet key is acceptable as the primary wallet; a WalletMapping
-    /// account must still be created separately to anchor it into the entry.
+    /// CHECK: optional. Any wallet key is acceptable as the primary wallet;
+    /// pass the System Program id as a sentinel when the user did not specify one.
     pub primary_wallet: UncheckedAccount<'info>,
     #[account(mut)]
     pub signer: Signer<'info>,
@@ -101,6 +101,7 @@ pub fn create_entry(
     entry_id: [u8; 8],
     company_name_hash: [u8; 32],
     project_name_hash: [u8; 32],
+    ein_hash: [u8; 32],
     jurisdiction: String,
     domain_hash: [u8; 32],
     metadata_uri: String,
@@ -114,14 +115,23 @@ pub fn create_entry(
         ChainTrustError::InvalidMetadataUri
     );
 
+    let primary_wallet_key = ctx.accounts.primary_wallet.key();
+    let stored_primary = if primary_wallet_key == ctx.accounts.system_program.key() {
+        // Sentinel: user declined to set a primary wallet.
+        Pubkey::default()
+    } else {
+        primary_wallet_key
+    };
+
     let entry = &mut ctx.accounts.entry;
     entry.entry_id = entry_id;
     entry.created_by = ctx.accounts.signer.key();
     entry.company_name_hash = company_name_hash;
     entry.project_name_hash = project_name_hash;
+    entry.ein_hash = ein_hash;
     entry.jurisdiction = jurisdiction;
     entry.domain_hash = domain_hash;
-    entry.primary_wallet = ctx.accounts.primary_wallet.key();
+    entry.primary_wallet = stored_primary;
     entry.status = STATUS_UNVERIFIED;
     entry.is_claimed = false;
     entry.official_wallet = Pubkey::default();
@@ -202,16 +212,13 @@ pub fn add_wallet_mapping(
 }
 
 // ---------------------------------------------------------------------------
-// submit_comment
+// submit_comment (top-level review)
 // ---------------------------------------------------------------------------
 
 #[derive(Accounts)]
 #[instruction(
     comment_index: u32,
     relation_type: u8,
-    contract_score: u8,
-    team_score: u8,
-    product_score: u8,
     content_hash: [u8; 32],
     evidence_hash: [u8; 32],
     content_uri: String,
@@ -243,18 +250,10 @@ pub struct SubmitComment<'info> {
     pub system_program: Program<'info, System>,
 }
 
-fn check_score(score: u8) -> Result<()> {
-    require!(score == 0 || (1..=5).contains(&score), ChainTrustError::InvalidScore);
-    Ok(())
-}
-
 pub fn submit_comment(
     ctx: Context<SubmitComment>,
     comment_index: u32,
     relation_type: u8,
-    contract_score: u8,
-    team_score: u8,
-    product_score: u8,
     content_hash: [u8; 32],
     evidence_hash: [u8; 32],
     content_uri: String,
@@ -263,9 +262,6 @@ pub fn submit_comment(
         relation_type >= 1 && relation_type <= MAX_RELATION_TYPE,
         ChainTrustError::InvalidRelationType
     );
-    check_score(contract_score)?;
-    check_score(team_score)?;
-    check_score(product_score)?;
     require!(
         content_uri.len() <= MAX_CONTENT_URI_LEN,
         ChainTrustError::InvalidContentUri
@@ -286,9 +282,9 @@ pub fn submit_comment(
     comment.commenter = ctx.accounts.signer.key();
     comment.comment_index = comment_index;
     comment.relation_type = relation_type;
-    comment.contract_score = contract_score;
-    comment.team_score = team_score;
-    comment.product_score = product_score;
+    comment.parent_comment = None;
+    comment.depth = 0;
+    comment.like_count = 0;
     comment.content_hash = content_hash;
     comment.evidence_hash = evidence_hash;
     comment.content_uri = content_uri;
@@ -296,6 +292,173 @@ pub fn submit_comment(
     comment.submitted_at = Clock::get()?.unix_timestamp;
     comment.official_response_at = 0;
     comment.bump = ctx.bumps.comment;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// submit_reply (nested reply)
+// ---------------------------------------------------------------------------
+
+#[derive(Accounts)]
+#[instruction(
+    comment_index: u32,
+    content_hash: [u8; 32],
+    evidence_hash: [u8; 32],
+    content_uri: String,
+)]
+pub struct SubmitReply<'info> {
+    #[account(mut)]
+    pub entry: Account<'info, CompanyEntry>,
+    #[account(
+        constraint = parent_comment.entry == entry.key() @ ChainTrustError::ParentEntryMismatch,
+    )]
+    pub parent_comment: Account<'info, CommentRecord>,
+    #[account(
+        init,
+        payer = signer,
+        space = 8 + CommentRecord::INIT_SPACE,
+        seeds = [
+            COMMENT_SEED,
+            entry.key().as_ref(),
+            signer.key().as_ref(),
+            &comment_index.to_le_bytes()
+        ],
+        bump
+    )]
+    pub comment: Account<'info, CommentRecord>,
+    #[account(
+        seeds = [USER_SEED, signer.key().as_ref()],
+        bump = commenter_profile.bump,
+        constraint = commenter_profile.wallet == signer.key(),
+    )]
+    pub commenter_profile: Account<'info, UserProfile>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn submit_reply(
+    ctx: Context<SubmitReply>,
+    comment_index: u32,
+    content_hash: [u8; 32],
+    evidence_hash: [u8; 32],
+    content_uri: String,
+) -> Result<()> {
+    require!(
+        content_uri.len() <= MAX_CONTENT_URI_LEN,
+        ChainTrustError::InvalidContentUri
+    );
+
+    let parent = &ctx.accounts.parent_comment;
+    let new_depth = parent
+        .depth
+        .checked_add(1)
+        .ok_or(ChainTrustError::MaxReplyDepthExceeded)?;
+    require!(
+        new_depth <= MAX_REPLY_DEPTH,
+        ChainTrustError::MaxReplyDepthExceeded
+    );
+
+    let entry = &mut ctx.accounts.entry;
+    require!(
+        comment_index == entry.comment_count,
+        ChainTrustError::CommentEntryMismatch
+    );
+    entry.comment_count = entry
+        .comment_count
+        .checked_add(1)
+        .ok_or(ChainTrustError::CommentCountOverflow)?;
+
+    let parent_key = parent.key();
+    let comment = &mut ctx.accounts.comment;
+    comment.entry = entry.key();
+    comment.commenter = ctx.accounts.signer.key();
+    comment.comment_index = comment_index;
+    // Replies inherit relation_type=0 to indicate "not applicable" — they are
+    // responses to a review, not a review themselves.
+    comment.relation_type = 0;
+    comment.parent_comment = Some(parent_key);
+    comment.depth = new_depth;
+    comment.like_count = 0;
+    comment.content_hash = content_hash;
+    comment.evidence_hash = evidence_hash;
+    comment.content_uri = content_uri;
+    comment.official_response_uri = String::new();
+    comment.submitted_at = Clock::get()?.unix_timestamp;
+    comment.official_response_at = 0;
+    comment.bump = ctx.bumps.comment;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// like_comment
+// ---------------------------------------------------------------------------
+
+#[derive(Accounts)]
+pub struct LikeComment<'info> {
+    #[account(mut)]
+    pub comment: Account<'info, CommentRecord>,
+    #[account(
+        init,
+        payer = signer,
+        space = 8 + LikeRecord::INIT_SPACE,
+        seeds = [LIKE_SEED, comment.key().as_ref(), signer.key().as_ref()],
+        bump
+    )]
+    pub like_record: Account<'info, LikeRecord>,
+    #[account(
+        seeds = [USER_SEED, signer.key().as_ref()],
+        bump = liker_profile.bump,
+        constraint = liker_profile.wallet == signer.key(),
+    )]
+    pub liker_profile: Account<'info, UserProfile>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn like_comment(ctx: Context<LikeComment>) -> Result<()> {
+    let comment = &mut ctx.accounts.comment;
+    comment.like_count = comment
+        .like_count
+        .checked_add(1)
+        .ok_or(ChainTrustError::LikeCountOverflow)?;
+
+    let like = &mut ctx.accounts.like_record;
+    like.comment = comment.key();
+    like.liker = ctx.accounts.signer.key();
+    like.liked_at = Clock::get()?.unix_timestamp;
+    like.bump = ctx.bumps.like_record;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// unlike_comment
+// ---------------------------------------------------------------------------
+
+#[derive(Accounts)]
+pub struct UnlikeComment<'info> {
+    #[account(mut)]
+    pub comment: Account<'info, CommentRecord>,
+    #[account(
+        mut,
+        close = signer,
+        seeds = [LIKE_SEED, comment.key().as_ref(), signer.key().as_ref()],
+        bump = like_record.bump,
+        constraint = like_record.liker == signer.key(),
+        constraint = like_record.comment == comment.key(),
+    )]
+    pub like_record: Account<'info, LikeRecord>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
+}
+
+pub fn unlike_comment(ctx: Context<UnlikeComment>) -> Result<()> {
+    let comment = &mut ctx.accounts.comment;
+    comment.like_count = comment
+        .like_count
+        .checked_sub(1)
+        .ok_or(ChainTrustError::LikeCountOverflow)?;
     Ok(())
 }
 
@@ -357,10 +520,15 @@ pub fn add_official_response(
         entry.official_wallet == ctx.accounts.signer.key(),
         ChainTrustError::NotOfficial
     );
+    let comment = &ctx.accounts.comment;
+    require!(
+        comment.parent_comment.is_none(),
+        ChainTrustError::CannotRespondToReply
+    );
 
     let comment = &mut ctx.accounts.comment;
     // Intentional invariant: we never touch content_hash, content_uri,
-    // commenter, relation_type, scores, or submitted_at. "Claim gives voice,
+    // commenter, relation_type, or submitted_at. "Claim gives voice,
     // not control."
     comment.official_response_uri = official_response_uri;
     comment.official_response_at = Clock::get()?.unix_timestamp;

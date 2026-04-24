@@ -103,11 +103,11 @@ export function HomeSearch() {
     if (!q) return [];
     return entries
       .filter((e) => {
-        const name = (e.meta?.companyName ?? "").toLowerCase();
+        const legal = (e.meta?.legalName ?? "").toLowerCase();
         const project = (e.meta?.projectName ?? "").toLowerCase();
-        const domain = (e.meta?.domain ?? "").toLowerCase();
+        const sites = (e.meta?.websites ?? []).join(" ").toLowerCase();
         return (
-          name.includes(q) || project.includes(q) || domain.includes(q)
+          legal.includes(q) || project.includes(q) || sites.includes(q)
         );
       })
       .slice(0, 8);
@@ -179,11 +179,15 @@ export function HomeSearch() {
                           onClick={() => setOpen(false)}
                         >
                           <p className="serif text-sm font-semibold text-ink-800">
-                            {e.meta?.companyName ?? "(unnamed)"}
+                            {e.meta?.projectName ??
+                              e.meta?.legalName ??
+                              "(unnamed)"}
                           </p>
                           <p className="text-xs text-ink-500">
-                            {e.meta?.projectName}
-                            {e.meta?.domain ? ` · ${e.meta.domain}` : ""}
+                            {e.meta?.legalName}
+                            {e.meta?.websites?.[0]
+                              ? ` · ${e.meta.websites[0]}`
+                              : ""}
                           </p>
                         </Link>
                       </li>

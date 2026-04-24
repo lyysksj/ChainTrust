@@ -23,6 +23,7 @@ pub struct CompanyEntry {
     pub created_by: Pubkey,
     pub company_name_hash: [u8; 32],
     pub project_name_hash: [u8; 32],
+    pub ein_hash: [u8; 32],
     #[max_len(MAX_JURISDICTION_LEN)]
     pub jurisdiction: String,
     pub domain_hash: [u8; 32],
@@ -45,9 +46,9 @@ pub struct CommentRecord {
     pub commenter: Pubkey,
     pub comment_index: u32,
     pub relation_type: u8,
-    pub contract_score: u8,
-    pub team_score: u8,
-    pub product_score: u8,
+    pub parent_comment: Option<Pubkey>,
+    pub depth: u8,
+    pub like_count: u32,
     pub content_hash: [u8; 32],
     pub evidence_hash: [u8; 32],
     #[max_len(MAX_CONTENT_URI_LEN)]
@@ -71,5 +72,14 @@ pub struct WalletMapping {
     pub added_by: Pubkey,
     pub is_official: bool,
     pub added_at: i64,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct LikeRecord {
+    pub comment: Pubkey,
+    pub liker: Pubkey,
+    pub liked_at: i64,
     pub bump: u8,
 }

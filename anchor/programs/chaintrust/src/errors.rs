@@ -18,8 +18,6 @@ pub enum ChainTrustError {
     InvalidOfficialResponseUri,
     #[msg("Invalid relation type")]
     InvalidRelationType,
-    #[msg("Score must be 0 or between 1 and 5")]
-    InvalidScore,
     #[msg("Invalid wallet role")]
     InvalidWalletRole,
     #[msg("Entry is already claimed")]
@@ -32,4 +30,12 @@ pub enum ChainTrustError {
     CommentEntryMismatch,
     #[msg("Comment count overflow")]
     CommentCountOverflow,
+    #[msg("Parent comment belongs to a different entry")]
+    ParentEntryMismatch,
+    #[msg("Reply depth exceeds the maximum allowed nesting")]
+    MaxReplyDepthExceeded,
+    #[msg("Official response can only target a top-level review, not a reply")]
+    CannotRespondToReply,
+    #[msg("Like count underflow / overflow")]
+    LikeCountOverflow,
 }

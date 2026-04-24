@@ -27,6 +27,7 @@ pub mod chaintrust {
         entry_id: [u8; 8],
         company_name_hash: [u8; 32],
         project_name_hash: [u8; 32],
+        ein_hash: [u8; 32],
         jurisdiction: String,
         domain_hash: [u8; 32],
         metadata_uri: String,
@@ -36,6 +37,7 @@ pub mod chaintrust {
             entry_id,
             company_name_hash,
             project_name_hash,
+            ein_hash,
             jurisdiction,
             domain_hash,
             metadata_uri,
@@ -56,9 +58,6 @@ pub mod chaintrust {
         ctx: Context<SubmitComment>,
         comment_index: u32,
         relation_type: u8,
-        contract_score: u8,
-        team_score: u8,
-        product_score: u8,
         content_hash: [u8; 32],
         evidence_hash: [u8; 32],
         content_uri: String,
@@ -67,13 +66,34 @@ pub mod chaintrust {
             ctx,
             comment_index,
             relation_type,
-            contract_score,
-            team_score,
-            product_score,
             content_hash,
             evidence_hash,
             content_uri,
         )
+    }
+
+    pub fn submit_reply(
+        ctx: Context<SubmitReply>,
+        comment_index: u32,
+        content_hash: [u8; 32],
+        evidence_hash: [u8; 32],
+        content_uri: String,
+    ) -> Result<()> {
+        instructions::submit_reply(
+            ctx,
+            comment_index,
+            content_hash,
+            evidence_hash,
+            content_uri,
+        )
+    }
+
+    pub fn like_comment(ctx: Context<LikeComment>) -> Result<()> {
+        instructions::like_comment(ctx)
+    }
+
+    pub fn unlike_comment(ctx: Context<UnlikeComment>) -> Result<()> {
+        instructions::unlike_comment(ctx)
     }
 
     pub fn claim_entry(ctx: Context<ClaimEntry>) -> Result<()> {

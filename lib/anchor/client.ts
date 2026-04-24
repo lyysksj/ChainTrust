@@ -15,6 +15,7 @@ import {
   PROGRAM_ID,
   commentPda,
   entryPda,
+  likeRecordPda,
   userProfilePda,
   walletMappingPda,
 } from "./pdas";
@@ -32,7 +33,6 @@ export function buildProvider(
 }
 
 export function buildProgram(provider: AnchorProvider): Program<Chaintrust> {
-  // @coral-xyz/anchor 0.30 expects the IDL and optional provider.
   return new Program(idlJson as Chaintrust, provider);
 }
 
@@ -111,6 +111,24 @@ export async function fetchAllUsers(program: Program<Chaintrust>) {
   return program.account.userProfile.all();
 }
 
+export async function fetchLikeRecord(
+  program: Program<Chaintrust>,
+  comment: PublicKey,
+  liker: PublicKey,
+) {
+  const [pda] = likeRecordPda(comment, liker);
+  return program.account.likeRecord.fetchNullable(pda);
+}
+
+export async function fetchLikesByLiker(
+  program: Program<Chaintrust>,
+  liker: PublicKey,
+) {
+  return program.account.likeRecord.all([
+    { memcmp: { offset: 8 + 32, bytes: liker.toBase58() } },
+  ]);
+}
+
 // --- write helpers ---
 
 export async function registerUser(
@@ -138,19 +156,24 @@ export async function createEntry(
     entryId: number[];
     companyNameHash: number[];
     projectNameHash: number[];
+    einHash: number[];
     jurisdiction: string;
     domainHash: number[];
     metadataUri: string;
-    primaryWallet: PublicKey;
+    primaryWallet: PublicKey | null;
   },
 ): Promise<string> {
   const [entry] = entryPda(params.entryId);
   const [creatorProfile] = userProfilePda(signer);
+  // If primaryWallet is null, pass System Program as sentinel so on-chain
+  // logic stores Pubkey::default() for "not set".
+  const primary = params.primaryWallet ?? SystemProgram.programId;
   return program.methods
     .createEntry(
       params.entryId,
       params.companyNameHash,
       params.projectNameHash,
+      params.einHash,
       params.jurisdiction,
       params.domainHash,
       params.metadataUri,
@@ -158,7 +181,7 @@ export async function createEntry(
     .accountsPartial({
       entry,
       creatorProfile,
-      primaryWallet: params.primaryWallet,
+      primaryWallet: primary,
       signer,
       systemProgram: SystemProgram.programId,
     })
@@ -204,9 +227,6 @@ export async function submitComment(
     entry: PublicKey;
     commentIndex: number;
     relationType: number;
-    contractScore: number;
-    teamScore: number;
-    productScore: number;
     contentHash: number[];
     evidenceHash: number[];
     contentUri: string;
@@ -218,9 +238,6 @@ export async function submitComment(
     .submitComment(
       params.commentIndex,
       params.relationType,
-      params.contractScore,
-      params.teamScore,
-      params.productScore,
       params.contentHash,
       params.evidenceHash,
       params.contentUri,
@@ -231,6 +248,73 @@ export async function submitComment(
       commenterProfile,
       signer,
       systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+export async function submitReply(
+  program: Program<Chaintrust>,
+  signer: PublicKey,
+  params: {
+    entry: PublicKey;
+    parentComment: PublicKey;
+    commentIndex: number;
+    contentHash: number[];
+    evidenceHash: number[];
+    contentUri: string;
+  },
+): Promise<string> {
+  const [commenterProfile] = userProfilePda(signer);
+  const [comment] = commentPda(params.entry, signer, params.commentIndex);
+  return program.methods
+    .submitReply(
+      params.commentIndex,
+      params.contentHash,
+      params.evidenceHash,
+      params.contentUri,
+    )
+    .accountsPartial({
+      entry: params.entry,
+      parentComment: params.parentComment,
+      comment,
+      commenterProfile,
+      signer,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+export async function likeComment(
+  program: Program<Chaintrust>,
+  signer: PublicKey,
+  comment: PublicKey,
+): Promise<string> {
+  const [likerProfile] = userProfilePda(signer);
+  const [like] = likeRecordPda(comment, signer);
+  return program.methods
+    .likeComment()
+    .accountsPartial({
+      comment,
+      likeRecord: like,
+      likerProfile,
+      signer,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+export async function unlikeComment(
+  program: Program<Chaintrust>,
+  signer: PublicKey,
+  comment: PublicKey,
+): Promise<string> {
+  const [like] = likeRecordPda(comment, signer);
+  return program.methods
+    .unlikeComment()
+    .accountsPartial({
+      comment,
+      likeRecord: like,
+      signer,
     })
     .rpc();
 }

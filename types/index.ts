@@ -17,6 +17,7 @@ export type CompanyEntry = {
   createdBy: PublicKey;
   companyNameHash: number[];
   projectNameHash: number[];
+  einHash: number[];
   jurisdiction: string;
   domainHash: number[];
   primaryWallet: PublicKey;
@@ -35,9 +36,9 @@ export type CommentRecord = {
   commenter: PublicKey;
   commentIndex: number;
   relationType: number;
-  contractScore: number;
-  teamScore: number;
-  productScore: number;
+  parentComment: PublicKey | null;
+  depth: number;
+  likeCount: number;
   contentHash: number[];
   evidenceHash: number[];
   contentUri: string;
@@ -59,24 +60,32 @@ export type WalletMapping = {
   bump: number;
 };
 
+export type LikeRecord = {
+  comment: PublicKey;
+  liker: PublicKey;
+  likedAt: BN;
+  bump: number;
+};
+
 // ---- Entry metadata stored off-chain (mock storage) ----
 export type EntryMetadata = {
-  companyName: string;
+  legalName: string;
+  ein: string;
+  countryCode: string;
+  countryLabel: string;
   projectName: string;
-  domain: string;
+  websites: string[];
+  primaryWallet?: string | null;
   description?: string;
-  links?: { label: string; url: string }[];
   evidenceNote?: string;
 };
 
 // ---- Review body off-chain ----
 export type CommentBody = {
-  headline: string;
+  headline?: string;
   body: string;
-  relationType: number;
-  contractScore: number;
-  teamScore: number;
-  productScore: number;
+  images?: string[];
+  relationType?: number;
 };
 
 // ---- User profile metadata off-chain ----
@@ -105,6 +114,7 @@ export const ENTRY_STATUS: Record<number, "unverified" | "platform_verified" | "
 };
 
 export const RELATION_LABELS: Record<number, string> = {
+  0: "Reply",
   1: "Employee",
   2: "Partner",
   3: "Investor",
@@ -118,3 +128,25 @@ export const WALLET_ROLE_LABELS: Record<number, string> = {
   3: "Team",
   4: "Other",
 };
+
+// ---- Country list for entry form ----
+export type CountryOption = {
+  code: string; // ISO 3166-1 alpha-2
+  label: string;
+  idLabel: string; // what to call the business ID in this country
+  idFormat: string; // human-readable hint
+};
+
+export const COUNTRIES: CountryOption[] = [
+  { code: "US", label: "United States", idLabel: "EIN", idFormat: "9 digits, e.g. 12-3456789" },
+  { code: "CN", label: "China", idLabel: "Unified Social Credit Code", idFormat: "18 chars, letters + digits" },
+  { code: "HK", label: "Hong Kong", idLabel: "Business Registration No.", idFormat: "8 digits" },
+  { code: "SG", label: "Singapore", idLabel: "UEN", idFormat: "9–10 alphanumeric" },
+  { code: "GB", label: "United Kingdom", idLabel: "Company Number", idFormat: "8 alphanumeric" },
+  { code: "JP", label: "Japan", idLabel: "Corporate Number", idFormat: "13 digits" },
+  { code: "KR", label: "South Korea", idLabel: "Business Registration No.", idFormat: "10 digits" },
+  { code: "CA", label: "Canada", idLabel: "BN / CRA", idFormat: "9 digits" },
+  { code: "AU", label: "Australia", idLabel: "ABN", idFormat: "11 digits" },
+  { code: "DE", label: "Germany", idLabel: "Handelsregisternummer", idFormat: "alphanumeric" },
+  { code: "OTHER", label: "Other", idLabel: "Company ID", idFormat: "any identifier" },
+];

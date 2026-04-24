@@ -8,6 +8,8 @@ pub const ENTRY_SEED: &[u8] = b"entry";
 pub const COMMENT_SEED: &[u8] = b"comment";
 #[constant]
 pub const WALLET_MAP_SEED: &[u8] = b"wallet_map";
+#[constant]
+pub const LIKE_SEED: &[u8] = b"like";
 
 pub const MAX_USERNAME_LEN: usize = 32;
 pub const MAX_DISPLAY_NAME_LEN: usize = 64;
@@ -27,3 +29,6 @@ pub const MAX_RELATION_TYPE: u8 = 5;
 
 // Wallet roles: 1=treasury, 2=deployer, 3=team, 4=other
 pub const MAX_WALLET_ROLE: u8 = 4;
+
+// Comment nesting: top-level=0, reply=1, reply-to-reply=2. Hard cap at 2.
+pub const MAX_REPLY_DEPTH: u8 = 2;

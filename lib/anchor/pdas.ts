@@ -8,6 +8,7 @@ const USER = Buffer.from("user");
 const ENTRY = Buffer.from("entry");
 const COMMENT = Buffer.from("comment");
 const WALLET_MAP = Buffer.from("wallet_map");
+const LIKE = Buffer.from("like");
 
 export function userProfilePda(wallet: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync([USER, wallet.toBuffer()], PROGRAM_ID);
@@ -38,6 +39,16 @@ export function walletMappingPda(
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [WALLET_MAP, targetWallet.toBuffer(), entry.toBuffer()],
+    PROGRAM_ID,
+  );
+}
+
+export function likeRecordPda(
+  comment: PublicKey,
+  liker: PublicKey,
+): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [LIKE, comment.toBuffer(), liker.toBuffer()],
     PROGRAM_ID,
   );
 }

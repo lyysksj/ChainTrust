@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
@@ -10,11 +10,12 @@ import { entryPda } from "@/lib/anchor/pdas";
 import { randomEntryId, sha256Bytes } from "@/lib/utils/hash";
 import {
   validateCompanyName,
-  validateDomain,
-  validateJurisdiction,
+  validateEin,
   validatePubkey,
+  validateWebsite,
 } from "@/lib/utils/validation";
 import { bytesHex } from "@/lib/utils/format";
+import { COUNTRIES } from "@/types";
 
 type InitialMapping = {
   pubkey: string;
@@ -24,17 +25,26 @@ type InitialMapping = {
 
 const DEFAULT_MAPPING: InitialMapping = { pubkey: "", role: 1, note: "" };
 
+function domainFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
 export function EntryForm() {
   const router = useRouter();
   const { publicKey } = useWallet();
   const program = useProgram();
 
-  const [companyName, setCompanyName] = useState("");
+  const [legalName, setLegalName] = useState("");
+  const [countryCode, setCountryCode] = useState("US");
+  const [ein, setEin] = useState("");
   const [projectName, setProjectName] = useState("");
-  const [jurisdiction, setJurisdiction] = useState("Hong Kong");
-  const [domain, setDomain] = useState("");
-  const [description, setDescription] = useState("");
+  const [websites, setWebsites] = useState<string[]>([""]);
   const [primaryWallet, setPrimaryWallet] = useState("");
+  const [description, setDescription] = useState("");
   const [mappings, setMappings] = useState<InitialMapping[]>([
     { ...DEFAULT_MAPPING },
   ]);
@@ -42,14 +52,29 @@ export function EntryForm() {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
 
-  function updateMapping(i: number, patch: Partial<InitialMapping>) {
-    setMappings((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
+  const country = useMemo(
+    () => COUNTRIES.find((c) => c.code === countryCode) ?? COUNTRIES[0],
+    [countryCode],
+  );
+
+  function updateWebsite(i: number, v: string) {
+    setWebsites((prev) => prev.map((w, idx) => (idx === i ? v : w)));
+  }
+  function addWebsite() {
+    setWebsites((prev) => [...prev, ""]);
+  }
+  function removeWebsite(i: number) {
+    setWebsites((prev) => prev.filter((_, idx) => idx !== i));
   }
 
+  function updateMapping(i: number, patch: Partial<InitialMapping>) {
+    setMappings((prev) =>
+      prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)),
+    );
+  }
   function addMapping() {
     setMappings((prev) => [...prev, { ...DEFAULT_MAPPING }]);
   }
-
   function removeMapping(i: number) {
     setMappings((prev) => prev.filter((_, idx) => idx !== i));
   }
@@ -62,23 +87,47 @@ export function EntryForm() {
       return;
     }
 
-    const errs = [
-      validateCompanyName(companyName),
-      validateJurisdiction(jurisdiction),
-      validateDomain(domain),
-      validatePubkey(primaryWallet),
-    ].filter(Boolean);
-    if (errs.length) {
-      setError(errs[0] as string);
+    const companyErr = validateCompanyName(legalName);
+    if (companyErr) {
+      setError(companyErr);
       return;
     }
+    const einErr = validateEin(countryCode, ein);
+    if (einErr) {
+      setError(einErr);
+      return;
+    }
+    if (!projectName.trim()) {
+      setError("Project name is required.");
+      return;
+    }
+    const liveWebsites = websites.map((w) => w.trim()).filter(Boolean);
+    if (!liveWebsites.length) {
+      setError("Add at least one website URL.");
+      return;
+    }
+    for (const w of liveWebsites) {
+      const werr = validateWebsite(w);
+      if (werr) {
+        setError(`Website: ${werr}`);
+        return;
+      }
+    }
 
-    // Validate each mapping pubkey (allow empty lines so user can skip)
+    // Primary wallet is optional — only validate when provided.
+    if (primaryWallet.trim()) {
+      const perr = validatePubkey(primaryWallet.trim());
+      if (perr) {
+        setError(`Project wallet: ${perr}`);
+        return;
+      }
+    }
+
     const live = mappings.filter((m) => m.pubkey.trim().length > 0);
     for (const m of live) {
-      const err = validatePubkey(m.pubkey);
-      if (err) {
-        setError(`Wallet mapping: ${err}`);
+      const merr = validatePubkey(m.pubkey);
+      if (merr) {
+        setError(`Wallet mapping: ${merr}`);
         return;
       }
     }
@@ -86,10 +135,15 @@ export function EntryForm() {
     setSubmitting(true);
     try {
       setProgress("Uploading metadata to mock storage…");
+      const primaryDomain = domainFromUrl(liveWebsites[0]);
       const metadata = {
-        companyName,
+        legalName,
+        ein,
+        countryCode,
+        countryLabel: country.label,
         projectName,
-        domain,
+        websites: liveWebsites,
+        primaryWallet: primaryWallet.trim() || null,
         description,
         evidenceNote: "Mock submission for hackathon demo.",
       };
@@ -105,12 +159,15 @@ export function EntryForm() {
       const [entry] = entryPda(entryId);
       await createEntry(program, publicKey, {
         entryId,
-        companyNameHash: sha256Bytes(companyName),
+        companyNameHash: sha256Bytes(legalName),
         projectNameHash: sha256Bytes(projectName),
-        jurisdiction,
-        domainHash: sha256Bytes(domain.toLowerCase()),
+        einHash: sha256Bytes(`${countryCode}:${ein}`),
+        jurisdiction: countryCode,
+        domainHash: sha256Bytes(primaryDomain),
         metadataUri: up.uri,
-        primaryWallet: new PublicKey(primaryWallet),
+        primaryWallet: primaryWallet.trim()
+          ? new PublicKey(primaryWallet.trim())
+          : null,
       });
 
       for (const m of live) {
@@ -136,79 +193,153 @@ export function EntryForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <form onSubmit={onSubmit} className="space-y-8">
+      <section className="space-y-4">
         <div>
-          <label className="label">Company / legal name</label>
-          <input
-            className="input mt-1"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            placeholder="Acme Protocol Pte. Ltd."
-            maxLength={200}
-          />
-        </div>
-        <div>
-          <label className="label">Project / brand name</label>
-          <input
-            className="input mt-1"
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-            placeholder="Acme"
-            maxLength={200}
-          />
-        </div>
-        <div>
-          <label className="label">Jurisdiction</label>
-          <input
-            className="input mt-1"
-            value={jurisdiction}
-            onChange={(e) => setJurisdiction(e.target.value)}
-            placeholder="Hong Kong"
-            maxLength={64}
-          />
-        </div>
-        <div>
-          <label className="label">Primary domain</label>
-          <input
-            className="input mt-1"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-            placeholder="acme.xyz"
-          />
-        </div>
-        <div className="md:col-span-2">
-          <label className="label">Description</label>
-          <textarea
-            className="textarea mt-1"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="What does this company do? What should partners know?"
-            maxLength={1200}
-          />
-        </div>
-        <div className="md:col-span-2">
-          <label className="label">Primary project wallet</label>
-          <input
-            className="input mt-1 font-mono text-xs"
-            value={primaryWallet}
-            onChange={(e) => setPrimaryWallet(e.target.value)}
-            placeholder="Project treasury or deployer wallet pubkey"
-          />
-          <p className="hint mt-1">
-            Anchored as the canonical wallet for this entry. You can link more wallets below.
+          <h2 className="serif text-lg font-semibold text-ink-800">
+            Legal entity
+          </h2>
+          <p className="hint">
+            The real-world company this entry represents. Business ID is hashed
+            before being stored on-chain.
           </p>
         </div>
-      </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="label">Legal company name</label>
+            <input
+              className="input mt-1"
+              value={legalName}
+              onChange={(e) => setLegalName(e.target.value)}
+              placeholder="Acme Protocol Pte. Ltd."
+              maxLength={200}
+            />
+          </div>
+          <div>
+            <label className="label">Country of registration</label>
+            <select
+              className="select mt-1"
+              value={countryCode}
+              onChange={(e) => {
+                setCountryCode(e.target.value);
+                setEin("");
+              }}
+            >
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">{country.idLabel}</label>
+            <input
+              className="input mt-1 font-mono text-sm"
+              value={ein}
+              onChange={(e) => setEin(e.target.value)}
+              placeholder={country.idFormat}
+              maxLength={40}
+            />
+            <p className="hint mt-1">Format: {country.idFormat}</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4 border-t border-ink-200 pt-6">
+        <div>
+          <h2 className="serif text-lg font-semibold text-ink-800">
+            Blockchain project
+          </h2>
+          <p className="hint">
+            How the project appears on-chain and which wallet represents it.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="label">Project / brand name</label>
+            <input
+              className="input mt-1"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              placeholder="Acme"
+              maxLength={200}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="label">Project websites</label>
+            <div className="mt-1 space-y-2">
+              {websites.map((w, i) => (
+                <div
+                  key={i}
+                  className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_auto]"
+                >
+                  <input
+                    className="input"
+                    value={w}
+                    onChange={(e) => updateWebsite(i, e.target.value)}
+                    placeholder="https://acme.xyz"
+                    maxLength={200}
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => removeWebsite(i)}
+                    disabled={websites.length === 1}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={addWebsite}
+              >
+                + Add website
+              </button>
+            </div>
+            <p className="hint mt-1">
+              The first URL becomes the primary domain (hashed on-chain).
+            </p>
+          </div>
+          <div className="md:col-span-2">
+            <label className="label">
+              Primary project wallet <span className="text-ink-400">(optional)</span>
+            </label>
+            <input
+              className="input mt-1 font-mono text-xs"
+              value={primaryWallet}
+              onChange={(e) => setPrimaryWallet(e.target.value)}
+              placeholder="Project treasury or deployer wallet (leave blank if unknown)"
+            />
+            <p className="hint mt-1">
+              Leave blank if the project does not publish a canonical wallet
+              yet. You can still link wallets below.
+            </p>
+          </div>
+          <div className="md:col-span-2">
+            <label className="label">Description</label>
+            <textarea
+              className="textarea mt-1"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What does this company do? What should partners know?"
+              maxLength={1200}
+            />
+          </div>
+        </div>
+      </section>
 
       <section className="border-t border-ink-200 pt-6">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="serif text-lg font-semibold text-ink-800">
+            <h2 className="serif text-lg font-semibold text-ink-800">
               Initial wallet mappings
-            </h3>
+            </h2>
             <p className="hint">
-              These are community-added mappings. Official mappings can be added later once the entry is claimed.
+              Community mappings are proposals. Official mappings can be added
+              after the entry is claimed.
             </p>
           </div>
           <button type="button" className="btn-secondary" onClick={addMapping}>
@@ -231,7 +362,9 @@ export function EntryForm() {
               <select
                 className="select"
                 value={m.role}
-                onChange={(e) => updateMapping(i, { role: Number(e.target.value) })}
+                onChange={(e) =>
+                  updateMapping(i, { role: Number(e.target.value) })
+                }
               >
                 <option value={1}>Treasury</option>
                 <option value={2}>Deployer</option>
