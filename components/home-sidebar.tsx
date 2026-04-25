@@ -101,7 +101,7 @@ export function HomeSidebar() {
     );
   }
 
-  const initial = (profile.displayName || profile.username).slice(0, 1).toUpperCase();
+  const initial = profile.username.slice(0, 1).toUpperCase();
 
   return (
     <aside className="border border-ink-200 bg-white">
@@ -112,9 +112,6 @@ export function HomeSidebar() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="serif truncate text-base font-semibold text-ink-800">
-              {profile.displayName || profile.username}
-            </p>
-            <p className="mono truncate text-xs text-ink-500">
               @{profile.username}
             </p>
           </div>

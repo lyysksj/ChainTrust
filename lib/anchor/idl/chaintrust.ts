@@ -447,10 +447,6 @@ export type Chaintrust = {
           "type": "string"
         },
         {
-          "name": "displayName",
-          "type": "string"
-        },
-        {
           "name": "metadataUri",
           "type": "string"
         }
@@ -728,6 +724,52 @@ export type Chaintrust = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "updateUserMetadataUri",
+      "discriminator": [
+        188,
+        193,
+        175,
+        250,
+        84,
+        169,
+        180,
+        211
+      ],
+      "accounts": [
+        {
+          "name": "userProfile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "metadataUri",
+          "type": "string"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -805,86 +847,81 @@ export type Chaintrust = {
     },
     {
       "code": 6001,
-      "name": "invalidDisplayName",
-      "msg": "Display name is empty or exceeds max length"
-    },
-    {
-      "code": 6002,
       "name": "invalidMetadataUri",
       "msg": "Metadata URI exceeds max length"
     },
     {
-      "code": 6003,
+      "code": 6002,
       "name": "invalidJurisdiction",
       "msg": "Jurisdiction is empty or exceeds max length"
     },
     {
-      "code": 6004,
+      "code": 6003,
       "name": "invalidContentUri",
       "msg": "Content URI exceeds max length"
     },
     {
-      "code": 6005,
+      "code": 6004,
       "name": "invalidEvidenceUri",
       "msg": "Evidence URI exceeds max length"
     },
     {
-      "code": 6006,
+      "code": 6005,
       "name": "invalidOfficialResponseUri",
       "msg": "Official response URI exceeds max length"
     },
     {
-      "code": 6007,
+      "code": 6006,
       "name": "invalidRelationType",
       "msg": "Invalid relation type"
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "invalidWalletRole",
       "msg": "Invalid wallet role"
     },
     {
-      "code": 6009,
+      "code": 6008,
       "name": "alreadyClaimed",
       "msg": "Entry is already claimed"
     },
     {
-      "code": 6010,
+      "code": 6009,
       "name": "notClaimed",
       "msg": "Entry is not claimed yet"
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "notOfficial",
       "msg": "Caller is not the official representative of this entry"
     },
     {
-      "code": 6012,
+      "code": 6011,
       "name": "commentEntryMismatch",
       "msg": "Comment does not belong to this entry"
     },
     {
-      "code": 6013,
+      "code": 6012,
       "name": "commentCountOverflow",
       "msg": "Comment count overflow"
     },
     {
-      "code": 6014,
+      "code": 6013,
       "name": "parentEntryMismatch",
       "msg": "Parent comment belongs to a different entry"
     },
     {
-      "code": 6015,
+      "code": 6014,
       "name": "maxReplyDepthExceeded",
       "msg": "Reply depth exceeds the maximum allowed nesting"
     },
     {
-      "code": 6016,
+      "code": 6015,
       "name": "cannotRespondToReply",
       "msg": "Official response can only target a top-level review, not a reply"
     },
     {
-      "code": 6017,
+      "code": 6016,
       "name": "likeCountOverflow",
       "msg": "Like count underflow / overflow"
     }
@@ -1098,10 +1135,6 @@ export type Chaintrust = {
           },
           {
             "name": "username",
-            "type": "string"
-          },
-          {
-            "name": "displayName",
             "type": "string"
           },
           {

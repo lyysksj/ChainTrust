@@ -12,7 +12,6 @@ pub const WALLET_MAP_SEED: &[u8] = b"wallet_map";
 pub const LIKE_SEED: &[u8] = b"like";
 
 pub const MAX_USERNAME_LEN: usize = 32;
-pub const MAX_DISPLAY_NAME_LEN: usize = 64;
 pub const MAX_METADATA_URI_LEN: usize = 200;
 pub const MAX_JURISDICTION_LEN: usize = 64;
 pub const MAX_CONTENT_URI_LEN: usize = 200;

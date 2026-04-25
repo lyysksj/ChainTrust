@@ -149,10 +149,9 @@ export function Feed() {
               entryIdHex: entryInfo?.idHex ?? "",
               entryName:
                 meta?.projectName ?? meta?.legalName ?? null,
-              commenterName:
-                commenter?.displayName ||
-                commenter?.username ||
-                null,
+              commenterName: commenter?.username
+                ? `@${commenter.username}`
+                : null,
               body,
               replyCount: replyCounts.get(c.publicKey.toBase58()) ?? 0,
             } as FeedItem;

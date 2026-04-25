@@ -9,7 +9,7 @@ use crate::state::*;
 // ---------------------------------------------------------------------------
 
 #[derive(Accounts)]
-#[instruction(username: String, display_name: String, metadata_uri: String)]
+#[instruction(username: String, metadata_uri: String)]
 pub struct RegisterUser<'info> {
     #[account(
         init,
@@ -27,16 +27,11 @@ pub struct RegisterUser<'info> {
 pub fn register_user(
     ctx: Context<RegisterUser>,
     username: String,
-    display_name: String,
     metadata_uri: String,
 ) -> Result<()> {
     require!(
         !username.is_empty() && username.len() <= MAX_USERNAME_LEN,
         ChainTrustError::InvalidUsername
-    );
-    require!(
-        !display_name.is_empty() && display_name.len() <= MAX_DISPLAY_NAME_LEN,
-        ChainTrustError::InvalidDisplayName
     );
     require!(
         metadata_uri.len() <= MAX_METADATA_URI_LEN,
@@ -52,10 +47,38 @@ pub fn register_user(
     let profile = &mut ctx.accounts.user_profile;
     profile.wallet = ctx.accounts.signer.key();
     profile.username = username;
-    profile.display_name = display_name;
     profile.metadata_uri = metadata_uri;
     profile.registered_at = Clock::get()?.unix_timestamp;
     profile.bump = ctx.bumps.user_profile;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// update_user_metadata_uri
+// ---------------------------------------------------------------------------
+
+#[derive(Accounts)]
+pub struct UpdateUserMetadataUri<'info> {
+    #[account(
+        mut,
+        seeds = [USER_SEED, signer.key().as_ref()],
+        bump = user_profile.bump,
+        constraint = user_profile.wallet == signer.key(),
+    )]
+    pub user_profile: Account<'info, UserProfile>,
+    pub signer: Signer<'info>,
+}
+
+pub fn update_user_metadata_uri(
+    ctx: Context<UpdateUserMetadataUri>,
+    metadata_uri: String,
+) -> Result<()> {
+    require!(
+        metadata_uri.len() <= MAX_METADATA_URI_LEN,
+        ChainTrustError::InvalidMetadataUri
+    );
+    let profile = &mut ctx.accounts.user_profile;
+    profile.metadata_uri = metadata_uri;
     Ok(())
 }
 

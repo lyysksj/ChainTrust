@@ -16,10 +16,16 @@ pub mod chaintrust {
     pub fn register_user(
         ctx: Context<RegisterUser>,
         username: String,
-        display_name: String,
         metadata_uri: String,
     ) -> Result<()> {
-        instructions::register_user(ctx, username, display_name, metadata_uri)
+        instructions::register_user(ctx, username, metadata_uri)
+    }
+
+    pub fn update_user_metadata_uri(
+        ctx: Context<UpdateUserMetadataUri>,
+        metadata_uri: String,
+    ) -> Result<()> {
+        instructions::update_user_metadata_uri(ctx, metadata_uri)
     }
 
     pub fn create_entry(

@@ -8,8 +8,6 @@ pub struct UserProfile {
     pub wallet: Pubkey,
     #[max_len(MAX_USERNAME_LEN)]
     pub username: String,
-    #[max_len(MAX_DISPLAY_NAME_LEN)]
-    pub display_name: String,
     #[max_len(MAX_METADATA_URI_LEN)]
     pub metadata_uri: String,
     pub registered_at: i64,

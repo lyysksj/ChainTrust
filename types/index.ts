@@ -6,7 +6,6 @@ import type BN from "bn.js";
 export type UserProfile = {
   wallet: PublicKey;
   username: string;
-  displayName: string;
   metadataUri: string;
   registeredAt: BN;
   bump: number;
@@ -88,11 +87,25 @@ export type CommentBody = {
   relationType?: number;
 };
 
-// ---- User profile metadata off-chain ----
+// ---- User profile metadata off-chain (lives at metadataUri) ----
+export type WorkExperienceItem = {
+  company: string;
+  role: string;
+  fromYear?: number | null;
+  toYear?: number | null;
+};
+
 export type UserMetadata = {
-  bio?: string;
-  twitter?: string;
-  site?: string;
+  headline?: string;
+  expertise?: string[];
+  workExperience?: WorkExperienceItem[];
+  links?: {
+    x?: string;
+    github?: string;
+    linkedin?: string;
+    site?: string;
+  };
+  about?: string;
 };
 
 // ---- Attestation (mock) ----

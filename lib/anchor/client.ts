@@ -135,16 +135,30 @@ export async function registerUser(
   program: Program<Chaintrust>,
   signer: PublicKey,
   username: string,
-  displayName: string,
   metadataUri: string,
 ): Promise<string> {
   const [userPda] = userProfilePda(signer);
   return program.methods
-    .registerUser(username, displayName, metadataUri)
+    .registerUser(username, metadataUri)
     .accountsPartial({
       userProfile: userPda,
       signer,
       systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+export async function updateUserMetadataUri(
+  program: Program<Chaintrust>,
+  signer: PublicKey,
+  metadataUri: string,
+): Promise<string> {
+  const [userPda] = userProfilePda(signer);
+  return program.methods
+    .updateUserMetadataUri(metadataUri)
+    .accountsPartial({
+      userProfile: userPda,
+      signer,
     })
     .rpc();
 }

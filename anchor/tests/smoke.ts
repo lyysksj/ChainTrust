@@ -111,7 +111,7 @@ async function main() {
   if (!existing) {
     console.log("register creator…");
     await program.methods
-      .registerUser("creator_" + Date.now().toString(36), "Creator", "")
+      .registerUser("creator_" + Date.now().toString(36), "")
       .accountsPartial({
         userProfile: creatorUser,
         signer: kp.publicKey,
@@ -202,7 +202,7 @@ async function main() {
   const reviewerUser = userPda(programId, reviewerKp.publicKey);
   console.log("register reviewer…");
   await reviewerProgram.methods
-    .registerUser("reviewer_" + Date.now().toString(36), "Reviewer B", "")
+    .registerUser("reviewer_" + Date.now().toString(36), "")
     .accountsPartial({
       userProfile: reviewerUser,
       signer: reviewerKp.publicKey,

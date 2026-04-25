@@ -116,11 +116,7 @@ export function HomeSearch() {
   const matchedUsers = useMemo(() => {
     if (!q) return [];
     return users
-      .filter((u) => {
-        const un = u.account.username.toLowerCase();
-        const dn = u.account.displayName.toLowerCase();
-        return un.includes(q) || dn.includes(q);
-      })
+      .filter((u) => u.account.username.toLowerCase().includes(q))
       .slice(0, 6);
   }, [q, users]);
 
@@ -209,9 +205,6 @@ export function HomeSearch() {
                           onClick={() => setOpen(false)}
                         >
                           <p className="text-sm font-semibold text-ink-800">
-                            {u.account.displayName || u.account.username}
-                          </p>
-                          <p className="mono text-xs text-ink-500">
                             @{u.account.username}
                           </p>
                         </Link>

@@ -6,9 +6,17 @@ export function validateUsername(v: string): string | null {
   return null;
 }
 
-export function validateDisplayName(v: string): string | null {
-  if (!v || !v.trim()) return "Display name is required";
-  if (v.length > 64) return "Display name must be 64 characters or fewer";
+export function validateHeadline(v: string): string | null {
+  if (!v || !v.trim()) return "Headline is required";
+  if (v.length > 120) return "Headline must be 120 characters or fewer";
+  return null;
+}
+
+export function validateOptionalUrl(v: string): string | null {
+  if (!v) return null;
+  if (!/^https?:\/\/[^\s]+$/i.test(v))
+    return "URL must start with http:// or https://";
+  if (v.length > 200) return "URL too long";
   return null;
 }
 

@@ -4,8 +4,6 @@ use anchor_lang::prelude::*;
 pub enum ChainTrustError {
     #[msg("Username is empty or exceeds max length")]
     InvalidUsername,
-    #[msg("Display name is empty or exceeds max length")]
-    InvalidDisplayName,
     #[msg("Metadata URI exceeds max length")]
     InvalidMetadataUri,
     #[msg("Jurisdiction is empty or exceeds max length")]
