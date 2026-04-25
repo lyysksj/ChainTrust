@@ -103,6 +103,19 @@ export async function fetchAllEntries(program: Program<Chaintrust>) {
   return program.account.companyEntry.all();
 }
 
+// `official_wallet` lives after a variable-length jurisdiction string, so we
+// can't use a memcmp filter — fall back to client-side filtering.
+export async function fetchEntriesByOfficialWallet(
+  program: Program<Chaintrust>,
+  wallet: PublicKey,
+) {
+  const all = await program.account.companyEntry.all();
+  const target = wallet.toBase58();
+  return all.filter(
+    (e) => e.account.officialWallet.toBase58() === target && e.account.isClaimed,
+  );
+}
+
 export async function fetchAllComments(program: Program<Chaintrust>) {
   return program.account.commentRecord.all();
 }

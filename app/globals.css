@@ -55,6 +55,10 @@ body {
   @apply border-ink-400 bg-ink-100 text-ink-600;
 }
 
+.chip-creator {
+  @apply border-ink-500 bg-ink-200 text-ink-700;
+}
+
 /* Override wallet adapter button to fit editorial aesthetic */
 .wallet-adapter-button-trigger {
   background: theme("colors.ink.800") !important;

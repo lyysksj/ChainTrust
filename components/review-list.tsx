@@ -24,9 +24,25 @@ type Props = {
   entryPda: PublicKey;
   items: Item[];
   isClaimed: boolean;
+  createdBy: PublicKey;
   officialWallet?: PublicKey | null;
   onResponded?: () => void;
 };
+
+type CommenterRole = "official" | "creator" | "community";
+
+function commenterRole(
+  commenter: PublicKey,
+  createdBy: PublicKey,
+  officialWallet: PublicKey | null,
+  isClaimed: boolean,
+): CommenterRole {
+  if (isClaimed && officialWallet && commenter.equals(officialWallet)) {
+    return "official";
+  }
+  if (commenter.equals(createdBy)) return "creator";
+  return "community";
+}
 
 type TreeNode = {
   item: Item;
@@ -70,6 +86,7 @@ export function ReviewList({
   entryPda,
   items,
   isClaimed,
+  createdBy,
   officialWallet,
   onResponded,
 }: Props) {
@@ -118,6 +135,7 @@ export function ReviewList({
           node={node}
           entryPda={entryPda}
           isClaimed={isClaimed}
+          createdBy={createdBy}
           officialWallet={officialWallet ?? null}
           likedSet={likedSet}
           setLikedSet={setLikedSet}
@@ -132,6 +150,7 @@ function CommentNode({
   node,
   entryPda,
   isClaimed,
+  createdBy,
   officialWallet,
   likedSet,
   setLikedSet,
@@ -140,6 +159,7 @@ function CommentNode({
   node: TreeNode;
   entryPda: PublicKey;
   isClaimed: boolean;
+  createdBy: PublicKey;
   officialWallet: PublicKey | null;
   likedSet: Set<string>;
   setLikedSet: (fn: (prev: Set<string>) => Set<string>) => void;
@@ -296,13 +316,36 @@ function CommentNode({
       <div className={isReply ? "space-y-2 border border-ink-100 bg-ink-50/60 p-3" : "space-y-3 p-4"}>
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-500">
           <div className="flex items-center gap-2">
-            {!isReply && (
-              <span className="chip chip-community">Community review</span>
-            )}
+            {(() => {
+              const role = commenterRole(
+                comment.commenter,
+                createdBy,
+                officialWallet,
+                isClaimed,
+              );
+              if (role === "official") {
+                return (
+                  <span className="chip chip-official">
+                    {isReply ? "Official reply" : "Official review"}
+                  </span>
+                );
+              }
+              if (role === "creator") {
+                return (
+                  <span className="chip chip-creator">
+                    {isReply ? "Creator reply" : "Creator review"}
+                  </span>
+                );
+              }
+              return (
+                <span className="chip chip-community">
+                  {isReply ? "Reply" : "Community review"}
+                </span>
+              );
+            })()}
             {!isReply && (
               <span>{RELATION_LABELS[comment.relationType] ?? "Other"}</span>
             )}
-            {isReply && <span className="chip chip-community">Reply</span>}
             <span className="mono">by {shortKey(comment.commenter)}</span>
           </div>
           <span>{formatTimestamp(comment.submittedAt)}</span>
@@ -458,6 +501,7 @@ function CommentNode({
               node={child}
               entryPda={entryPda}
               isClaimed={isClaimed}
+              createdBy={createdBy}
               officialWallet={officialWallet}
               likedSet={likedSet}
               setLikedSet={setLikedSet}

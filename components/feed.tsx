@@ -29,6 +29,7 @@ type FeedItem = {
   commenterName: string | null;
   body: CommentBody | null;
   replyCount: number;
+  commenterRoleLabel: "official" | "creator" | "community";
 };
 
 export function Feed() {
@@ -56,13 +57,22 @@ export function Feed() {
 
         const entryByPda = new Map<
           string,
-          { idHex: string; metaUri: string }
+          {
+            idHex: string;
+            metaUri: string;
+            createdBy: PublicKey;
+            officialWallet: PublicKey;
+            isClaimed: boolean;
+          }
         >();
         for (const e of rawEntries) {
           const acc = e.account as unknown as CompanyEntry;
           entryByPda.set(e.publicKey.toBase58(), {
             idHex: bytesHex(acc.entryId),
             metaUri: acc.metadataUri,
+            createdBy: acc.createdBy,
+            officialWallet: acc.officialWallet,
+            isClaimed: acc.isClaimed,
           });
         }
 
@@ -143,6 +153,17 @@ export function Feed() {
               loadBody(c.account.contentUri),
             ]);
             const commenter = userByWallet.get(c.account.commenter.toBase58());
+            let role: FeedItem["commenterRoleLabel"] = "community";
+            if (entryInfo) {
+              if (
+                entryInfo.isClaimed &&
+                c.account.commenter.equals(entryInfo.officialWallet)
+              ) {
+                role = "official";
+              } else if (c.account.commenter.equals(entryInfo.createdBy)) {
+                role = "creator";
+              }
+            }
             return {
               commentPda: c.publicKey,
               comment: c.account,
@@ -154,6 +175,7 @@ export function Feed() {
                 : null,
               body,
               replyCount: replyCounts.get(c.publicKey.toBase58()) ?? 0,
+              commenterRoleLabel: role,
             } as FeedItem;
           }),
         );
@@ -222,6 +244,7 @@ function FeedCard({ item }: { item: FeedItem }) {
     commenterName,
     body,
     replyCount,
+    commenterRoleLabel,
   } = item;
   const thumbnails = useMemo(
     () => (body?.images ?? []).slice(0, 3),
@@ -277,6 +300,12 @@ function FeedCard({ item }: { item: FeedItem }) {
         )}
 
         <div className="flex flex-wrap items-center gap-3 text-xs text-ink-500">
+          {commenterRoleLabel === "official" && (
+            <span className="chip chip-official">Official review</span>
+          )}
+          {commenterRoleLabel === "creator" && (
+            <span className="chip chip-creator">Creator review</span>
+          )}
           <span className="chip chip-community">
             {RELATION_LABELS[comment.relationType] ?? "Other"}
           </span>

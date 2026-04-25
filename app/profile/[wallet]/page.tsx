@@ -6,6 +6,7 @@ import { PublicKey } from "@solana/web3.js";
 import { useProgram } from "@/lib/anchor/hooks";
 import {
   fetchCommentsByCommenter,
+  fetchEntriesByOfficialWallet,
   fetchEntriesCreatedBy,
   fetchUserProfile,
 } from "@/lib/anchor/client";
@@ -18,6 +19,7 @@ import {
 import type {
   CommentRecord,
   CompanyEntry,
+  EntryMetadata,
   UserMetadata,
   UserProfile,
 } from "@/types";
@@ -40,6 +42,9 @@ export default function ProfilePage({ params }: { params: Params }) {
   const [entries, setEntries] = useState<
     { publicKey: PublicKey; account: CompanyEntry }[]
   >([]);
+  const [verifiedEntries, setVerifiedEntries] = useState<
+    { publicKey: PublicKey; account: CompanyEntry }[]
+  >([]);
   const [comments, setComments] = useState<
     { publicKey: PublicKey; account: CommentRecord }[]
   >([]);
@@ -54,12 +59,14 @@ export default function ProfilePage({ params }: { params: Params }) {
         const p = await fetchUserProfile(program, wallet);
         if (!alive) return;
         setProfile(p);
-        const [e, c] = await Promise.all([
+        const [e, ve, c] = await Promise.all([
           fetchEntriesCreatedBy(program, wallet),
+          fetchEntriesByOfficialWallet(program, wallet),
           fetchCommentsByCommenter(program, wallet),
         ]);
         if (!alive) return;
         setEntries(e);
+        setVerifiedEntries(ve);
         setComments(c);
       } finally {
         if (alive) setLoading(false);
@@ -91,6 +98,43 @@ export default function ProfilePage({ params }: { params: Params }) {
     };
   }, [profile?.metadataUri]);
 
+  // Fetch metadata for verified-rep entries so the badge can show the project
+  // name.
+  const [verifiedEntryNames, setVerifiedEntryNames] = useState<
+    Record<string, string>
+  >({});
+  useEffect(() => {
+    if (verifiedEntries.length === 0) {
+      setVerifiedEntryNames({});
+      return;
+    }
+    let alive = true;
+    (async () => {
+      const result: Record<string, string> = {};
+      await Promise.all(
+        verifiedEntries.map(async (e) => {
+          if (!e.account.metadataUri) return;
+          try {
+            const resp = await fetch(
+              `/api/mock/fetch?uri=${encodeURIComponent(e.account.metadataUri)}`,
+            );
+            if (!resp.ok) return;
+            const text = await resp.text();
+            const parsed = JSON.parse(text) as EntryMetadata;
+            result[e.publicKey.toBase58()] =
+              parsed.projectName ?? parsed.legalName ?? "(unnamed)";
+          } catch {
+            /* ignore */
+          }
+        }),
+      );
+      if (alive) setVerifiedEntryNames(result);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [verifiedEntries]);
+
   if (!wallet) return <p className="hint">Invalid wallet address.</p>;
 
   return (
@@ -99,13 +143,38 @@ export default function ProfilePage({ params }: { params: Params }) {
         <p className="text-xs uppercase tracking-[0.3em] text-ink-500">
           User profile
         </p>
-        <div className="flex items-baseline gap-3">
+        <div className="flex flex-wrap items-baseline gap-3">
           <h1 className="serif text-4xl font-semibold text-ink-800">
             {profile?.username ? `@${profile.username}` : shortKey(wallet)}
           </h1>
+          {verifiedEntries.length > 0 && (
+            <span className="chip chip-official text-[11px]">
+              ✓ Official representative
+            </span>
+          )}
         </div>
         {meta?.headline && (
           <p className="serif text-lg text-ink-700">{meta.headline}</p>
+        )}
+        {verifiedEntries.length > 0 && (
+          <p className="text-sm text-claimed">
+            Verified representative for{" "}
+            {verifiedEntries.map((e, i) => {
+              const name =
+                verifiedEntryNames[e.publicKey.toBase58()] ?? "(loading)";
+              return (
+                <span key={e.publicKey.toBase58()}>
+                  <Link
+                    href={`/entry/${bytesHex(e.account.entryId)}`}
+                    className="font-semibold underline"
+                  >
+                    {name}
+                  </Link>
+                  {i < verifiedEntries.length - 1 ? ", " : ""}
+                </span>
+              );
+            })}
+          </p>
         )}
         <p className="text-sm text-ink-600">
           {profile ? (

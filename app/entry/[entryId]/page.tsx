@@ -238,6 +238,7 @@ export default function EntryPage({ params }: { params: Params }) {
           entryPda={pda}
           items={comments}
           isClaimed={entry.isClaimed}
+          createdBy={entry.createdBy}
           officialWallet={entry.isClaimed ? entry.officialWallet : null}
           onResponded={refresh}
         />
