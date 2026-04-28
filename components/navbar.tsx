@@ -1,28 +1,67 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { WalletButton } from "./wallet-button";
 
+const LINKS = [
+  { href: "/", label: "Registry", match: (p: string) => p === "/" },
+  { href: "/resolve", label: "Resolve", match: (p: string) => p.startsWith("/resolve") },
+  { href: "/attest", label: "Attest", match: (p: string) => p.startsWith("/attest") },
+  { href: "/issuers", label: "Issuers", match: (p: string) => p.startsWith("/issuers") || p.startsWith("/issuer") },
+];
+
+function todayLabel(): string {
+  return new Date()
+    .toLocaleDateString("en-GB", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })
+    .toUpperCase();
+}
+
 export function Navbar() {
+  const pathname = usePathname();
+  const router = useRouter();
   return (
-    <header className="border-b border-ink-200 bg-ink-50">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-        <Link href="/" className="flex items-baseline gap-3">
-          <span className="serif text-xl font-semibold text-ink-800">
-            ChainTrust
-          </span>
-          <span className="hidden text-xs uppercase tracking-[0.2em] text-ink-500 md:inline">
-            Public Company Registry
-          </span>
-        </Link>
-        <nav className="flex items-center gap-4 text-sm">
-          <Link href="/create" className="text-ink-600 hover:text-ink-800">
-            Create entry
-          </Link>
-          <Link href="/register" className="text-ink-600 hover:text-ink-800">
-            Register
-          </Link>
-          <WalletButton />
-        </nav>
+    <>
+      <div className="topbar-meta">
+        <div className="topbar-meta-inner">
+          <span>CT REGISTRY · PUBLIC GOOD · NO. 0000-0001</span>
+          <span>SOLANA · {todayLabel()}</span>
+        </div>
       </div>
-    </header>
+      <header className="topbar">
+        <div className="topbar-inner">
+          <a
+            className="brand"
+            onClick={() => router.push("/")}
+            style={{ cursor: "pointer" }}
+          >
+            <span className="brand-mark">C</span>
+            <span className="brand-name">ChainTrust</span>
+            <span className="brand-tag">
+              Public Identity Registry · v0.4 MVP
+            </span>
+          </a>
+          <nav className="nav">
+            {LINKS.map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                className={`nav-link ${l.match(pathname) ? "active" : ""}`}
+              >
+                {l.label}
+              </Link>
+            ))}
+            <span style={{ marginLeft: 12 }}>
+              <WalletButton />
+            </span>
+          </nav>
+        </div>
+      </header>
+    </>
   );
 }

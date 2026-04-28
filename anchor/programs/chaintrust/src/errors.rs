@@ -14,25 +14,41 @@ pub enum ChainTrustError {
     InvalidEvidenceUri,
     #[msg("Official response URI exceeds max length")]
     InvalidOfficialResponseUri,
-    #[msg("Invalid relation type")]
+    #[msg("Invalid comment relation type")]
     InvalidRelationType,
-    #[msg("Invalid wallet role")]
-    InvalidWalletRole,
-    #[msg("Entry is already claimed")]
+    #[msg("Invalid issuer kind")]
+    InvalidIssuerKind,
+    #[msg("Invalid issuer tier")]
+    InvalidIssuerTier,
+    #[msg("Invalid relationship kind")]
+    InvalidRelationshipKind,
+    #[msg("Invalid validity window — valid_until must be 0 or greater than valid_from")]
+    InvalidValidityWindow,
+    #[msg("Project does not belong to the given Entity")]
+    ProjectEntityMismatch,
+    #[msg("Issuer authority does not match signer")]
+    IssuerAuthorityMismatch,
+    #[msg("Relationship has already been revoked")]
+    AlreadyRevoked,
+    #[msg("Entity is already claimed")]
     AlreadyClaimed,
-    #[msg("Entry is not claimed yet")]
+    #[msg("Entity is not claimed yet")]
     NotClaimed,
-    #[msg("Caller is not the official representative of this entry")]
+    #[msg("Caller is not the official representative of this entity")]
     NotOfficial,
-    #[msg("Comment does not belong to this entry")]
-    CommentEntryMismatch,
+    #[msg("Comment does not belong to this entity")]
+    CommentEntityMismatch,
     #[msg("Comment count overflow")]
     CommentCountOverflow,
-    #[msg("Parent comment belongs to a different entry")]
-    ParentEntryMismatch,
+    #[msg("Project count overflow")]
+    ProjectCountOverflow,
+    #[msg("Relationship count overflow")]
+    RelationshipCountOverflow,
+    #[msg("Parent comment belongs to a different entity")]
+    ParentEntityMismatch,
     #[msg("Reply depth exceeds the maximum allowed nesting")]
     MaxReplyDepthExceeded,
-    #[msg("Official response can only target a top-level review, not a reply")]
+    #[msg("Official response can only target a top-level comment, not a reply")]
     CannotRespondToReply,
     #[msg("Like count underflow / overflow")]
     LikeCountOverflow,

@@ -14,10 +14,12 @@ import type { Chaintrust } from "./idl/chaintrust";
 import {
   PROGRAM_ID,
   commentPda,
-  entryPda,
+  entityPda,
+  issuerPda,
   likeRecordPda,
+  projectPda,
+  relationshipPda,
   userProfilePda,
-  walletMappingPda,
 } from "./pdas";
 
 const COMMITMENT: Commitment = "confirmed";
@@ -36,7 +38,7 @@ export function buildProgram(provider: AnchorProvider): Program<Chaintrust> {
   return new Program(idlJson as Chaintrust, provider);
 }
 
-// --- read helpers ---
+// ---- read helpers ----
 
 export async function fetchUserProfile(
   program: Program<Chaintrust>,
@@ -46,47 +48,106 @@ export async function fetchUserProfile(
   return program.account.userProfile.fetchNullable(pda);
 }
 
-export async function fetchEntry(
+export async function fetchIssuer(
   program: Program<Chaintrust>,
-  entryId: number[] | Uint8Array,
+  authority: PublicKey,
 ) {
-  const [pda] = entryPda(entryId);
-  const acc = await program.account.companyEntry.fetchNullable(pda);
+  const [pda] = issuerPda(authority);
+  return program.account.issuer.fetchNullable(pda);
+}
+
+export async function fetchAllIssuers(program: Program<Chaintrust>) {
+  return program.account.issuer.all();
+}
+
+export async function fetchEntity(
+  program: Program<Chaintrust>,
+  entityId: number[] | Uint8Array,
+) {
+  const [pda] = entityPda(entityId);
+  const acc = await program.account.entity.fetchNullable(pda);
   return acc ? { pda, account: acc } : null;
 }
 
-export async function fetchEntryByPda(
+export async function fetchEntityByPda(
   program: Program<Chaintrust>,
   pda: PublicKey,
 ) {
-  return program.account.companyEntry.fetchNullable(pda);
+  return program.account.entity.fetchNullable(pda);
 }
 
-export async function fetchWalletMappingsForEntry(
-  program: Program<Chaintrust>,
-  entry: PublicKey,
-) {
-  return program.account.walletMapping.all([
-    { memcmp: { offset: 8 + 32, bytes: entry.toBase58() } },
-  ]);
+export async function fetchAllEntities(program: Program<Chaintrust>) {
+  return program.account.entity.all();
 }
 
-export async function fetchCommentsForEntry(
-  program: Program<Chaintrust>,
-  entry: PublicKey,
-) {
-  return program.account.commentRecord.all([
-    { memcmp: { offset: 8, bytes: entry.toBase58() } },
-  ]);
-}
-
-export async function fetchEntriesCreatedBy(
+export async function fetchEntitiesCreatedBy(
   program: Program<Chaintrust>,
   wallet: PublicKey,
 ) {
-  // created_by is the 2nd field: after 8-byte discriminator + 8-byte entry_id
-  return program.account.companyEntry.all([
+  // created_by is after 8-byte discriminator + 8-byte entity_id
+  return program.account.entity.all([
     { memcmp: { offset: 8 + 8, bytes: wallet.toBase58() } },
+  ]);
+}
+
+export async function fetchEntitiesByOfficialWallet(
+  program: Program<Chaintrust>,
+  wallet: PublicKey,
+) {
+  // official_wallet sits after a variable-length jurisdiction string, so we
+  // fall back to client-side filtering.
+  const all = await program.account.entity.all();
+  const target = wallet.toBase58();
+  return all.filter(
+    (e) => e.account.officialWallet.toBase58() === target && e.account.isClaimed,
+  );
+}
+
+export async function fetchProjectsForEntity(
+  program: Program<Chaintrust>,
+  entity: PublicKey,
+) {
+  // entity is after 8-byte discriminator + 8-byte project_id
+  return program.account.project.all([
+    { memcmp: { offset: 8 + 8, bytes: entity.toBase58() } },
+  ]);
+}
+
+export async function fetchAllProjects(program: Program<Chaintrust>) {
+  return program.account.project.all();
+}
+
+export async function fetchRelationshipsForEntity(
+  program: Program<Chaintrust>,
+  entity: PublicKey,
+) {
+  return program.account.relationship.all([
+    { memcmp: { offset: 8, bytes: entity.toBase58() } },
+  ]);
+}
+
+export async function fetchAllRelationships(program: Program<Chaintrust>) {
+  return program.account.relationship.all();
+}
+
+export async function fetchRelationshipsForTargetWallet(
+  program: Program<Chaintrust>,
+  target: PublicKey,
+) {
+  // target_ref offset = 8 (disc) + 32 (entity) + 1 (kind) = 41
+  // The bytes filter accepts a base58 string of exactly the bytes at that
+  // offset — for a 32-byte pubkey ref, we use the wallet's base58.
+  return program.account.relationship.all([
+    { memcmp: { offset: 8 + 32 + 1, bytes: target.toBase58() } },
+  ]);
+}
+
+export async function fetchCommentsForEntity(
+  program: Program<Chaintrust>,
+  entity: PublicKey,
+) {
+  return program.account.commentRecord.all([
+    { memcmp: { offset: 8, bytes: entity.toBase58() } },
   ]);
 }
 
@@ -97,23 +158,6 @@ export async function fetchCommentsByCommenter(
   return program.account.commentRecord.all([
     { memcmp: { offset: 8 + 32, bytes: wallet.toBase58() } },
   ]);
-}
-
-export async function fetchAllEntries(program: Program<Chaintrust>) {
-  return program.account.companyEntry.all();
-}
-
-// `official_wallet` lives after a variable-length jurisdiction string, so we
-// can't use a memcmp filter — fall back to client-side filtering.
-export async function fetchEntriesByOfficialWallet(
-  program: Program<Chaintrust>,
-  wallet: PublicKey,
-) {
-  const all = await program.account.companyEntry.all();
-  const target = wallet.toBase58();
-  return all.filter(
-    (e) => e.account.officialWallet.toBase58() === target && e.account.isClaimed,
-  );
 }
 
 export async function fetchAllComments(program: Program<Chaintrust>) {
@@ -142,7 +186,7 @@ export async function fetchLikesByLiker(
   ]);
 }
 
-// --- write helpers ---
+// ---- write helpers ----
 
 export async function registerUser(
   program: Program<Chaintrust>,
@@ -176,73 +220,161 @@ export async function updateUserMetadataUri(
     .rpc();
 }
 
-export async function createEntry(
+export async function registerIssuer(
   program: Program<Chaintrust>,
   signer: PublicKey,
   params: {
-    entryId: number[];
-    companyNameHash: number[];
-    projectNameHash: number[];
-    einHash: number[];
-    jurisdiction: string;
-    domainHash: number[];
+    kind: number;
+    trustTier: number;
+    nameHash: number[];
     metadataUri: string;
-    primaryWallet: PublicKey | null;
   },
 ): Promise<string> {
-  const [entry] = entryPda(params.entryId);
-  const [creatorProfile] = userProfilePda(signer);
-  // If primaryWallet is null, pass System Program as sentinel so on-chain
-  // logic stores Pubkey::default() for "not set".
-  const primary = params.primaryWallet ?? SystemProgram.programId;
+  const [issuer] = issuerPda(signer);
+  const [userProfile] = userProfilePda(signer);
   return program.methods
-    .createEntry(
-      params.entryId,
-      params.companyNameHash,
-      params.projectNameHash,
-      params.einHash,
-      params.jurisdiction,
-      params.domainHash,
+    .registerIssuer(
+      params.kind,
+      params.trustTier,
+      params.nameHash,
       params.metadataUri,
     )
     .accountsPartial({
-      entry,
-      creatorProfile,
-      primaryWallet: primary,
+      issuer,
+      userProfile,
       signer,
       systemProgram: SystemProgram.programId,
     })
     .rpc();
 }
 
-export async function addWalletMapping(
+export async function createEntity(
   program: Program<Chaintrust>,
   signer: PublicKey,
   params: {
-    entry: PublicKey;
-    targetWallet: PublicKey;
-    walletRole: number;
-    evidenceHash: number[];
-    evidenceUri: string;
-    isOfficial: boolean;
+    entityId: number[];
+    legalNameHash: number[];
+    registryIdHash: number[];
+    jurisdiction: string;
+    metadataUri: string;
   },
 ): Promise<string> {
-  const [userProfile] = userProfilePda(signer);
-  const [mapping] = walletMappingPda(params.targetWallet, params.entry);
+  const [entity] = entityPda(params.entityId);
+  const [creatorProfile] = userProfilePda(signer);
   return program.methods
-    .addWalletMapping(
-      params.walletRole,
-      params.evidenceHash,
-      params.evidenceUri,
-      params.isOfficial,
+    .createEntity(
+      params.entityId,
+      params.legalNameHash,
+      params.registryIdHash,
+      params.jurisdiction,
+      params.metadataUri,
     )
     .accountsPartial({
-      entry: params.entry,
-      walletMapping: mapping,
-      targetWallet: params.targetWallet,
-      userProfile,
+      entity,
+      creatorProfile,
       signer,
       systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+export async function createProject(
+  program: Program<Chaintrust>,
+  signer: PublicKey,
+  params: {
+    entity: PublicKey;
+    projectId: number[];
+    nameHash: number[];
+    domainHash: number[];
+    metadataUri: string;
+  },
+): Promise<string> {
+  const [project] = projectPda(params.entity, params.projectId);
+  const [creatorProfile] = userProfilePda(signer);
+  return program.methods
+    .createProject(
+      params.projectId,
+      params.nameHash,
+      params.domainHash,
+      params.metadataUri,
+    )
+    .accountsPartial({
+      entity: params.entity,
+      project,
+      creatorProfile,
+      signer,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+export async function attestRelationship(
+  program: Program<Chaintrust>,
+  signer: PublicKey,
+  params: {
+    entity: PublicKey;
+    kind: number;
+    targetRef: number[];
+    evidenceHash: number[];
+    evidenceUri: string;
+    validFrom: number;
+    validUntil: number;
+  },
+): Promise<string> {
+  const [issuer] = issuerPda(signer);
+  const [relationship] = relationshipPda(
+    params.entity,
+    params.kind,
+    params.targetRef,
+    issuer,
+  );
+  return program.methods
+    .attestRelationship(
+      params.kind,
+      params.targetRef,
+      params.evidenceHash,
+      params.evidenceUri,
+      new BN(params.validFrom),
+      new BN(params.validUntil),
+    )
+    .accountsPartial({
+      entity: params.entity,
+      issuer,
+      relationship,
+      signer,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+export async function revokeRelationship(
+  program: Program<Chaintrust>,
+  signer: PublicKey,
+  relationship: PublicKey,
+): Promise<string> {
+  const [issuer] = issuerPda(signer);
+  return program.methods
+    .revokeRelationship()
+    .accountsPartial({
+      relationship,
+      issuer,
+      signer,
+    })
+    .rpc();
+}
+
+export async function claimEntity(
+  program: Program<Chaintrust>,
+  signer: PublicKey,
+  entity: PublicKey,
+): Promise<string> {
+  const [claimerProfile] = userProfilePda(signer);
+  return program.methods
+    .claimEntity()
+    .accountsPartial({
+      entity,
+      claimerProfile,
+      signer,
     })
     .rpc();
 }
@@ -251,7 +383,7 @@ export async function submitComment(
   program: Program<Chaintrust>,
   signer: PublicKey,
   params: {
-    entry: PublicKey;
+    entity: PublicKey;
     commentIndex: number;
     relationType: number;
     contentHash: number[];
@@ -260,7 +392,7 @@ export async function submitComment(
   },
 ): Promise<string> {
   const [commenterProfile] = userProfilePda(signer);
-  const [comment] = commentPda(params.entry, signer, params.commentIndex);
+  const [comment] = commentPda(params.entity, signer, params.commentIndex);
   return program.methods
     .submitComment(
       params.commentIndex,
@@ -270,7 +402,7 @@ export async function submitComment(
       params.contentUri,
     )
     .accountsPartial({
-      entry: params.entry,
+      entity: params.entity,
       comment,
       commenterProfile,
       signer,
@@ -283,7 +415,7 @@ export async function submitReply(
   program: Program<Chaintrust>,
   signer: PublicKey,
   params: {
-    entry: PublicKey;
+    entity: PublicKey;
     parentComment: PublicKey;
     commentIndex: number;
     contentHash: number[];
@@ -292,7 +424,7 @@ export async function submitReply(
   },
 ): Promise<string> {
   const [commenterProfile] = userProfilePda(signer);
-  const [comment] = commentPda(params.entry, signer, params.commentIndex);
+  const [comment] = commentPda(params.entity, signer, params.commentIndex);
   return program.methods
     .submitReply(
       params.commentIndex,
@@ -301,7 +433,7 @@ export async function submitReply(
       params.contentUri,
     )
     .accountsPartial({
-      entry: params.entry,
+      entity: params.entity,
       parentComment: params.parentComment,
       comment,
       commenterProfile,
@@ -346,33 +478,17 @@ export async function unlikeComment(
     .rpc();
 }
 
-export async function claimEntry(
-  program: Program<Chaintrust>,
-  signer: PublicKey,
-  entry: PublicKey,
-): Promise<string> {
-  const [claimerProfile] = userProfilePda(signer);
-  return program.methods
-    .claimEntry()
-    .accountsPartial({
-      entry,
-      claimerProfile,
-      signer,
-    })
-    .rpc();
-}
-
 export async function addOfficialResponse(
   program: Program<Chaintrust>,
   signer: PublicKey,
-  entry: PublicKey,
+  entity: PublicKey,
   comment: PublicKey,
   officialResponseUri: string,
 ): Promise<string> {
   return program.methods
     .addOfficialResponse(officialResponseUri)
     .accountsPartial({
-      entry,
+      entity,
       comment,
       signer,
     })

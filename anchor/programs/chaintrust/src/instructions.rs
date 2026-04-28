@@ -83,108 +83,20 @@ pub fn update_user_metadata_uri(
 }
 
 // ---------------------------------------------------------------------------
-// create_entry
+// register_issuer
 // ---------------------------------------------------------------------------
 
 #[derive(Accounts)]
-#[instruction(
-    entry_id: [u8; 8],
-    company_name_hash: [u8; 32],
-    project_name_hash: [u8; 32],
-    ein_hash: [u8; 32],
-    jurisdiction: String,
-    domain_hash: [u8; 32],
-    metadata_uri: String,
-)]
-pub struct CreateEntry<'info> {
+#[instruction(kind: u8, trust_tier: u8, name_hash: [u8; 32], metadata_uri: String)]
+pub struct RegisterIssuer<'info> {
     #[account(
         init,
         payer = signer,
-        space = 8 + CompanyEntry::INIT_SPACE,
-        seeds = [ENTRY_SEED, &entry_id],
+        space = 8 + Issuer::INIT_SPACE,
+        seeds = [ISSUER_SEED, signer.key().as_ref()],
         bump
     )]
-    pub entry: Account<'info, CompanyEntry>,
-    #[account(
-        seeds = [USER_SEED, signer.key().as_ref()],
-        bump = creator_profile.bump,
-        constraint = creator_profile.wallet == signer.key(),
-    )]
-    pub creator_profile: Account<'info, UserProfile>,
-    /// CHECK: optional. Any wallet key is acceptable as the primary wallet;
-    /// pass the System Program id as a sentinel when the user did not specify one.
-    pub primary_wallet: UncheckedAccount<'info>,
-    #[account(mut)]
-    pub signer: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-pub fn create_entry(
-    ctx: Context<CreateEntry>,
-    entry_id: [u8; 8],
-    company_name_hash: [u8; 32],
-    project_name_hash: [u8; 32],
-    ein_hash: [u8; 32],
-    jurisdiction: String,
-    domain_hash: [u8; 32],
-    metadata_uri: String,
-) -> Result<()> {
-    require!(
-        !jurisdiction.is_empty() && jurisdiction.len() <= MAX_JURISDICTION_LEN,
-        ChainTrustError::InvalidJurisdiction
-    );
-    require!(
-        metadata_uri.len() <= MAX_METADATA_URI_LEN,
-        ChainTrustError::InvalidMetadataUri
-    );
-
-    let primary_wallet_key = ctx.accounts.primary_wallet.key();
-    let stored_primary = if primary_wallet_key == ctx.accounts.system_program.key() {
-        // Sentinel: user declined to set a primary wallet.
-        Pubkey::default()
-    } else {
-        primary_wallet_key
-    };
-
-    let entry = &mut ctx.accounts.entry;
-    entry.entry_id = entry_id;
-    entry.created_by = ctx.accounts.signer.key();
-    entry.company_name_hash = company_name_hash;
-    entry.project_name_hash = project_name_hash;
-    entry.ein_hash = ein_hash;
-    entry.jurisdiction = jurisdiction;
-    entry.domain_hash = domain_hash;
-    entry.primary_wallet = stored_primary;
-    entry.status = STATUS_UNVERIFIED;
-    entry.is_claimed = false;
-    entry.official_wallet = Pubkey::default();
-    entry.metadata_uri = metadata_uri;
-    entry.comment_count = 0;
-    entry.created_at = Clock::get()?.unix_timestamp;
-    entry.claimed_at = 0;
-    entry.bump = ctx.bumps.entry;
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// add_wallet_mapping
-// ---------------------------------------------------------------------------
-
-#[derive(Accounts)]
-#[instruction(wallet_role: u8, evidence_hash: [u8; 32], evidence_uri: String, is_official: bool)]
-pub struct AddWalletMapping<'info> {
-    #[account(mut)]
-    pub entry: Account<'info, CompanyEntry>,
-    #[account(
-        init,
-        payer = signer,
-        space = 8 + WalletMapping::INIT_SPACE,
-        seeds = [WALLET_MAP_SEED, target_wallet.key().as_ref(), entry.key().as_ref()],
-        bump
-    )]
-    pub wallet_mapping: Account<'info, WalletMapping>,
-    /// CHECK: arbitrary wallet being linked; identity not verified on-chain.
-    pub target_wallet: UncheckedAccount<'info>,
+    pub issuer: Account<'info, Issuer>,
     #[account(
         seeds = [USER_SEED, signer.key().as_ref()],
         bump = user_profile.bump,
@@ -196,46 +108,325 @@ pub struct AddWalletMapping<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn add_wallet_mapping(
-    ctx: Context<AddWalletMapping>,
-    wallet_role: u8,
-    evidence_hash: [u8; 32],
-    evidence_uri: String,
-    is_official: bool,
+pub fn register_issuer(
+    ctx: Context<RegisterIssuer>,
+    kind: u8,
+    trust_tier: u8,
+    name_hash: [u8; 32],
+    metadata_uri: String,
 ) -> Result<()> {
     require!(
-        wallet_role >= 1 && wallet_role <= MAX_WALLET_ROLE,
-        ChainTrustError::InvalidWalletRole
+        kind >= ISSUER_KIND_MIN && kind <= ISSUER_KIND_MAX,
+        ChainTrustError::InvalidIssuerKind
+    );
+    require!(
+        trust_tier >= ISSUER_TIER_MIN && trust_tier <= ISSUER_TIER_MAX,
+        ChainTrustError::InvalidIssuerTier
+    );
+    require!(
+        metadata_uri.len() <= MAX_METADATA_URI_LEN,
+        ChainTrustError::InvalidMetadataUri
+    );
+
+    let issuer = &mut ctx.accounts.issuer;
+    issuer.authority = ctx.accounts.signer.key();
+    issuer.kind = kind;
+    issuer.trust_tier = trust_tier;
+    issuer.name_hash = name_hash;
+    issuer.metadata_uri = metadata_uri;
+    issuer.registered_at = Clock::get()?.unix_timestamp;
+    issuer.bump = ctx.bumps.issuer;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// create_entity
+// ---------------------------------------------------------------------------
+
+#[derive(Accounts)]
+#[instruction(
+    entity_id: [u8; 8],
+    legal_name_hash: [u8; 32],
+    registry_id_hash: [u8; 32],
+    jurisdiction: String,
+    metadata_uri: String,
+)]
+pub struct CreateEntity<'info> {
+    #[account(
+        init,
+        payer = signer,
+        space = 8 + Entity::INIT_SPACE,
+        seeds = [ENTITY_SEED, &entity_id],
+        bump
+    )]
+    pub entity: Account<'info, Entity>,
+    #[account(
+        seeds = [USER_SEED, signer.key().as_ref()],
+        bump = creator_profile.bump,
+        constraint = creator_profile.wallet == signer.key(),
+    )]
+    pub creator_profile: Account<'info, UserProfile>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn create_entity(
+    ctx: Context<CreateEntity>,
+    entity_id: [u8; 8],
+    legal_name_hash: [u8; 32],
+    registry_id_hash: [u8; 32],
+    jurisdiction: String,
+    metadata_uri: String,
+) -> Result<()> {
+    require!(
+        !jurisdiction.is_empty() && jurisdiction.len() <= MAX_JURISDICTION_LEN,
+        ChainTrustError::InvalidJurisdiction
+    );
+    require!(
+        metadata_uri.len() <= MAX_METADATA_URI_LEN,
+        ChainTrustError::InvalidMetadataUri
+    );
+
+    let entity = &mut ctx.accounts.entity;
+    entity.entity_id = entity_id;
+    entity.created_by = ctx.accounts.signer.key();
+    entity.legal_name_hash = legal_name_hash;
+    entity.registry_id_hash = registry_id_hash;
+    entity.jurisdiction = jurisdiction;
+    entity.status = STATUS_UNVERIFIED;
+    entity.is_claimed = false;
+    entity.official_wallet = Pubkey::default();
+    entity.metadata_uri = metadata_uri;
+    entity.project_count = 0;
+    entity.relationship_count = 0;
+    entity.comment_count = 0;
+    entity.created_at = Clock::get()?.unix_timestamp;
+    entity.claimed_at = 0;
+    entity.bump = ctx.bumps.entity;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// create_project
+// ---------------------------------------------------------------------------
+
+#[derive(Accounts)]
+#[instruction(
+    project_id: [u8; 8],
+    name_hash: [u8; 32],
+    domain_hash: [u8; 32],
+    metadata_uri: String,
+)]
+pub struct CreateProject<'info> {
+    #[account(mut)]
+    pub entity: Account<'info, Entity>,
+    #[account(
+        init,
+        payer = signer,
+        space = 8 + Project::INIT_SPACE,
+        seeds = [PROJECT_SEED, entity.key().as_ref(), &project_id],
+        bump
+    )]
+    pub project: Account<'info, Project>,
+    #[account(
+        seeds = [USER_SEED, signer.key().as_ref()],
+        bump = creator_profile.bump,
+        constraint = creator_profile.wallet == signer.key(),
+    )]
+    pub creator_profile: Account<'info, UserProfile>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn create_project(
+    ctx: Context<CreateProject>,
+    project_id: [u8; 8],
+    name_hash: [u8; 32],
+    domain_hash: [u8; 32],
+    metadata_uri: String,
+) -> Result<()> {
+    require!(
+        metadata_uri.len() <= MAX_METADATA_URI_LEN,
+        ChainTrustError::InvalidMetadataUri
+    );
+
+    let entity = &mut ctx.accounts.entity;
+    entity.project_count = entity
+        .project_count
+        .checked_add(1)
+        .ok_or(ChainTrustError::ProjectCountOverflow)?;
+
+    let project = &mut ctx.accounts.project;
+    project.project_id = project_id;
+    project.entity = entity.key();
+    project.created_by = ctx.accounts.signer.key();
+    project.name_hash = name_hash;
+    project.domain_hash = domain_hash;
+    project.metadata_uri = metadata_uri;
+    project.created_at = Clock::get()?.unix_timestamp;
+    project.bump = ctx.bumps.project;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// attest_relationship
+// ---------------------------------------------------------------------------
+//
+// Creates a signed, time-bounded edge from `entity` to `target_ref`.
+// The signing wallet must be the authority of the provided Issuer PDA.
+// Multiple issuers can attest the same (entity, kind, target_ref) tuple
+// independently — the issuer pubkey is part of the PDA seed.
+
+#[derive(Accounts)]
+#[instruction(
+    kind: u8,
+    target_ref: [u8; 32],
+    evidence_hash: [u8; 32],
+    evidence_uri: String,
+    valid_from: i64,
+    valid_until: i64,
+)]
+pub struct AttestRelationship<'info> {
+    #[account(mut)]
+    pub entity: Account<'info, Entity>,
+    #[account(
+        seeds = [ISSUER_SEED, signer.key().as_ref()],
+        bump = issuer.bump,
+        constraint = issuer.authority == signer.key() @ ChainTrustError::IssuerAuthorityMismatch,
+    )]
+    pub issuer: Account<'info, Issuer>,
+    #[account(
+        init,
+        payer = signer,
+        space = 8 + Relationship::INIT_SPACE,
+        seeds = [
+            REL_SEED,
+            entity.key().as_ref(),
+            &[kind],
+            &target_ref,
+            issuer.key().as_ref(),
+        ],
+        bump
+    )]
+    pub relationship: Account<'info, Relationship>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn attest_relationship(
+    ctx: Context<AttestRelationship>,
+    kind: u8,
+    target_ref: [u8; 32],
+    evidence_hash: [u8; 32],
+    evidence_uri: String,
+    valid_from: i64,
+    valid_until: i64,
+) -> Result<()> {
+    require!(
+        kind >= REL_KIND_MIN && kind <= REL_KIND_MAX,
+        ChainTrustError::InvalidRelationshipKind
     );
     require!(
         evidence_uri.len() <= MAX_EVIDENCE_URI_LEN,
         ChainTrustError::InvalidEvidenceUri
     );
+    // valid_until == 0 means "no expiry"
+    require!(
+        valid_until == 0 || valid_until > valid_from,
+        ChainTrustError::InvalidValidityWindow
+    );
 
-    if is_official {
-        let entry = &ctx.accounts.entry;
-        require!(entry.is_claimed, ChainTrustError::NotClaimed);
-        require!(
-            entry.official_wallet == ctx.accounts.signer.key(),
-            ChainTrustError::NotOfficial
-        );
+    let entity = &mut ctx.accounts.entity;
+    entity.relationship_count = entity
+        .relationship_count
+        .checked_add(1)
+        .ok_or(ChainTrustError::RelationshipCountOverflow)?;
+
+    // If a Tier-1 issuer attests a relationship and the entity is still
+    // unverified, promote it to platform_verified. Claimed status is sticky.
+    if entity.status == STATUS_UNVERIFIED && ctx.accounts.issuer.trust_tier == ISSUER_TIER_MIN {
+        entity.status = STATUS_PLATFORM_VERIFIED;
     }
 
-    let mapping = &mut ctx.accounts.wallet_mapping;
-    mapping.target_wallet = ctx.accounts.target_wallet.key();
-    mapping.entry = ctx.accounts.entry.key();
-    mapping.wallet_role = wallet_role;
-    mapping.evidence_hash = evidence_hash;
-    mapping.evidence_uri = evidence_uri;
-    mapping.added_by = ctx.accounts.signer.key();
-    mapping.is_official = is_official;
-    mapping.added_at = Clock::get()?.unix_timestamp;
-    mapping.bump = ctx.bumps.wallet_mapping;
+    let rel = &mut ctx.accounts.relationship;
+    rel.entity = entity.key();
+    rel.kind = kind;
+    rel.target_ref = target_ref;
+    rel.issuer = ctx.accounts.issuer.key();
+    rel.attestor_authority = ctx.accounts.signer.key();
+    rel.evidence_hash = evidence_hash;
+    rel.evidence_uri = evidence_uri;
+    rel.valid_from = valid_from;
+    rel.valid_until = valid_until;
+    rel.revoked_at = 0;
+    rel.created_at = Clock::get()?.unix_timestamp;
+    rel.bump = ctx.bumps.relationship;
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// submit_comment (top-level review)
+// revoke_relationship
+// ---------------------------------------------------------------------------
+//
+// Sets `revoked_at` on the relationship. The PDA is preserved — nothing is
+// closed or deleted — so the revocation itself is part of the public record.
+
+#[derive(Accounts)]
+pub struct RevokeRelationship<'info> {
+    #[account(
+        mut,
+        constraint = relationship.issuer == issuer.key(),
+    )]
+    pub relationship: Account<'info, Relationship>,
+    #[account(
+        seeds = [ISSUER_SEED, signer.key().as_ref()],
+        bump = issuer.bump,
+        constraint = issuer.authority == signer.key() @ ChainTrustError::IssuerAuthorityMismatch,
+    )]
+    pub issuer: Account<'info, Issuer>,
+    pub signer: Signer<'info>,
+}
+
+pub fn revoke_relationship(ctx: Context<RevokeRelationship>) -> Result<()> {
+    let rel = &mut ctx.accounts.relationship;
+    require!(rel.revoked_at == 0, ChainTrustError::AlreadyRevoked);
+    rel.revoked_at = Clock::get()?.unix_timestamp;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// claim_entity
+// ---------------------------------------------------------------------------
+
+#[derive(Accounts)]
+pub struct ClaimEntity<'info> {
+    #[account(mut)]
+    pub entity: Account<'info, Entity>,
+    #[account(
+        seeds = [USER_SEED, signer.key().as_ref()],
+        bump = claimer_profile.bump,
+        constraint = claimer_profile.wallet == signer.key(),
+    )]
+    pub claimer_profile: Account<'info, UserProfile>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
+}
+
+pub fn claim_entity(ctx: Context<ClaimEntity>) -> Result<()> {
+    let entity = &mut ctx.accounts.entity;
+    require!(!entity.is_claimed, ChainTrustError::AlreadyClaimed);
+    entity.is_claimed = true;
+    entity.official_wallet = ctx.accounts.signer.key();
+    entity.status = STATUS_CLAIMED;
+    entity.claimed_at = Clock::get()?.unix_timestamp;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// submit_comment (top-level community signal)
 // ---------------------------------------------------------------------------
 
 #[derive(Accounts)]
@@ -248,14 +439,14 @@ pub fn add_wallet_mapping(
 )]
 pub struct SubmitComment<'info> {
     #[account(mut)]
-    pub entry: Account<'info, CompanyEntry>,
+    pub entity: Account<'info, Entity>,
     #[account(
         init,
         payer = signer,
         space = 8 + CommentRecord::INIT_SPACE,
         seeds = [
             COMMENT_SEED,
-            entry.key().as_ref(),
+            entity.key().as_ref(),
             signer.key().as_ref(),
             &comment_index.to_le_bytes()
         ],
@@ -282,7 +473,7 @@ pub fn submit_comment(
     content_uri: String,
 ) -> Result<()> {
     require!(
-        relation_type >= 1 && relation_type <= MAX_RELATION_TYPE,
+        relation_type >= 1 && relation_type <= MAX_COMMENT_RELATION_TYPE,
         ChainTrustError::InvalidRelationType
     );
     require!(
@@ -290,18 +481,18 @@ pub fn submit_comment(
         ChainTrustError::InvalidContentUri
     );
 
-    let entry = &mut ctx.accounts.entry;
+    let entity = &mut ctx.accounts.entity;
     require!(
-        comment_index == entry.comment_count,
-        ChainTrustError::CommentEntryMismatch
+        comment_index == entity.comment_count,
+        ChainTrustError::CommentEntityMismatch
     );
-    entry.comment_count = entry
+    entity.comment_count = entity
         .comment_count
         .checked_add(1)
         .ok_or(ChainTrustError::CommentCountOverflow)?;
 
     let comment = &mut ctx.accounts.comment;
-    comment.entry = entry.key();
+    comment.entity = entity.key();
     comment.commenter = ctx.accounts.signer.key();
     comment.comment_index = comment_index;
     comment.relation_type = relation_type;
@@ -331,9 +522,9 @@ pub fn submit_comment(
 )]
 pub struct SubmitReply<'info> {
     #[account(mut)]
-    pub entry: Account<'info, CompanyEntry>,
+    pub entity: Account<'info, Entity>,
     #[account(
-        constraint = parent_comment.entry == entry.key() @ ChainTrustError::ParentEntryMismatch,
+        constraint = parent_comment.entity == entity.key() @ ChainTrustError::ParentEntityMismatch,
     )]
     pub parent_comment: Account<'info, CommentRecord>,
     #[account(
@@ -342,7 +533,7 @@ pub struct SubmitReply<'info> {
         space = 8 + CommentRecord::INIT_SPACE,
         seeds = [
             COMMENT_SEED,
-            entry.key().as_ref(),
+            entity.key().as_ref(),
             signer.key().as_ref(),
             &comment_index.to_le_bytes()
         ],
@@ -382,23 +573,23 @@ pub fn submit_reply(
         ChainTrustError::MaxReplyDepthExceeded
     );
 
-    let entry = &mut ctx.accounts.entry;
+    let entity = &mut ctx.accounts.entity;
     require!(
-        comment_index == entry.comment_count,
-        ChainTrustError::CommentEntryMismatch
+        comment_index == entity.comment_count,
+        ChainTrustError::CommentEntityMismatch
     );
-    entry.comment_count = entry
+    entity.comment_count = entity
         .comment_count
         .checked_add(1)
         .ok_or(ChainTrustError::CommentCountOverflow)?;
 
     let parent_key = parent.key();
     let comment = &mut ctx.accounts.comment;
-    comment.entry = entry.key();
+    comment.entity = entity.key();
     comment.commenter = ctx.accounts.signer.key();
     comment.comment_index = comment_index;
     // Replies inherit relation_type=0 to indicate "not applicable" — they are
-    // responses to a review, not a review themselves.
+    // responses to a comment, not a top-level community signal.
     comment.relation_type = 0;
     comment.parent_comment = Some(parent_key);
     comment.depth = new_depth;
@@ -414,7 +605,7 @@ pub fn submit_reply(
 }
 
 // ---------------------------------------------------------------------------
-// like_comment
+// like_comment / unlike_comment
 // ---------------------------------------------------------------------------
 
 #[derive(Accounts)]
@@ -455,10 +646,6 @@ pub fn like_comment(ctx: Context<LikeComment>) -> Result<()> {
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// unlike_comment
-// ---------------------------------------------------------------------------
-
 #[derive(Accounts)]
 pub struct UnlikeComment<'info> {
     #[account(mut)]
@@ -486,43 +673,15 @@ pub fn unlike_comment(ctx: Context<UnlikeComment>) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
-// claim_entry
-// ---------------------------------------------------------------------------
-
-#[derive(Accounts)]
-pub struct ClaimEntry<'info> {
-    #[account(mut)]
-    pub entry: Account<'info, CompanyEntry>,
-    #[account(
-        seeds = [USER_SEED, signer.key().as_ref()],
-        bump = claimer_profile.bump,
-        constraint = claimer_profile.wallet == signer.key(),
-    )]
-    pub claimer_profile: Account<'info, UserProfile>,
-    #[account(mut)]
-    pub signer: Signer<'info>,
-}
-
-pub fn claim_entry(ctx: Context<ClaimEntry>) -> Result<()> {
-    let entry = &mut ctx.accounts.entry;
-    require!(!entry.is_claimed, ChainTrustError::AlreadyClaimed);
-    entry.is_claimed = true;
-    entry.official_wallet = ctx.accounts.signer.key();
-    entry.status = STATUS_CLAIMED;
-    entry.claimed_at = Clock::get()?.unix_timestamp;
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
 // add_official_response
 // ---------------------------------------------------------------------------
 
 #[derive(Accounts)]
 pub struct AddOfficialResponse<'info> {
-    pub entry: Account<'info, CompanyEntry>,
+    pub entity: Account<'info, Entity>,
     #[account(
         mut,
-        constraint = comment.entry == entry.key() @ ChainTrustError::CommentEntryMismatch,
+        constraint = comment.entity == entity.key() @ ChainTrustError::CommentEntityMismatch,
     )]
     pub comment: Account<'info, CommentRecord>,
     #[account(mut)]
@@ -537,10 +696,10 @@ pub fn add_official_response(
         official_response_uri.len() <= MAX_OFFICIAL_RESPONSE_URI_LEN,
         ChainTrustError::InvalidOfficialResponseUri
     );
-    let entry = &ctx.accounts.entry;
-    require!(entry.is_claimed, ChainTrustError::NotClaimed);
+    let entity = &ctx.accounts.entity;
+    require!(entity.is_claimed, ChainTrustError::NotClaimed);
     require!(
-        entry.official_wallet == ctx.accounts.signer.key(),
+        entity.official_wallet == ctx.accounts.signer.key(),
         ChainTrustError::NotOfficial
     );
     let comment = &ctx.accounts.comment;

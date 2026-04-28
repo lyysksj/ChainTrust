@@ -4,15 +4,15 @@ import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import type { PublicKey } from "@solana/web3.js";
 import { useProgram } from "@/lib/anchor/hooks";
-import { claimEntry } from "@/lib/anchor/client";
+import { claimEntity } from "@/lib/anchor/client";
 
 type Props = {
-  entryPda: PublicKey;
+  entity: PublicKey;
   domain: string;
   onClaimed?: () => void;
 };
 
-export function ClaimCard({ entryPda, domain, onClaimed }: Props) {
+export function ClaimCard({ entity, domain, onClaimed }: Props) {
   const { publicKey } = useWallet();
   const program = useProgram();
   const [step, setStep] = useState<"idle" | "dns" | "sign" | "done">("idle");
@@ -60,7 +60,7 @@ export function ClaimCard({ entryPda, domain, onClaimed }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      await claimEntry(program, publicKey, entryPda);
+      await claimEntity(program, publicKey, entity);
       setStep("done");
       onClaimed?.();
     } catch (err) {
@@ -74,10 +74,10 @@ export function ClaimCard({ entryPda, domain, onClaimed }: Props) {
     <div className="space-y-3 border-2 border-dashed border-claimed/40 bg-claimed/5 p-4">
       <div>
         <h3 className="serif text-lg font-semibold text-ink-800">
-          Claim this entry
+          Claim this entity
         </h3>
         <p className="hint">
-          Representatives prove control via domain or wallet. Claim unlocks official responses and metadata — it does <span className="font-medium">not</span> delete or rewrite any review.
+          Representatives prove control via domain or wallet. Claim unlocks official responses on community signals — it does <span className="font-medium">not</span> delete, rewrite, or revoke any record.
         </p>
       </div>
 
@@ -128,7 +128,7 @@ export function ClaimCard({ entryPda, domain, onClaimed }: Props) {
 
       {step === "done" && (
         <p className="text-sm text-claimed">
-          Entry claimed. You can now publish official responses. Reviews remain immutable.
+          Entity claimed. You can now publish official responses on community signals. Records remain immutable.
         </p>
       )}
 

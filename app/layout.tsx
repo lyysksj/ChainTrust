@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Navbar } from "@/components/navbar";
+import { Footer } from "@/components/footer";
 
 export const metadata: Metadata = {
-  title: "ChainTrust — on-chain company registry",
+  title: "ChainTrust · Public Identity Registry",
   description:
-    "An on-chain company identity and reputation layer for Web3 teams. Claim gives voice, not control.",
+    "The on-chain Dun & Bradstreet for Web3. Signed, time-stamped, append-only identity graph anchored on Solana.",
 };
 
 export default function RootLayout({
@@ -16,13 +17,25 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body>
         <Providers>
-          <Navbar />
-          <main className="mx-auto max-w-5xl px-6 pb-24 pt-8">{children}</main>
-          <footer className="border-t border-ink-200 py-8 text-center text-xs uppercase tracking-wider text-ink-500">
-            ChainTrust · Public on-chain company registry · Demo build
-          </footer>
+          <div className="app">
+            <Navbar />
+            <main className="page">{children}</main>
+            <Footer />
+          </div>
         </Providers>
       </body>
     </html>

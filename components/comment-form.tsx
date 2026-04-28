@@ -5,14 +5,15 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import type { PublicKey } from "@solana/web3.js";
 import { useProgram } from "@/lib/anchor/hooks";
 import {
-  fetchEntryByPda,
+  fetchEntityByPda,
   submitComment,
   submitReply,
 } from "@/lib/anchor/client";
 import { sha256Bytes } from "@/lib/utils/hash";
+import { COMMENT_RELATION_LABELS } from "@/types";
 
 type Props = {
-  entryPda: PublicKey;
+  entity: PublicKey;
   parentComment?: PublicKey | null;
   onSubmitted?: () => void;
   onCancel?: () => void;
@@ -22,7 +23,7 @@ type Props = {
 const MAX_IMAGES = 6;
 
 export function CommentForm({
-  entryPda,
+  entity,
   parentComment,
   onSubmitted,
   onCancel,
@@ -32,7 +33,7 @@ export function CommentForm({
   const program = useProgram();
   const isReply = !!parentComment;
 
-  const [relationType, setRelationType] = useState(4); // default Customer
+  const [relationType, setRelationType] = useState(2); // default Addendum
   const [headline, setHeadline] = useState("");
   const [body, setBody] = useState("");
   const [images, setImages] = useState<string[]>([]);
@@ -44,7 +45,7 @@ export function CommentForm({
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     if (images.length >= MAX_IMAGES) {
-      setError(`Up to ${MAX_IMAGES} images per review.`);
+      setError(`Up to ${MAX_IMAGES} images per signal.`);
       return;
     }
     setUploading(true);
@@ -87,7 +88,7 @@ export function CommentForm({
       return;
     }
     if (!body.trim()) {
-      setError(isReply ? "Reply cannot be empty." : "Review body is required.");
+      setError(isReply ? "Reply cannot be empty." : "Signal body is required.");
       return;
     }
     setSubmitting(true);
@@ -108,13 +109,13 @@ export function CommentForm({
       }).then((r) => r.json());
       if (!up.uri) throw new Error(up.error ?? "Upload failed");
 
-      const entry = await fetchEntryByPda(program, entryPda);
-      if (!entry) throw new Error("Entry not found");
-      const commentIndex = entry.commentCount;
+      const ent = await fetchEntityByPda(program, entity);
+      if (!ent) throw new Error("Entity not found");
+      const commentIndex = ent.commentCount;
 
       if (isReply && parentComment) {
         await submitReply(program, publicKey, {
-          entry: entryPda,
+          entity,
           parentComment,
           commentIndex,
           contentHash: sha256Bytes(content),
@@ -123,7 +124,7 @@ export function CommentForm({
         });
       } else {
         await submitComment(program, publicKey, {
-          entry: entryPda,
+          entity,
           commentIndex,
           relationType,
           contentHash: sha256Bytes(content),
@@ -152,11 +153,12 @@ export function CommentForm({
       {!isReply && (
         <div>
           <h3 className="serif text-base font-semibold text-ink-800">
-            Add a review
+            Add a community signal
           </h3>
           <p className="hint">
-            Append-only. Content hash, timestamp, and your wallet are anchored
-            on-chain. The company can respond but cannot delete or edit.
+            Append-only. Use this for nuanced facts (disputes, addenda, incidents)
+            that don't fit the structured relationship schema. Hash, timestamp,
+            and your wallet are anchored on-chain.
           </p>
         </div>
       )}
@@ -164,17 +166,19 @@ export function CommentForm({
       {!isReply && (
         <>
           <div>
-            <label className="label">Relationship</label>
+            <label className="label">Signal kind</label>
             <select
               className="select mt-1"
               value={relationType}
               onChange={(e) => setRelationType(Number(e.target.value))}
             >
-              <option value={1}>Employee</option>
-              <option value={2}>Partner</option>
-              <option value={3}>Investor</option>
-              <option value={4}>Customer</option>
-              <option value={5}>Other</option>
+              {Object.entries(COMMENT_RELATION_LABELS)
+                .filter(([k]) => Number(k) >= 1)
+                .map(([k, label]) => (
+                  <option key={k} value={k}>
+                    {label}
+                  </option>
+                ))}
             </select>
           </div>
           <div>
@@ -191,7 +195,7 @@ export function CommentForm({
       )}
 
       <div>
-        <label className="label">{isReply ? "Reply" : "Review"}</label>
+        <label className="label">{isReply ? "Reply" : "Body"}</label>
         <textarea
           className="textarea mt-1"
           value={body}
@@ -199,7 +203,7 @@ export function CommentForm({
           placeholder={
             isReply
               ? "Add context, ask a question, or share your take."
-              : "Describe the interaction. Stick to facts; provide evidence when possible."
+              : "Stick to facts. Provide evidence when possible."
           }
           maxLength={4000}
           autoFocus={autoFocus}
@@ -214,7 +218,7 @@ export function CommentForm({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={`/api/mock/fetch?uri=${encodeURIComponent(uri)}`}
-                alt="review attachment"
+                alt="signal attachment"
                 className="h-20 w-20 border border-ink-200 object-cover"
               />
               <button
@@ -243,8 +247,8 @@ export function CommentForm({
           )}
         </div>
         <p className="hint mt-1">
-          Up to {MAX_IMAGES} images. Images are pinned off-chain; only a hash
-          of the review body goes on-chain.
+          Up to {MAX_IMAGES} images. Images are pinned off-chain; only the body
+          hash goes on-chain.
         </p>
       </div>
 

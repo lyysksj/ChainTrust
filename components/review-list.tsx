@@ -12,7 +12,7 @@ import {
 } from "@/lib/anchor/client";
 import { CommentForm } from "@/components/comment-form";
 import { formatTimestamp, shortHash, shortKey } from "@/lib/utils/format";
-import { RELATION_LABELS } from "@/types";
+import { COMMENT_RELATION_LABELS } from "@/types";
 import type { CommentBody, CommentRecord } from "@/types";
 
 type Item = {
@@ -21,7 +21,7 @@ type Item = {
 };
 
 type Props = {
-  entryPda: PublicKey;
+  entity: PublicKey;
   items: Item[];
   isClaimed: boolean;
   createdBy: PublicKey;
@@ -83,7 +83,7 @@ function buildTree(items: Item[]): TreeNode[] {
 }
 
 export function ReviewList({
-  entryPda,
+  entity,
   items,
   isClaimed,
   createdBy,
@@ -121,8 +121,8 @@ export function ReviewList({
   if (!items.length) {
     return (
       <p className="hint">
-        No reviews yet. Be the first to anchor a record of working with this
-        company.
+        No community signals yet. Use signals to record disputes, addenda,
+        incidents, or other facts that don't fit a structured attestation.
       </p>
     );
   }
@@ -133,7 +133,7 @@ export function ReviewList({
         <CommentNode
           key={node.item.publicKey.toBase58()}
           node={node}
-          entryPda={entryPda}
+          entity={entity}
           isClaimed={isClaimed}
           createdBy={createdBy}
           officialWallet={officialWallet ?? null}
@@ -148,7 +148,7 @@ export function ReviewList({
 
 function CommentNode({
   node,
-  entryPda,
+  entity,
   isClaimed,
   createdBy,
   officialWallet,
@@ -157,7 +157,7 @@ function CommentNode({
   onResponded,
 }: {
   node: TreeNode;
-  entryPda: PublicKey;
+  entity: PublicKey;
   isClaimed: boolean;
   createdBy: PublicKey;
   officialWallet: PublicKey | null;
@@ -293,7 +293,7 @@ function CommentNode({
       await addOfficialResponse(
         program,
         publicKey,
-        entryPda,
+        entity,
         commentPda,
         up.uri,
       );
@@ -344,7 +344,7 @@ function CommentNode({
               );
             })()}
             {!isReply && (
-              <span>{RELATION_LABELS[comment.relationType] ?? "Other"}</span>
+              <span>{COMMENT_RELATION_LABELS[comment.relationType] ?? "Other"}</span>
             )}
             <span className="mono">by {shortKey(comment.commenter)}</span>
           </div>
@@ -418,7 +418,7 @@ function CommentNode({
         {showReplyForm && (
           <div className="pt-2">
             <CommentForm
-              entryPda={entryPda}
+              entity={entity}
               parentComment={commentPda}
               onSubmitted={() => {
                 setShowReplyForm(false);
@@ -499,7 +499,7 @@ function CommentNode({
             <CommentNode
               key={child.item.publicKey.toBase58()}
               node={child}
-              entryPda={entryPda}
+              entity={entity}
               isClaimed={isClaimed}
               createdBy={createdBy}
               officialWallet={officialWallet}

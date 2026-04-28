@@ -240,16 +240,31 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <header>
-        <h1 className="serif text-3xl font-semibold text-ink-800">
-          Register as a verified user
-        </h1>
-        <p className="mt-2 text-sm text-ink-600">
-          One human, one wallet, one profile. Verified users can create
-          entries, link wallets, leave reviews, and reply.
-        </p>
-      </header>
+    <div className="max-w-2xl">
+      <div className="docnum" style={{ marginBottom: 8 }}>
+        FORM CT-USR · 2026 EDITION · ART. 5.1
+      </div>
+      <div className="section-h" style={{ borderTop: "none", paddingTop: 0 }}>
+        <h2 className="section-title" style={{ fontSize: 36 }}>
+          Register a verified user.
+        </h2>
+        <span className="section-meta">
+          PDA seeds: [&quot;user&quot;, wallet]
+        </span>
+      </div>
+      <p
+        style={{
+          fontFamily: "var(--serif)",
+          fontSize: 17,
+          color: "var(--ink-2)",
+          maxWidth: "70ch",
+          marginTop: -8,
+          marginBottom: 24,
+        }}
+      >
+        One human, one wallet, one profile. Verified users can file entities,
+        sign as issuers, and add community signals on-chain.
+      </p>
 
       <WorldIdGate
         humanVerified={humanVerified}

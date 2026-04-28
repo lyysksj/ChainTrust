@@ -7,17 +7,20 @@ export function sha256Hex(input: string | Uint8Array): string {
   return h.digest("hex");
 }
 
-/** Returns a 32-byte array (number[]) of the SHA-256 digest; [] of zeros if empty. */
+/** Returns a 32-byte array (number[]) of the SHA-256 digest; zeros if empty. */
 export function sha256Bytes(input: string | undefined | null): number[] {
   if (!input) return new Array<number>(32).fill(0);
   const buf = createHash("sha256").update(input).digest();
   return Array.from(buf);
 }
 
-/** Random 8-byte entry id. */
-export function randomEntryId(): number[] {
+/** Random 8-byte id used as PDA seed for Entity / Project. */
+export function randomId8(): number[] {
   return Array.from(randomBytes(8));
 }
+
+export const randomEntityId = randomId8;
+export const randomProjectId = randomId8;
 
 export function bytesToHex(bytes: number[] | Uint8Array): string {
   return Array.from(bytes as number[])

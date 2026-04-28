@@ -6,8 +6,8 @@ import { PublicKey } from "@solana/web3.js";
 import { useProgram } from "@/lib/anchor/hooks";
 import {
   fetchCommentsByCommenter,
-  fetchEntriesByOfficialWallet,
-  fetchEntriesCreatedBy,
+  fetchEntitiesByOfficialWallet,
+  fetchEntitiesCreatedBy,
   fetchUserProfile,
 } from "@/lib/anchor/client";
 import {
@@ -18,8 +18,8 @@ import {
 } from "@/lib/utils/format";
 import type {
   CommentRecord,
-  CompanyEntry,
-  EntryMetadata,
+  Entity,
+  EntityMetadata,
   UserMetadata,
   UserProfile,
 } from "@/types";
@@ -39,11 +39,11 @@ export default function ProfilePage({ params }: { params: Params }) {
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [meta, setMeta] = useState<UserMetadata | null>(null);
-  const [entries, setEntries] = useState<
-    { publicKey: PublicKey; account: CompanyEntry }[]
+  const [entities, setEntities] = useState<
+    { publicKey: PublicKey; account: Entity }[]
   >([]);
-  const [verifiedEntries, setVerifiedEntries] = useState<
-    { publicKey: PublicKey; account: CompanyEntry }[]
+  const [verifiedEntities, setVerifiedEntities] = useState<
+    { publicKey: PublicKey; account: Entity }[]
   >([]);
   const [comments, setComments] = useState<
     { publicKey: PublicKey; account: CommentRecord }[]
@@ -60,14 +60,29 @@ export default function ProfilePage({ params }: { params: Params }) {
         if (!alive) return;
         setProfile(p);
         const [e, ve, c] = await Promise.all([
-          fetchEntriesCreatedBy(program, wallet),
-          fetchEntriesByOfficialWallet(program, wallet),
+          fetchEntitiesCreatedBy(program, wallet),
+          fetchEntitiesByOfficialWallet(program, wallet),
           fetchCommentsByCommenter(program, wallet),
         ]);
         if (!alive) return;
-        setEntries(e);
-        setVerifiedEntries(ve);
-        setComments(c);
+        setEntities(
+          e.map((x) => ({
+            publicKey: x.publicKey,
+            account: x.account as unknown as Entity,
+          })),
+        );
+        setVerifiedEntities(
+          ve.map((x) => ({
+            publicKey: x.publicKey,
+            account: x.account as unknown as Entity,
+          })),
+        );
+        setComments(
+          c.map((x) => ({
+            publicKey: x.publicKey,
+            account: x.account as unknown as CommentRecord,
+          })),
+        );
       } finally {
         if (alive) setLoading(false);
       }
@@ -98,13 +113,13 @@ export default function ProfilePage({ params }: { params: Params }) {
     };
   }, [profile?.metadataUri]);
 
-  // Fetch metadata for verified-rep entries so the badge can show the project
+  // Fetch metadata for verified-rep entities so the badge can show the project
   // name.
   const [verifiedEntryNames, setVerifiedEntryNames] = useState<
     Record<string, string>
   >({});
   useEffect(() => {
-    if (verifiedEntries.length === 0) {
+    if (verifiedEntities.length === 0) {
       setVerifiedEntryNames({});
       return;
     }
@@ -112,7 +127,7 @@ export default function ProfilePage({ params }: { params: Params }) {
     (async () => {
       const result: Record<string, string> = {};
       await Promise.all(
-        verifiedEntries.map(async (e) => {
+        verifiedEntities.map(async (e) => {
           if (!e.account.metadataUri) return;
           try {
             const resp = await fetch(
@@ -120,9 +135,9 @@ export default function ProfilePage({ params }: { params: Params }) {
             );
             if (!resp.ok) return;
             const text = await resp.text();
-            const parsed = JSON.parse(text) as EntryMetadata;
+            const parsed = JSON.parse(text) as EntityMetadata;
             result[e.publicKey.toBase58()] =
-              parsed.projectName ?? parsed.legalName ?? "(unnamed)";
+              parsed.legalName ?? "(unnamed)";
           } catch {
             /* ignore */
           }
@@ -133,7 +148,7 @@ export default function ProfilePage({ params }: { params: Params }) {
     return () => {
       alive = false;
     };
-  }, [verifiedEntries]);
+  }, [verifiedEntities]);
 
   if (!wallet) return <p className="hint">Invalid wallet address.</p>;
 
@@ -147,7 +162,7 @@ export default function ProfilePage({ params }: { params: Params }) {
           <h1 className="serif text-4xl font-semibold text-ink-800">
             {profile?.username ? `@${profile.username}` : shortKey(wallet)}
           </h1>
-          {verifiedEntries.length > 0 && (
+          {verifiedEntities.length > 0 && (
             <span className="chip chip-official text-[11px]">
               ✓ Official representative
             </span>
@@ -156,21 +171,21 @@ export default function ProfilePage({ params }: { params: Params }) {
         {meta?.headline && (
           <p className="serif text-lg text-ink-700">{meta.headline}</p>
         )}
-        {verifiedEntries.length > 0 && (
+        {verifiedEntities.length > 0 && (
           <p className="text-sm text-claimed">
             Verified representative for{" "}
-            {verifiedEntries.map((e, i) => {
+            {verifiedEntities.map((e, i) => {
               const name =
                 verifiedEntryNames[e.publicKey.toBase58()] ?? "(loading)";
               return (
                 <span key={e.publicKey.toBase58()}>
                   <Link
-                    href={`/entry/${bytesHex(e.account.entryId)}`}
+                    href={`/entry/${bytesHex(e.account.entityId)}`}
                     className="font-semibold underline"
                   >
                     {name}
                   </Link>
-                  {i < verifiedEntries.length - 1 ? ", " : ""}
+                  {i < verifiedEntities.length - 1 ? ", " : ""}
                 </span>
               );
             })}
@@ -297,27 +312,27 @@ export default function ProfilePage({ params }: { params: Params }) {
         </Section>
       )}
 
-      <Section title="Entries created">
-        {entries.length === 0 ? (
-          <p className="hint">No entries created by this wallet.</p>
+      <Section title="Entities created">
+        {entities.length === 0 ? (
+          <p className="hint">No entities created by this wallet.</p>
         ) : (
           <ul className="space-y-2">
-            {entries.map((e) => (
+            {entities.map((e) => (
               <li
                 key={e.publicKey.toBase58()}
                 className="flex items-center justify-between border border-ink-200 bg-white px-4 py-3"
               >
                 <div>
                   <p className="mono text-xs text-ink-500">
-                    entry {bytesHex(e.account.entryId)}
+                    entity {bytesHex(e.account.entityId)}
                   </p>
                   <p className="text-sm">
-                    {e.account.jurisdiction} · {e.account.commentCount}{" "}
-                    review(s)
+                    {e.account.jurisdiction} · {e.account.projectCount}{" "}
+                    project(s) · {e.account.relationshipCount} attestation(s)
                   </p>
                 </div>
                 <Link
-                  href={`/entry/${bytesHex(e.account.entryId)}`}
+                  href={`/entry/${bytesHex(e.account.entityId)}`}
                   className="btn-secondary"
                 >
                   Open
@@ -328,9 +343,9 @@ export default function ProfilePage({ params }: { params: Params }) {
         )}
       </Section>
 
-      <Section title="Reviews submitted">
+      <Section title="Community signals submitted">
         {comments.length === 0 ? (
-          <p className="hint">No reviews submitted yet.</p>
+          <p className="hint">No community signals submitted yet.</p>
         ) : (
           <ul className="space-y-2">
             {comments.map((c) => (
@@ -339,8 +354,8 @@ export default function ProfilePage({ params }: { params: Params }) {
                 className="border border-ink-200 bg-white px-4 py-3"
               >
                 <p className="text-xs text-ink-500">
-                  for entry{" "}
-                  <span className="mono">{shortKey(c.account.entry)}</span>
+                  on entity{" "}
+                  <span className="mono">{shortKey(c.account.entity)}</span>
                   {" · "}
                   submitted {formatTimestamp(c.account.submittedAt)}
                 </p>

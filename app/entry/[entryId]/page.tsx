@@ -2,75 +2,122 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { useProgram } from "@/lib/anchor/hooks";
 import {
-  fetchCommentsForEntry,
-  fetchEntryByPda,
-  fetchWalletMappingsForEntry,
+  fetchAllIssuers,
+  fetchCommentsForEntity,
+  fetchEntityByPda,
+  fetchProjectsForEntity,
+  fetchRelationshipsForEntity,
 } from "@/lib/anchor/client";
-import { entryPda } from "@/lib/anchor/pdas";
-import { StatusChip } from "@/components/status-chip";
-import { WalletMappingList } from "@/components/wallet-mapping-list";
+import { entityPda } from "@/lib/anchor/pdas";
+import { entityIdToCtNumber } from "@/lib/utils/ct-number";
+import {
+  bytesHex,
+  formatTimestamp,
+  shortHash,
+  shortKey,
+} from "@/lib/utils/format";
+import { Stamp, StatusPill } from "@/components/registry-bits";
+import { RelRowCompact } from "@/components/rel-row";
+import { IdentityGraph } from "@/components/identity-graph";
 import { ReviewList } from "@/components/review-list";
 import { CommentForm } from "@/components/comment-form";
-import { ClaimCard } from "@/components/claim-card";
-import { AttestationsCard } from "@/components/attestations-card";
-import { formatTimestamp, shortHash, shortKey } from "@/lib/utils/format";
-import { COUNTRIES } from "@/types";
-import type { CompanyEntry, EntryMetadata, CommentRecord, WalletMapping } from "@/types";
+import { COMMENT_RELATION_LABELS, COUNTRIES } from "@/types";
+import type {
+  CommentRecord,
+  Entity,
+  EntityMetadata,
+  Issuer,
+  Project,
+  Relationship,
+} from "@/types";
 
 type Params = { entryId: string };
+type Tab = "graph" | "rels" | "projects" | "signals" | "raw";
 
-function hexToBytes(hex: string): number[] {
-  if (hex.length !== 16) throw new Error("entry id must be 16 hex chars");
+function hexToBytes(hex: string): number[] | null {
+  if (hex.length !== 16) return null;
   const out = new Array<number>(8);
-  for (let i = 0; i < 8; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  for (let i = 0; i < 8; i++) {
+    const b = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    if (Number.isNaN(b)) return null;
+    out[i] = b;
+  }
   return out;
 }
 
-export default function EntryPage({ params }: { params: Params }) {
+export default function EntityPage({ params }: { params: Params }) {
   const program = useProgram();
+  const router = useRouter();
   const { publicKey } = useWallet();
+  const [tab, setTab] = useState<Tab>("graph");
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const idBytes = useMemo(() => {
-    try {
-      return hexToBytes(params.entryId);
-    } catch {
-      return null;
-    }
-  }, [params.entryId]);
+  const idBytes = useMemo(() => hexToBytes(params.entryId), [params.entryId]);
+  const pda = useMemo(() => (idBytes ? entityPda(idBytes)[0] : null), [idBytes]);
+  const ctNumber = useMemo(
+    () => (idBytes ? entityIdToCtNumber(idBytes) : null),
+    [idBytes],
+  );
 
-  const pda = useMemo(() => (idBytes ? entryPda(idBytes)[0] : null), [idBytes]);
-
-  const [entry, setEntry] = useState<CompanyEntry | null>(null);
-  const [mappings, setMappings] = useState<
-    { publicKey: PublicKey; account: WalletMapping }[]
+  const [entity, setEntity] = useState<Entity | null>(null);
+  const [projects, setProjects] = useState<
+    { publicKey: PublicKey; account: Project }[]
+  >([]);
+  const [rels, setRels] = useState<
+    { publicKey: PublicKey; account: Relationship }[]
   >([]);
   const [comments, setComments] = useState<
     { publicKey: PublicKey; account: CommentRecord }[]
   >([]);
-  const [metadata, setMetadata] = useState<EntryMetadata | null>(null);
+  const [issuers, setIssuers] = useState<Map<string, Issuer>>(new Map());
+  const [meta, setMeta] = useState<EntityMetadata | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!program || !pda) return;
-    const e = await fetchEntryByPda(program, pda);
+    const e = (await fetchEntityByPda(program, pda)) as Entity | null;
     if (!e) {
       setNotFound(true);
       setLoading(false);
       return;
     }
-    setEntry(e);
-    const [m, c] = await Promise.all([
-      fetchWalletMappingsForEntry(program, pda),
-      fetchCommentsForEntry(program, pda),
+    setEntity(e);
+    const [p, r, c, allIssuersRaw] = await Promise.all([
+      fetchProjectsForEntity(program, pda),
+      fetchRelationshipsForEntity(program, pda),
+      fetchCommentsForEntity(program, pda),
+      fetchAllIssuers(program),
     ]);
-    setMappings(m);
-    setComments(c);
+    setProjects(
+      p.map((x) => ({
+        publicKey: x.publicKey,
+        account: x.account as unknown as Project,
+      })),
+    );
+    setRels(
+      r.map((x) => ({
+        publicKey: x.publicKey,
+        account: x.account as unknown as Relationship,
+      })),
+    );
+    setComments(
+      c.map((x) => ({
+        publicKey: x.publicKey,
+        account: x.account as unknown as CommentRecord,
+      })),
+    );
+    const issuerMap = new Map<string, Issuer>();
+    for (const i of allIssuersRaw)
+      issuerMap.set(i.publicKey.toBase58(), i.account as unknown as Issuer);
+    setIssuers(issuerMap);
     setLoading(false);
+    setRefreshKey((k) => k + 1);
   }, [program, pda]);
 
   useEffect(() => {
@@ -78,17 +125,17 @@ export default function EntryPage({ params }: { params: Params }) {
   }, [refresh]);
 
   useEffect(() => {
-    if (!entry?.metadataUri) {
-      setMetadata(null);
+    if (!entity?.metadataUri) {
+      setMeta(null);
       return;
     }
     let alive = true;
-    fetch(`/api/mock/fetch?uri=${encodeURIComponent(entry.metadataUri)}`)
+    fetch(`/api/mock/fetch?uri=${encodeURIComponent(entity.metadataUri)}`)
       .then((r) => (r.ok ? r.text() : null))
       .then((t) => {
         if (!alive || !t) return;
         try {
-          setMetadata(JSON.parse(t) as EntryMetadata);
+          setMeta(JSON.parse(t) as EntityMetadata);
         } catch {
           /* ignore */
         }
@@ -96,196 +143,487 @@ export default function EntryPage({ params }: { params: Params }) {
     return () => {
       alive = false;
     };
-  }, [entry?.metadataUri]);
+  }, [entity?.metadataUri]);
 
   if (!idBytes) {
-    return <p className="hint">Invalid entry id.</p>;
+    return <div className="no-result">INVALID ENTITY ID</div>;
   }
-  if (loading) return <p className="hint">Loading entry…</p>;
-  if (notFound || !entry || !pda) {
+  if (loading) {
+    return <p className="hint">LOADING ENTITY…</p>;
+  }
+  if (notFound || !entity || !pda || !ctNumber) {
     return (
-      <div className="space-y-3">
-        <h1 className="serif text-2xl font-semibold text-ink-800">Entry not found</h1>
-        <p className="text-sm text-ink-600">
-          The entry <span className="mono">{params.entryId}</span> does not exist yet.
-        </p>
-        <Link href="/create" className="btn">
-          Create a new entry
-        </Link>
+      <div data-screen="entity not found">
+        <div className="no-result">
+          ENTITY NOT FOUND · <span className="mono">{params.entryId}</span>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <Link href="/create" className="btn">
+            File a new entity
+          </Link>
+        </div>
       </div>
     );
   }
 
+  const country = COUNTRIES.find((c) => c.code === entity.jurisdiction);
   const isOfficial =
-    entry.isClaimed &&
+    entity.isClaimed &&
     publicKey != null &&
-    publicKey.toBase58() === entry.officialWallet.toBase58();
-  const domain = metadata?.websites?.[0] ?? "";
-  const jurisdictionLabel =
-    COUNTRIES.find((c) => c.code === entry.jurisdiction)?.label ??
-    entry.jurisdiction;
-  const hasPrimaryWallet =
-    entry.primaryWallet.toBase58() !== PublicKey.default.toBase58();
+    publicKey.toBase58() === entity.officialWallet.toBase58();
 
   return (
-    <div className="space-y-10">
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.3em] text-ink-500">
-          <span>Company entry</span>
-          <span>·</span>
-          <span className="mono normal-case tracking-normal">{params.entryId}</span>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="serif text-4xl font-semibold text-ink-800">
-              {metadata?.projectName ?? metadata?.legalName ?? "(metadata pending)"}
-            </h1>
-            {metadata?.legalName &&
-              metadata.legalName !== metadata.projectName && (
-                <p className="mt-1 text-ink-600">
-                  Legal entity:{" "}
-                  <span className="font-medium">{metadata.legalName}</span>
-                </p>
-              )}
-          </div>
-          <div className="flex items-center gap-2">
-            <StatusChip status={entry.status} isClaimed={entry.isClaimed} />
-          </div>
-        </div>
-
-        <dl className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
-          <Field label="Country" value={jurisdictionLabel} />
-          <Field
-            label="Websites"
-            value={
-              metadata?.websites?.length ? (
-                <div className="space-y-0.5">
-                  {metadata.websites.map((w) => (
-                    <div key={w}>
-                      <a
-                        href={w}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="break-all text-accent hover:underline"
-                      >
-                        {w}
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                "—"
-              )
-            }
-          />
-          <Field
-            label="Primary wallet"
-            value={
-              hasPrimaryWallet ? (
-                <span className="mono">{shortKey(entry.primaryWallet)}</span>
-              ) : (
-                <span className="text-ink-400">Not set</span>
-              )
-            }
-          />
-          <Field label="Created" value={formatTimestamp(entry.createdAt)} />
-          <Field
-            label="Created by"
-            value={<span className="mono">{shortKey(entry.createdBy)}</span>}
-          />
-          <Field
-            label="EIN hash"
-            value={<span className="mono">{shortHash(entry.einHash)}</span>}
-          />
-        </dl>
-
-        {metadata?.description && (
-          <p className="max-w-3xl border-l-2 border-ink-300 pl-4 text-sm leading-relaxed text-ink-700">
-            {metadata.description}
-          </p>
-        )}
-
-        {entry.isClaimed && (
-          <p className="rounded-sm bg-claimed/5 px-3 py-2 text-xs text-claimed">
-            Claimed by <span className="mono">{shortKey(entry.officialWallet)}</span> on{" "}
-            {formatTimestamp(entry.claimedAt)}. Claim gives voice, not control — community reviews remain immutable.
-          </p>
-        )}
-      </header>
-
-      <Section title="Attestations" hint="Who vouches for this entry.">
-        <AttestationsCard entryPda={pda.toBase58()} />
-      </Section>
-
-      <Section
-        title="Linked wallets"
-        hint="Community mappings are proposals. Official mappings are added by the claimed representative."
+    <div data-screen={`03 Entity · ${ctNumber}`}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 16,
+          fontFamily: "var(--mono)",
+          fontSize: 11,
+          color: "var(--ink-3)",
+          letterSpacing: "0.06em",
+        }}
       >
-        <WalletMappingList items={mappings} />
-      </Section>
-
-      {!entry.isClaimed && domain && (
-        <Section title="Claim" hint="Available because no representative has claimed this entry yet.">
-          <ClaimCard entryPda={pda} domain={domain} onClaimed={refresh} />
-        </Section>
-      )}
-
-      <Section
-        title="Reviews"
-        hint="Each review is a PDA with a content hash and timestamp. The program has no delete instruction."
-      >
-        <ReviewList
-          entryPda={pda}
-          items={comments}
-          isClaimed={entry.isClaimed}
-          createdBy={entry.createdBy}
-          officialWallet={entry.isClaimed ? entry.officialWallet : null}
-          onResponded={refresh}
-        />
-      </Section>
-
-      <Section title="Add a review" hint="">
-        {publicKey ? (
-          <CommentForm entryPda={pda} onSubmitted={refresh} />
-        ) : (
-          <p className="hint">Connect and register a user to submit a review.</p>
-        )}
-      </Section>
-
-      {isOfficial && (
-        <p className="border border-claimed/40 bg-claimed/5 p-3 text-xs text-claimed">
-          You are the official representative for this entry. Click on any community review to publish an official response.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-[10px] uppercase tracking-[0.2em] text-ink-500">{label}</dt>
-      <dd className="mt-0.5 text-sm text-ink-800">{value}</dd>
-    </div>
-  );
-}
-
-function Section({
-  title,
-  hint,
-  children,
-}: {
-  title: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="border-t border-ink-200 pt-6">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="serif text-xl font-semibold text-ink-800">{title}</h2>
-        {hint && <p className="hint max-w-lg text-right">{hint}</p>}
+        <a
+          onClick={() => router.push("/")}
+          style={{ cursor: "pointer" }}
+        >
+          REGISTRY
+        </a>
+        <span>›</span>
+        <span style={{ color: "var(--ink)" }}>{ctNumber}</span>
       </div>
-      {children}
-    </section>
+
+      <div className="entity-head">
+        <div>
+          <div className="ct-num-big">CT-NUMBER · {ctNumber}</div>
+          <h1>{meta?.legalName ?? "(metadata pending)"}</h1>
+          <p className="summary">
+            {meta?.description ??
+              `Filed ${formatTimestamp(entity.createdAt)} · Identity graph still being populated.`}
+          </p>
+          <div className="entity-meta-grid">
+            <div className="entity-meta-cell">
+              <div className="label">REGISTRY ID</div>
+              <div className="v">{meta?.registryId ?? "—"}</div>
+            </div>
+            <div className="entity-meta-cell">
+              <div className="label">JURISDICTION</div>
+              <div className="v serif">
+                {country?.label ?? entity.jurisdiction}
+              </div>
+            </div>
+            <div className="entity-meta-cell">
+              <div className="label">FILED</div>
+              <div className="v">{formatTimestamp(entity.createdAt)}</div>
+            </div>
+            <div className="entity-meta-cell">
+              <div className="label">PRIMARY DOMAIN</div>
+              <div className="v">
+                {meta?.websites?.[0]
+                  ? new URL(meta.websites[0]).hostname
+                  : "—"}
+              </div>
+            </div>
+            <div className="entity-meta-cell">
+              <div className="label">OFFICIAL WALLET</div>
+              <div className="v">
+                {entity.isClaimed
+                  ? shortKey(entity.officialWallet, 6)
+                  : "— UNCLAIMED —"}
+              </div>
+            </div>
+            <div className="entity-meta-cell">
+              <div className="label">CLAIMED</div>
+              <div className="v">
+                {entity.isClaimed
+                  ? formatTimestamp(entity.claimedAt)
+                  : "—"}
+              </div>
+            </div>
+            <div className="entity-meta-cell">
+              <div className="label">CREATED BY</div>
+              <div className="v">{shortKey(entity.createdBy, 6)}</div>
+            </div>
+            <div className="entity-meta-cell">
+              <div className="label">SIGNED EDGES</div>
+              <div className="v">
+                {entity.relationshipCount} ·{" "}
+                {rels.filter((r) => Number(r.account.revokedAt) > 0).length}{" "}
+                revoked
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="entity-head-side">
+          <Stamp
+            text={
+              entity.isClaimed
+                ? "Claimed"
+                : entity.status === 1
+                  ? "Verified"
+                  : "Unverified"
+            }
+            sub={`CT · ${ctNumber.slice(3, 10)}`}
+          />
+          <div className="entity-statuses">
+            <StatusPill
+              status={entity.status}
+              claimed={entity.isClaimed}
+            />
+            {entity.isClaimed && (
+              <span className="status status-platform">
+                CLAIM · {formatTimestamp(entity.claimedAt)}
+              </span>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexDirection: "column" }}>
+            <Link
+              href={`/attest?entity=${ctNumber}`}
+              className="btn btn-stamp"
+            >
+              + File attestation
+            </Link>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                navigator.clipboard?.writeText(window.location.href);
+              }}
+            >
+              ⎘ Copy citable URL
+            </button>
+            {isOfficial && (
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 10,
+                  color: "var(--stamp-deep)",
+                  letterSpacing: "0.08em",
+                  fontWeight: 700,
+                }}
+              >
+                ◆ OFFICIAL WALLET CONNECTED
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="tabs">
+        <button
+          className={`tab ${tab === "graph" ? "active" : ""}`}
+          onClick={() => setTab("graph")}
+        >
+          Identity graph
+        </button>
+        <button
+          className={`tab ${tab === "rels" ? "active" : ""}`}
+          onClick={() => setTab("rels")}
+        >
+          Relationships <span className="count">{rels.length}</span>
+        </button>
+        <button
+          className={`tab ${tab === "projects" ? "active" : ""}`}
+          onClick={() => setTab("projects")}
+        >
+          Projects <span className="count">{projects.length}</span>
+        </button>
+        <button
+          className={`tab ${tab === "signals" ? "active" : ""}`}
+          onClick={() => setTab("signals")}
+        >
+          Community signals{" "}
+          <span className="count">{comments.length}</span>
+        </button>
+        <button
+          className={`tab ${tab === "raw" ? "active" : ""}`}
+          onClick={() => setTab("raw")}
+        >
+          On-chain raw
+        </button>
+      </div>
+
+      {tab === "graph" && (
+        <>
+          <div className="graph-card">
+            <div className="graph-card-h">
+              <h3>Identity graph</h3>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 14,
+                  alignItems: "center",
+                  fontFamily: "var(--mono)",
+                  fontSize: 10,
+                  color: "var(--ink-3)",
+                  letterSpacing: "0.06em",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span>
+                  <Dot color="#2a1f3d" />
+                  T1
+                </span>
+                <span>
+                  <Dot color="#7a6e92" />
+                  T2
+                </span>
+                <span>
+                  <Dot color="#a89cb8" />
+                  T3
+                </span>
+                <span style={{ color: "var(--revoked)" }}>·· REVOKED</span>
+              </div>
+            </div>
+            <div className="graph-svg-wrap">
+              <IdentityGraph
+                entity={pda}
+                entityAccount={entity}
+                refreshKey={refreshKey}
+              />
+            </div>
+          </div>
+          <div className="rel-list">
+            {rels.length === 0 ? (
+              <div className="no-result" style={{ border: "none" }}>
+                NO RELATIONSHIPS YET — FILE THE FIRST ATTESTATION
+              </div>
+            ) : (
+              rels
+                .slice(0, 6)
+                .map((r) => (
+                  <RelRowCompact
+                    key={r.publicKey.toBase58()}
+                    pda={r.publicKey}
+                    rel={r.account}
+                    issuer={issuers.get(r.account.issuer.toBase58()) ?? null}
+                  />
+                ))
+            )}
+          </div>
+          {rels.length > 6 && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ marginTop: 16 }}
+              onClick={() => setTab("rels")}
+            >
+              View all {rels.length} relationships →
+            </button>
+          )}
+        </>
+      )}
+
+      {tab === "rels" && (
+        <>
+          <div
+            style={{
+              marginBottom: 16,
+              fontFamily: "var(--mono)",
+              fontSize: 11,
+              color: "var(--ink-3)",
+              letterSpacing: "0.04em",
+            }}
+          >
+            APPEND-ONLY · ORDERED BY CREATED_AT DESC · REVOKED ROWS REMAIN
+            VISIBLE
+          </div>
+          <div className="rel-list">
+            {rels.length === 0 ? (
+              <div className="no-result" style={{ border: "none" }}>
+                NO RELATIONSHIPS FILED YET
+              </div>
+            ) : (
+              [...rels]
+                .sort(
+                  (a, b) =>
+                    Number(b.account.createdAt) - Number(a.account.createdAt),
+                )
+                .map((r) => (
+                  <RelRowCompact
+                    key={r.publicKey.toBase58()}
+                    pda={r.publicKey}
+                    rel={r.account}
+                    issuer={issuers.get(r.account.issuer.toBase58()) ?? null}
+                  />
+                ))
+            )}
+          </div>
+        </>
+      )}
+
+      {tab === "projects" && (
+        <>
+          {projects.length === 0 && (
+            <div className="no-result">
+              NO PROJECTS FILED UNDER THIS ENTITY
+            </div>
+          )}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: 16,
+            }}
+          >
+            {projects.map((p) => (
+              <div key={p.publicKey.toBase58()} className="doc-card">
+                <div className="docnum" style={{ marginBottom: 6 }}>
+                  PROJECT · {bytesHex(p.account.projectId)}
+                </div>
+                <h3
+                  style={{
+                    fontFamily: "var(--serif)",
+                    fontSize: 22,
+                    margin: "0 0 6px",
+                    fontWeight: 600,
+                  }}
+                >
+                  Project {bytesHex(p.account.projectId).slice(0, 6)}
+                </h3>
+                <div
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 11,
+                    color: "var(--stamp-deep)",
+                    letterSpacing: "0.06em",
+                    marginBottom: 12,
+                  }}
+                >
+                  domain hash · {shortHash(p.account.domainHash, 8)}
+                </div>
+                <div
+                  className="rule-h-soft"
+                  style={{
+                    paddingTop: 10,
+                    fontFamily: "var(--mono)",
+                    fontSize: 10,
+                    color: "var(--ink-3)",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  PDA · {shortKey(p.publicKey, 6)}
+                  <br />
+                  CREATED · {formatTimestamp(p.account.createdAt)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {tab === "signals" && (
+        <>
+          <div
+            style={{
+              marginBottom: 16,
+              fontFamily: "var(--serif)",
+              fontSize: 15,
+              color: "var(--ink-2)",
+              maxWidth: "70ch",
+            }}
+          >
+            <em>
+              Community signals are append-only annotations on the entity
+              record — disputes, addenda, praise, supplemental evidence.
+            </em>{" "}
+            They are not reviews; they cannot replace signed relationships,
+            and the entity cannot delete them. Only the official wallet may
+            attach a response.
+          </div>
+          {comments.length === 0 ? (
+            <div className="no-result">NO COMMUNITY SIGNALS FILED</div>
+          ) : (
+            <ReviewList
+              entity={pda}
+              items={comments}
+              isClaimed={entity.isClaimed}
+              createdBy={entity.createdBy}
+              officialWallet={
+                entity.isClaimed ? entity.officialWallet : null
+              }
+              onResponded={refresh}
+            />
+          )}
+          {publicKey && (
+            <div style={{ marginTop: 24 }}>
+              <CommentForm entity={pda} onSubmitted={refresh} />
+            </div>
+          )}
+          {!publicKey && (
+            <p className="hint" style={{ marginTop: 16 }}>
+              Connect a wallet and register a profile to file a community
+              signal.
+            </p>
+          )}
+        </>
+      )}
+
+      {tab === "raw" && (
+        <div className="doc-card">
+          <div className="docnum" style={{ marginBottom: 12 }}>
+            ON-CHAIN ACCOUNT · ENTITY PDA
+          </div>
+          <pre
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 12,
+              lineHeight: 1.6,
+              color: "var(--ink)",
+              background: "var(--paper-2)",
+              padding: 16,
+              margin: 0,
+              border: "1px solid var(--rule-soft)",
+              overflowX: "auto",
+            }}
+          >
+{`{
+  "account_type":      "Entity",
+  "pda":               "${pda.toBase58()}",
+  "ct_number":         "${ctNumber}",
+  "entity_id":         "${bytesHex(entity.entityId)}",
+  "created_by":        "${entity.createdBy.toBase58()}",
+  "legal_name_hash":   "0x${shortHash(entity.legalNameHash, 8)}",
+  "registry_id_hash":  "0x${shortHash(entity.registryIdHash, 8)}",
+  "jurisdiction":      "${entity.jurisdiction}",
+  "status":            ${entity.status},
+  "is_claimed":        ${entity.isClaimed},
+  "official_wallet":   ${
+    entity.isClaimed ? `"${entity.officialWallet.toBase58()}"` : "null"
+  },
+  "metadata_uri":      "${entity.metadataUri}",
+  "project_count":     ${entity.projectCount},
+  "comment_count":     ${entity.commentCount},
+  "relationship_count":${entity.relationshipCount},
+  "created_at":        ${entity.createdAt.toString()},
+  "claimed_at":        ${entity.claimedAt.toString()},
+  "bump":              ${entity.bump}
+}`}
+          </pre>
+        </div>
+      )}
+    </div>
   );
 }
+
+function Dot({ color }: { color: string }) {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: 8,
+        height: 8,
+        background: color,
+        borderRadius: "50%",
+        marginRight: 4,
+        verticalAlign: "middle",
+      }}
+    />
+  );
+}
+
+// Suppress unused — relation labels exported elsewhere
+void COMMENT_RELATION_LABELS;

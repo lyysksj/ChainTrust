@@ -28,36 +28,70 @@ pub mod chaintrust {
         instructions::update_user_metadata_uri(ctx, metadata_uri)
     }
 
-    pub fn create_entry(
-        ctx: Context<CreateEntry>,
-        entry_id: [u8; 8],
-        company_name_hash: [u8; 32],
-        project_name_hash: [u8; 32],
-        ein_hash: [u8; 32],
-        jurisdiction: String,
-        domain_hash: [u8; 32],
+    pub fn register_issuer(
+        ctx: Context<RegisterIssuer>,
+        kind: u8,
+        trust_tier: u8,
+        name_hash: [u8; 32],
         metadata_uri: String,
     ) -> Result<()> {
-        instructions::create_entry(
+        instructions::register_issuer(ctx, kind, trust_tier, name_hash, metadata_uri)
+    }
+
+    pub fn create_entity(
+        ctx: Context<CreateEntity>,
+        entity_id: [u8; 8],
+        legal_name_hash: [u8; 32],
+        registry_id_hash: [u8; 32],
+        jurisdiction: String,
+        metadata_uri: String,
+    ) -> Result<()> {
+        instructions::create_entity(
             ctx,
-            entry_id,
-            company_name_hash,
-            project_name_hash,
-            ein_hash,
+            entity_id,
+            legal_name_hash,
+            registry_id_hash,
             jurisdiction,
-            domain_hash,
             metadata_uri,
         )
     }
 
-    pub fn add_wallet_mapping(
-        ctx: Context<AddWalletMapping>,
-        wallet_role: u8,
+    pub fn create_project(
+        ctx: Context<CreateProject>,
+        project_id: [u8; 8],
+        name_hash: [u8; 32],
+        domain_hash: [u8; 32],
+        metadata_uri: String,
+    ) -> Result<()> {
+        instructions::create_project(ctx, project_id, name_hash, domain_hash, metadata_uri)
+    }
+
+    pub fn attest_relationship(
+        ctx: Context<AttestRelationship>,
+        kind: u8,
+        target_ref: [u8; 32],
         evidence_hash: [u8; 32],
         evidence_uri: String,
-        is_official: bool,
+        valid_from: i64,
+        valid_until: i64,
     ) -> Result<()> {
-        instructions::add_wallet_mapping(ctx, wallet_role, evidence_hash, evidence_uri, is_official)
+        instructions::attest_relationship(
+            ctx,
+            kind,
+            target_ref,
+            evidence_hash,
+            evidence_uri,
+            valid_from,
+            valid_until,
+        )
+    }
+
+    pub fn revoke_relationship(ctx: Context<RevokeRelationship>) -> Result<()> {
+        instructions::revoke_relationship(ctx)
+    }
+
+    pub fn claim_entity(ctx: Context<ClaimEntity>) -> Result<()> {
+        instructions::claim_entity(ctx)
     }
 
     pub fn submit_comment(
@@ -100,10 +134,6 @@ pub mod chaintrust {
 
     pub fn unlike_comment(ctx: Context<UnlikeComment>) -> Result<()> {
         instructions::unlike_comment(ctx)
-    }
-
-    pub fn claim_entry(ctx: Context<ClaimEntry>) -> Result<()> {
-        instructions::claim_entry(ctx)
     }
 
     pub fn add_official_response(

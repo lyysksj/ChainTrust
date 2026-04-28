@@ -11,27 +11,62 @@ export type UserProfile = {
   bump: number;
 };
 
-export type CompanyEntry = {
-  entryId: number[];
+export type Issuer = {
+  authority: PublicKey;
+  kind: number;
+  trustTier: number;
+  nameHash: number[];
+  metadataUri: string;
+  registeredAt: BN;
+  bump: number;
+};
+
+export type Entity = {
+  entityId: number[];
   createdBy: PublicKey;
-  companyNameHash: number[];
-  projectNameHash: number[];
-  einHash: number[];
+  legalNameHash: number[];
+  registryIdHash: number[];
   jurisdiction: string;
-  domainHash: number[];
-  primaryWallet: PublicKey;
   status: number;
   isClaimed: boolean;
   officialWallet: PublicKey;
   metadataUri: string;
+  projectCount: number;
+  relationshipCount: number;
   commentCount: number;
   createdAt: BN;
   claimedAt: BN;
   bump: number;
 };
 
+export type Project = {
+  projectId: number[];
+  entity: PublicKey;
+  createdBy: PublicKey;
+  nameHash: number[];
+  domainHash: number[];
+  metadataUri: string;
+  createdAt: BN;
+  bump: number;
+};
+
+export type Relationship = {
+  entity: PublicKey;
+  kind: number;
+  targetRef: number[];
+  issuer: PublicKey;
+  attestorAuthority: PublicKey;
+  evidenceHash: number[];
+  evidenceUri: string;
+  validFrom: BN;
+  validUntil: BN;
+  revokedAt: BN;
+  createdAt: BN;
+  bump: number;
+};
+
 export type CommentRecord = {
-  entry: PublicKey;
+  entity: PublicKey;
   commenter: PublicKey;
   commentIndex: number;
   relationType: number;
@@ -47,18 +82,6 @@ export type CommentRecord = {
   bump: number;
 };
 
-export type WalletMapping = {
-  targetWallet: PublicKey;
-  entry: PublicKey;
-  walletRole: number;
-  evidenceHash: number[];
-  evidenceUri: string;
-  addedBy: PublicKey;
-  isOfficial: boolean;
-  addedAt: BN;
-  bump: number;
-};
-
 export type LikeRecord = {
   comment: PublicKey;
   liker: PublicKey;
@@ -66,20 +89,32 @@ export type LikeRecord = {
   bump: number;
 };
 
-// ---- Entry metadata stored off-chain (mock storage) ----
-export type EntryMetadata = {
+// ---- Off-chain metadata (mock storage / IPFS) ----
+
+export type EntityMetadata = {
   legalName: string;
-  ein: string;
+  registryId: string;
   countryCode: string;
   countryLabel: string;
-  projectName: string;
-  websites: string[];
-  primaryWallet?: string | null;
+  websites?: string[];
   description?: string;
   evidenceNote?: string;
 };
 
-// ---- Review body off-chain ----
+export type ProjectMetadata = {
+  name: string;
+  domain?: string;
+  description?: string;
+  links?: string[];
+};
+
+export type IssuerMetadata = {
+  name: string;
+  description?: string;
+  website?: string;
+  contact?: string;
+};
+
 export type CommentBody = {
   headline?: string;
   body: string;
@@ -87,7 +122,6 @@ export type CommentBody = {
   relationType?: number;
 };
 
-// ---- User profile metadata off-chain (lives at metadataUri) ----
 export type WorkExperienceItem = {
   company: string;
   role: string;
@@ -108,46 +142,91 @@ export type UserMetadata = {
   about?: string;
 };
 
-// ---- Attestation (mock) ----
-export type Attestation = {
-  id: string;
-  issuer: string;
-  issuerRole: "platform" | "third-party";
-  type: string;
-  status: string;
-  issuedAt: number;
-  note?: string;
-};
-
 // ---- Display helpers ----
-export const ENTRY_STATUS: Record<number, "unverified" | "platform_verified" | "claimed"> = {
+
+export const ENTITY_STATUS: Record<number, "unverified" | "platform_verified" | "claimed"> = {
   0: "unverified",
   1: "platform_verified",
   2: "claimed",
 };
 
-export const RELATION_LABELS: Record<number, string> = {
+// Issuer kinds (must match constants.rs)
+export const ISSUER_KIND = {
+  KYB_PROVIDER: 1,
+  AUDIT: 2,
+  CHAIN_ANALYTICS: 3,
+  REGULATOR: 4,
+  SELF: 5,
+  COMMUNITY: 6,
+} as const;
+
+export const ISSUER_KIND_LABELS: Record<number, string> = {
+  1: "KYB Provider",
+  2: "Audit Firm",
+  3: "Chain Analytics",
+  4: "Regulator",
+  5: "Self-asserted",
+  6: "Community",
+};
+
+export const ISSUER_TIER_LABELS: Record<number, string> = {
+  1: "Tier 1 · Platform / Regulated",
+  2: "Tier 2 · Known Third-party",
+  3: "Tier 3 · Community / Self",
+};
+
+// Relationship kinds (must match constants.rs)
+export const REL_KIND = {
+  OPERATES_PROJECT: 1,
+  DEPLOYS_WALLET: 2,
+  CONTROLS_WALLET: 3,
+  HAS_DOMAIN: 4,
+  SUBSIDIARY_OF: 5,
+  PARENT_OF: 6,
+  HAS_UBO: 7,
+  HAS_OFFICER: 8,
+  AUDITED_BY: 9,
+} as const;
+
+export type RelTargetType =
+  | "project"
+  | "wallet"
+  | "domain"
+  | "entity"
+  | "person"
+  | "issuer";
+
+export const REL_KIND_META: Record<
+  number,
+  { label: string; verb: string; targetType: RelTargetType }
+> = {
+  1: { label: "Operates project", verb: "operates", targetType: "project" },
+  2: { label: "Deploys wallet", verb: "deploys", targetType: "wallet" },
+  3: { label: "Controls wallet", verb: "controls", targetType: "wallet" },
+  4: { label: "Has domain", verb: "claims domain", targetType: "domain" },
+  5: { label: "Subsidiary of", verb: "is subsidiary of", targetType: "entity" },
+  6: { label: "Parent of", verb: "is parent of", targetType: "entity" },
+  7: { label: "Has UBO", verb: "has UBO", targetType: "person" },
+  8: { label: "Has officer", verb: "has officer", targetType: "person" },
+  9: { label: "Audited by", verb: "audited by", targetType: "issuer" },
+};
+
+// Comment relation types — community-signal categories. 0 reserved for replies.
+export const COMMENT_RELATION_LABELS: Record<number, string> = {
   0: "Reply",
-  1: "Employee",
-  2: "Partner",
-  3: "Investor",
-  4: "Customer",
+  1: "Dispute",
+  2: "Addendum",
+  3: "Praise",
+  4: "Incident",
   5: "Other",
 };
 
-export const WALLET_ROLE_LABELS: Record<number, string> = {
-  1: "Treasury",
-  2: "Deployer",
-  3: "Team",
-  4: "Other",
-};
-
-// ---- Country list for entry form ----
+// ---- Country list for entity form ----
 export type CountryOption = {
-  code: string; // ISO 3166-1 alpha-2
+  code: string;
   label: string;
-  idLabel: string; // what to call the business ID in this country
-  idFormat: string; // human-readable hint
+  idLabel: string;
+  idFormat: string;
 };
 
 export const COUNTRIES: CountryOption[] = [

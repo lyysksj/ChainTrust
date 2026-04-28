@@ -27,7 +27,7 @@ export type Chaintrust = {
       ],
       "accounts": [
         {
-          "name": "entry"
+          "name": "entity"
         },
         {
           "name": "comment",
@@ -47,65 +47,33 @@ export type Chaintrust = {
       ]
     },
     {
-      "name": "addWalletMapping",
+      "name": "attestRelationship",
       "discriminator": [
-        110,
-        93,
-        50,
-        31,
-        236,
-        134,
-        105,
-        27
+        62,
+        74,
+        169,
+        243,
+        79,
+        129,
+        157,
+        109
       ],
       "accounts": [
         {
-          "name": "entry",
+          "name": "entity",
           "writable": true
         },
         {
-          "name": "walletMapping",
-          "writable": true,
+          "name": "issuer",
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  119,
-                  97,
-                  108,
-                  108,
-                  101,
-                  116,
-                  95,
-                  109,
-                  97,
-                  112
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "targetWallet"
-              },
-              {
-                "kind": "account",
-                "path": "entry"
-              }
-            ]
-          }
-        },
-        {
-          "name": "targetWallet"
-        },
-        {
-          "name": "userProfile",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  117,
+                  105,
                   115,
+                  115,
+                  117,
                   101,
                   114
                 ]
@@ -116,6 +84,10 @@ export type Chaintrust = {
               }
             ]
           }
+        },
+        {
+          "name": "relationship",
+          "writable": true
         },
         {
           "name": "signer",
@@ -129,8 +101,17 @@ export type Chaintrust = {
       ],
       "args": [
         {
-          "name": "walletRole",
+          "name": "kind",
           "type": "u8"
+        },
+        {
+          "name": "targetRef",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         },
         {
           "name": "evidenceHash",
@@ -146,26 +127,30 @@ export type Chaintrust = {
           "type": "string"
         },
         {
-          "name": "isOfficial",
-          "type": "bool"
+          "name": "validFrom",
+          "type": "i64"
+        },
+        {
+          "name": "validUntil",
+          "type": "i64"
         }
       ]
     },
     {
-      "name": "claimEntry",
+      "name": "claimEntity",
       "discriminator": [
-        255,
-        0,
-        113,
-        239,
-        102,
-        117,
-        114,
-        50
+        152,
+        31,
+        227,
+        45,
+        93,
+        249,
+        219,
+        87
       ],
       "accounts": [
         {
-          "name": "entry",
+          "name": "entity",
           "writable": true
         },
         {
@@ -197,20 +182,20 @@ export type Chaintrust = {
       "args": []
     },
     {
-      "name": "createEntry",
+      "name": "createEntity",
       "discriminator": [
-        248,
-        207,
-        142,
-        242,
-        66,
-        162,
-        150,
-        16
+        231,
+        148,
+        76,
+        9,
+        52,
+        190,
+        122,
+        31
       ],
       "accounts": [
         {
-          "name": "entry",
+          "name": "entity",
           "writable": true,
           "pda": {
             "seeds": [
@@ -220,13 +205,14 @@ export type Chaintrust = {
                   101,
                   110,
                   116,
-                  114,
+                  105,
+                  116,
                   121
                 ]
               },
               {
                 "kind": "arg",
-                "path": "entryId"
+                "path": "entityId"
               }
             ]
           }
@@ -252,10 +238,117 @@ export type Chaintrust = {
           }
         },
         {
-          "name": "primaryWallet",
-          "docs": [
-            "pass the System Program id as a sentinel when the user did not specify one."
-          ]
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "entityId",
+          "type": {
+            "array": [
+              "u8",
+              8
+            ]
+          }
+        },
+        {
+          "name": "legalNameHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "registryIdHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "jurisdiction",
+          "type": "string"
+        },
+        {
+          "name": "metadataUri",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "createProject",
+      "discriminator": [
+        148,
+        219,
+        181,
+        42,
+        221,
+        114,
+        145,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "entity",
+          "writable": true
+        },
+        {
+          "name": "project",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  106,
+                  101,
+                  99,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "entity"
+              },
+              {
+                "kind": "arg",
+                "path": "projectId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creatorProfile",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
         },
         {
           "name": "signer",
@@ -269,7 +362,7 @@ export type Chaintrust = {
       ],
       "args": [
         {
-          "name": "entryId",
+          "name": "projectId",
           "type": {
             "array": [
               "u8",
@@ -278,35 +371,13 @@ export type Chaintrust = {
           }
         },
         {
-          "name": "companyNameHash",
+          "name": "nameHash",
           "type": {
             "array": [
               "u8",
               32
             ]
           }
-        },
-        {
-          "name": "projectNameHash",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "einHash",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "jurisdiction",
-          "type": "string"
         },
         {
           "name": "domainHash",
@@ -398,6 +469,96 @@ export type Chaintrust = {
       "args": []
     },
     {
+      "name": "registerIssuer",
+      "discriminator": [
+        145,
+        117,
+        52,
+        59,
+        189,
+        27,
+        127,
+        18
+      ],
+      "accounts": [
+        {
+          "name": "issuer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "userProfile",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "kind",
+          "type": "u8"
+        },
+        {
+          "name": "trustTier",
+          "type": "u8"
+        },
+        {
+          "name": "nameHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "metadataUri",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "registerUser",
       "discriminator": [
         2,
@@ -453,6 +614,52 @@ export type Chaintrust = {
       ]
     },
     {
+      "name": "revokeRelationship",
+      "discriminator": [
+        32,
+        212,
+        32,
+        93,
+        29,
+        52,
+        193,
+        7
+      ],
+      "accounts": [
+        {
+          "name": "relationship",
+          "writable": true
+        },
+        {
+          "name": "issuer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "submitComment",
       "discriminator": [
         112,
@@ -466,7 +673,7 @@ export type Chaintrust = {
       ],
       "accounts": [
         {
-          "name": "entry",
+          "name": "entity",
           "writable": true
         },
         {
@@ -488,7 +695,7 @@ export type Chaintrust = {
               },
               {
                 "kind": "account",
-                "path": "entry"
+                "path": "entity"
               },
               {
                 "kind": "account",
@@ -578,7 +785,7 @@ export type Chaintrust = {
       ],
       "accounts": [
         {
-          "name": "entry",
+          "name": "entity",
           "writable": true
         },
         {
@@ -603,7 +810,7 @@ export type Chaintrust = {
               },
               {
                 "kind": "account",
-                "path": "entry"
+                "path": "entity"
               },
               {
                 "kind": "account",
@@ -787,16 +994,29 @@ export type Chaintrust = {
       ]
     },
     {
-      "name": "companyEntry",
+      "name": "entity",
       "discriminator": [
-        86,
-        82,
-        125,
-        42,
-        215,
-        225,
-        171,
-        247
+        46,
+        157,
+        161,
+        161,
+        254,
+        46,
+        79,
+        24
+      ]
+    },
+    {
+      "name": "issuer",
+      "discriminator": [
+        216,
+        19,
+        83,
+        230,
+        108,
+        53,
+        80,
+        14
       ]
     },
     {
@@ -813,6 +1033,32 @@ export type Chaintrust = {
       ]
     },
     {
+      "name": "project",
+      "discriminator": [
+        205,
+        168,
+        189,
+        202,
+        181,
+        247,
+        142,
+        19
+      ]
+    },
+    {
+      "name": "relationship",
+      "discriminator": [
+        89,
+        169,
+        213,
+        122,
+        174,
+        249,
+        5,
+        251
+      ]
+    },
+    {
       "name": "userProfile",
       "discriminator": [
         32,
@@ -823,19 +1069,6 @@ export type Chaintrust = {
         180,
         13,
         194
-      ]
-    },
-    {
-      "name": "walletMapping",
-      "discriminator": [
-        113,
-        133,
-        85,
-        102,
-        21,
-        1,
-        246,
-        42
       ]
     }
   ],
@@ -873,55 +1106,95 @@ export type Chaintrust = {
     {
       "code": 6006,
       "name": "invalidRelationType",
-      "msg": "Invalid relation type"
+      "msg": "Invalid comment relation type"
     },
     {
       "code": 6007,
-      "name": "invalidWalletRole",
-      "msg": "Invalid wallet role"
+      "name": "invalidIssuerKind",
+      "msg": "Invalid issuer kind"
     },
     {
       "code": 6008,
-      "name": "alreadyClaimed",
-      "msg": "Entry is already claimed"
+      "name": "invalidIssuerTier",
+      "msg": "Invalid issuer tier"
     },
     {
       "code": 6009,
-      "name": "notClaimed",
-      "msg": "Entry is not claimed yet"
+      "name": "invalidRelationshipKind",
+      "msg": "Invalid relationship kind"
     },
     {
       "code": 6010,
-      "name": "notOfficial",
-      "msg": "Caller is not the official representative of this entry"
+      "name": "invalidValidityWindow",
+      "msg": "Invalid validity window — valid_until must be 0 or greater than valid_from"
     },
     {
       "code": 6011,
-      "name": "commentEntryMismatch",
-      "msg": "Comment does not belong to this entry"
+      "name": "projectEntityMismatch",
+      "msg": "Project does not belong to the given Entity"
     },
     {
       "code": 6012,
+      "name": "issuerAuthorityMismatch",
+      "msg": "Issuer authority does not match signer"
+    },
+    {
+      "code": 6013,
+      "name": "alreadyRevoked",
+      "msg": "Relationship has already been revoked"
+    },
+    {
+      "code": 6014,
+      "name": "alreadyClaimed",
+      "msg": "Entity is already claimed"
+    },
+    {
+      "code": 6015,
+      "name": "notClaimed",
+      "msg": "Entity is not claimed yet"
+    },
+    {
+      "code": 6016,
+      "name": "notOfficial",
+      "msg": "Caller is not the official representative of this entity"
+    },
+    {
+      "code": 6017,
+      "name": "commentEntityMismatch",
+      "msg": "Comment does not belong to this entity"
+    },
+    {
+      "code": 6018,
       "name": "commentCountOverflow",
       "msg": "Comment count overflow"
     },
     {
-      "code": 6013,
-      "name": "parentEntryMismatch",
-      "msg": "Parent comment belongs to a different entry"
+      "code": 6019,
+      "name": "projectCountOverflow",
+      "msg": "Project count overflow"
     },
     {
-      "code": 6014,
+      "code": 6020,
+      "name": "relationshipCountOverflow",
+      "msg": "Relationship count overflow"
+    },
+    {
+      "code": 6021,
+      "name": "parentEntityMismatch",
+      "msg": "Parent comment belongs to a different entity"
+    },
+    {
+      "code": 6022,
       "name": "maxReplyDepthExceeded",
       "msg": "Reply depth exceeds the maximum allowed nesting"
     },
     {
-      "code": 6015,
+      "code": 6023,
       "name": "cannotRespondToReply",
-      "msg": "Official response can only target a top-level review, not a reply"
+      "msg": "Official response can only target a top-level comment, not a reply"
     },
     {
-      "code": 6016,
+      "code": 6024,
       "name": "likeCountOverflow",
       "msg": "Like count underflow / overflow"
     }
@@ -933,7 +1206,7 @@ export type Chaintrust = {
         "kind": "struct",
         "fields": [
           {
-            "name": "entry",
+            "name": "entity",
             "type": "pubkey"
           },
           {
@@ -1004,12 +1277,12 @@ export type Chaintrust = {
       }
     },
     {
-      "name": "companyEntry",
+      "name": "entity",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "entryId",
+            "name": "entityId",
             "type": {
               "array": [
                 "u8",
@@ -1022,7 +1295,7 @@ export type Chaintrust = {
             "type": "pubkey"
           },
           {
-            "name": "companyNameHash",
+            "name": "legalNameHash",
             "type": {
               "array": [
                 "u8",
@@ -1031,16 +1304,7 @@ export type Chaintrust = {
             }
           },
           {
-            "name": "projectNameHash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "einHash",
+            "name": "registryIdHash",
             "type": {
               "array": [
                 "u8",
@@ -1051,19 +1315,6 @@ export type Chaintrust = {
           {
             "name": "jurisdiction",
             "type": "string"
-          },
-          {
-            "name": "domainHash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "primaryWallet",
-            "type": "pubkey"
           },
           {
             "name": "status",
@@ -1082,6 +1333,14 @@ export type Chaintrust = {
             "type": "string"
           },
           {
+            "name": "projectCount",
+            "type": "u32"
+          },
+          {
+            "name": "relationshipCount",
+            "type": "u32"
+          },
+          {
             "name": "commentCount",
             "type": "u32"
           },
@@ -1091,6 +1350,47 @@ export type Chaintrust = {
           },
           {
             "name": "claimedAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "issuer",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "trustTier",
+            "type": "u8"
+          },
+          {
+            "name": "nameHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "metadataUri",
+            "type": "string"
+          },
+          {
+            "name": "registeredAt",
             "type": "i64"
           },
           {
@@ -1115,6 +1415,127 @@ export type Chaintrust = {
           },
           {
             "name": "likedAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "project",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "projectId",
+            "type": {
+              "array": [
+                "u8",
+                8
+              ]
+            }
+          },
+          {
+            "name": "entity",
+            "type": "pubkey"
+          },
+          {
+            "name": "createdBy",
+            "type": "pubkey"
+          },
+          {
+            "name": "nameHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "domainHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "metadataUri",
+            "type": "string"
+          },
+          {
+            "name": "createdAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "relationship",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "entity",
+            "type": "pubkey"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "targetRef",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "attestorAuthority",
+            "type": "pubkey"
+          },
+          {
+            "name": "evidenceHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "evidenceUri",
+            "type": "string"
+          },
+          {
+            "name": "validFrom",
+            "type": "i64"
+          },
+          {
+            "name": "validUntil",
+            "type": "i64"
+          },
+          {
+            "name": "revokedAt",
+            "type": "i64"
+          },
+          {
+            "name": "createdAt",
             "type": "i64"
           },
           {
@@ -1151,55 +1572,6 @@ export type Chaintrust = {
           }
         ]
       }
-    },
-    {
-      "name": "walletMapping",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "targetWallet",
-            "type": "pubkey"
-          },
-          {
-            "name": "entry",
-            "type": "pubkey"
-          },
-          {
-            "name": "walletRole",
-            "type": "u8"
-          },
-          {
-            "name": "evidenceHash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "evidenceUri",
-            "type": "string"
-          },
-          {
-            "name": "addedBy",
-            "type": "pubkey"
-          },
-          {
-            "name": "isOfficial",
-            "type": "bool"
-          },
-          {
-            "name": "addedAt",
-            "type": "i64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          }
-        ]
-      }
     }
   ],
   "constants": [
@@ -1209,9 +1581,14 @@ export type Chaintrust = {
       "value": "[99, 111, 109, 109, 101, 110, 116]"
     },
     {
-      "name": "entrySeed",
+      "name": "entitySeed",
       "type": "bytes",
-      "value": "[101, 110, 116, 114, 121]"
+      "value": "[101, 110, 116, 105, 116, 121]"
+    },
+    {
+      "name": "issuerSeed",
+      "type": "bytes",
+      "value": "[105, 115, 115, 117, 101, 114]"
     },
     {
       "name": "likeSeed",
@@ -1219,14 +1596,19 @@ export type Chaintrust = {
       "value": "[108, 105, 107, 101]"
     },
     {
+      "name": "projectSeed",
+      "type": "bytes",
+      "value": "[112, 114, 111, 106, 101, 99, 116]"
+    },
+    {
+      "name": "relSeed",
+      "type": "bytes",
+      "value": "[114, 101, 108]"
+    },
+    {
       "name": "userSeed",
       "type": "bytes",
       "value": "[117, 115, 101, 114]"
-    },
-    {
-      "name": "walletMapSeed",
-      "type": "bytes",
-      "value": "[119, 97, 108, 108, 101, 116, 95, 109, 97, 112]"
     }
   ]
 };

@@ -21,7 +21,7 @@
       ],
       "accounts": [
         {
-          "name": "entry"
+          "name": "entity"
         },
         {
           "name": "comment",
@@ -41,65 +41,33 @@
       ]
     },
     {
-      "name": "add_wallet_mapping",
+      "name": "attest_relationship",
       "discriminator": [
-        110,
-        93,
-        50,
-        31,
-        236,
-        134,
-        105,
-        27
+        62,
+        74,
+        169,
+        243,
+        79,
+        129,
+        157,
+        109
       ],
       "accounts": [
         {
-          "name": "entry",
+          "name": "entity",
           "writable": true
         },
         {
-          "name": "wallet_mapping",
-          "writable": true,
+          "name": "issuer",
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  119,
-                  97,
-                  108,
-                  108,
-                  101,
-                  116,
-                  95,
-                  109,
-                  97,
-                  112
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "target_wallet"
-              },
-              {
-                "kind": "account",
-                "path": "entry"
-              }
-            ]
-          }
-        },
-        {
-          "name": "target_wallet"
-        },
-        {
-          "name": "user_profile",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  117,
+                  105,
                   115,
+                  115,
+                  117,
                   101,
                   114
                 ]
@@ -110,6 +78,10 @@
               }
             ]
           }
+        },
+        {
+          "name": "relationship",
+          "writable": true
         },
         {
           "name": "signer",
@@ -123,8 +95,17 @@
       ],
       "args": [
         {
-          "name": "wallet_role",
+          "name": "kind",
           "type": "u8"
+        },
+        {
+          "name": "target_ref",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         },
         {
           "name": "evidence_hash",
@@ -140,26 +121,30 @@
           "type": "string"
         },
         {
-          "name": "is_official",
-          "type": "bool"
+          "name": "valid_from",
+          "type": "i64"
+        },
+        {
+          "name": "valid_until",
+          "type": "i64"
         }
       ]
     },
     {
-      "name": "claim_entry",
+      "name": "claim_entity",
       "discriminator": [
-        255,
-        0,
-        113,
-        239,
-        102,
-        117,
-        114,
-        50
+        152,
+        31,
+        227,
+        45,
+        93,
+        249,
+        219,
+        87
       ],
       "accounts": [
         {
-          "name": "entry",
+          "name": "entity",
           "writable": true
         },
         {
@@ -191,20 +176,20 @@
       "args": []
     },
     {
-      "name": "create_entry",
+      "name": "create_entity",
       "discriminator": [
-        248,
-        207,
-        142,
-        242,
-        66,
-        162,
-        150,
-        16
+        231,
+        148,
+        76,
+        9,
+        52,
+        190,
+        122,
+        31
       ],
       "accounts": [
         {
-          "name": "entry",
+          "name": "entity",
           "writable": true,
           "pda": {
             "seeds": [
@@ -214,13 +199,14 @@
                   101,
                   110,
                   116,
-                  114,
+                  105,
+                  116,
                   121
                 ]
               },
               {
                 "kind": "arg",
-                "path": "entry_id"
+                "path": "entity_id"
               }
             ]
           }
@@ -246,10 +232,117 @@
           }
         },
         {
-          "name": "primary_wallet",
-          "docs": [
-            "pass the System Program id as a sentinel when the user did not specify one."
-          ]
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "entity_id",
+          "type": {
+            "array": [
+              "u8",
+              8
+            ]
+          }
+        },
+        {
+          "name": "legal_name_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "registry_id_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "jurisdiction",
+          "type": "string"
+        },
+        {
+          "name": "metadata_uri",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "create_project",
+      "discriminator": [
+        148,
+        219,
+        181,
+        42,
+        221,
+        114,
+        145,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "entity",
+          "writable": true
+        },
+        {
+          "name": "project",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  106,
+                  101,
+                  99,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "entity"
+              },
+              {
+                "kind": "arg",
+                "path": "project_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_profile",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
         },
         {
           "name": "signer",
@@ -263,7 +356,7 @@
       ],
       "args": [
         {
-          "name": "entry_id",
+          "name": "project_id",
           "type": {
             "array": [
               "u8",
@@ -272,35 +365,13 @@
           }
         },
         {
-          "name": "company_name_hash",
+          "name": "name_hash",
           "type": {
             "array": [
               "u8",
               32
             ]
           }
-        },
-        {
-          "name": "project_name_hash",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "ein_hash",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "jurisdiction",
-          "type": "string"
         },
         {
           "name": "domain_hash",
@@ -392,6 +463,96 @@
       "args": []
     },
     {
+      "name": "register_issuer",
+      "discriminator": [
+        145,
+        117,
+        52,
+        59,
+        189,
+        27,
+        127,
+        18
+      ],
+      "accounts": [
+        {
+          "name": "issuer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_profile",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "kind",
+          "type": "u8"
+        },
+        {
+          "name": "trust_tier",
+          "type": "u8"
+        },
+        {
+          "name": "name_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "metadata_uri",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "register_user",
       "discriminator": [
         2,
@@ -447,6 +608,52 @@
       ]
     },
     {
+      "name": "revoke_relationship",
+      "discriminator": [
+        32,
+        212,
+        32,
+        93,
+        29,
+        52,
+        193,
+        7
+      ],
+      "accounts": [
+        {
+          "name": "relationship",
+          "writable": true
+        },
+        {
+          "name": "issuer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "submit_comment",
       "discriminator": [
         112,
@@ -460,7 +667,7 @@
       ],
       "accounts": [
         {
-          "name": "entry",
+          "name": "entity",
           "writable": true
         },
         {
@@ -482,7 +689,7 @@
               },
               {
                 "kind": "account",
-                "path": "entry"
+                "path": "entity"
               },
               {
                 "kind": "account",
@@ -572,7 +779,7 @@
       ],
       "accounts": [
         {
-          "name": "entry",
+          "name": "entity",
           "writable": true
         },
         {
@@ -597,7 +804,7 @@
               },
               {
                 "kind": "account",
-                "path": "entry"
+                "path": "entity"
               },
               {
                 "kind": "account",
@@ -781,16 +988,29 @@
       ]
     },
     {
-      "name": "CompanyEntry",
+      "name": "Entity",
       "discriminator": [
-        86,
-        82,
-        125,
-        42,
-        215,
-        225,
-        171,
-        247
+        46,
+        157,
+        161,
+        161,
+        254,
+        46,
+        79,
+        24
+      ]
+    },
+    {
+      "name": "Issuer",
+      "discriminator": [
+        216,
+        19,
+        83,
+        230,
+        108,
+        53,
+        80,
+        14
       ]
     },
     {
@@ -807,6 +1027,32 @@
       ]
     },
     {
+      "name": "Project",
+      "discriminator": [
+        205,
+        168,
+        189,
+        202,
+        181,
+        247,
+        142,
+        19
+      ]
+    },
+    {
+      "name": "Relationship",
+      "discriminator": [
+        89,
+        169,
+        213,
+        122,
+        174,
+        249,
+        5,
+        251
+      ]
+    },
+    {
       "name": "UserProfile",
       "discriminator": [
         32,
@@ -817,19 +1063,6 @@
         180,
         13,
         194
-      ]
-    },
-    {
-      "name": "WalletMapping",
-      "discriminator": [
-        113,
-        133,
-        85,
-        102,
-        21,
-        1,
-        246,
-        42
       ]
     }
   ],
@@ -867,55 +1100,95 @@
     {
       "code": 6006,
       "name": "InvalidRelationType",
-      "msg": "Invalid relation type"
+      "msg": "Invalid comment relation type"
     },
     {
       "code": 6007,
-      "name": "InvalidWalletRole",
-      "msg": "Invalid wallet role"
+      "name": "InvalidIssuerKind",
+      "msg": "Invalid issuer kind"
     },
     {
       "code": 6008,
-      "name": "AlreadyClaimed",
-      "msg": "Entry is already claimed"
+      "name": "InvalidIssuerTier",
+      "msg": "Invalid issuer tier"
     },
     {
       "code": 6009,
-      "name": "NotClaimed",
-      "msg": "Entry is not claimed yet"
+      "name": "InvalidRelationshipKind",
+      "msg": "Invalid relationship kind"
     },
     {
       "code": 6010,
-      "name": "NotOfficial",
-      "msg": "Caller is not the official representative of this entry"
+      "name": "InvalidValidityWindow",
+      "msg": "Invalid validity window — valid_until must be 0 or greater than valid_from"
     },
     {
       "code": 6011,
-      "name": "CommentEntryMismatch",
-      "msg": "Comment does not belong to this entry"
+      "name": "ProjectEntityMismatch",
+      "msg": "Project does not belong to the given Entity"
     },
     {
       "code": 6012,
+      "name": "IssuerAuthorityMismatch",
+      "msg": "Issuer authority does not match signer"
+    },
+    {
+      "code": 6013,
+      "name": "AlreadyRevoked",
+      "msg": "Relationship has already been revoked"
+    },
+    {
+      "code": 6014,
+      "name": "AlreadyClaimed",
+      "msg": "Entity is already claimed"
+    },
+    {
+      "code": 6015,
+      "name": "NotClaimed",
+      "msg": "Entity is not claimed yet"
+    },
+    {
+      "code": 6016,
+      "name": "NotOfficial",
+      "msg": "Caller is not the official representative of this entity"
+    },
+    {
+      "code": 6017,
+      "name": "CommentEntityMismatch",
+      "msg": "Comment does not belong to this entity"
+    },
+    {
+      "code": 6018,
       "name": "CommentCountOverflow",
       "msg": "Comment count overflow"
     },
     {
-      "code": 6013,
-      "name": "ParentEntryMismatch",
-      "msg": "Parent comment belongs to a different entry"
+      "code": 6019,
+      "name": "ProjectCountOverflow",
+      "msg": "Project count overflow"
     },
     {
-      "code": 6014,
+      "code": 6020,
+      "name": "RelationshipCountOverflow",
+      "msg": "Relationship count overflow"
+    },
+    {
+      "code": 6021,
+      "name": "ParentEntityMismatch",
+      "msg": "Parent comment belongs to a different entity"
+    },
+    {
+      "code": 6022,
       "name": "MaxReplyDepthExceeded",
       "msg": "Reply depth exceeds the maximum allowed nesting"
     },
     {
-      "code": 6015,
+      "code": 6023,
       "name": "CannotRespondToReply",
-      "msg": "Official response can only target a top-level review, not a reply"
+      "msg": "Official response can only target a top-level comment, not a reply"
     },
     {
-      "code": 6016,
+      "code": 6024,
       "name": "LikeCountOverflow",
       "msg": "Like count underflow / overflow"
     }
@@ -927,7 +1200,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "entry",
+            "name": "entity",
             "type": "pubkey"
           },
           {
@@ -998,12 +1271,12 @@
       }
     },
     {
-      "name": "CompanyEntry",
+      "name": "Entity",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "entry_id",
+            "name": "entity_id",
             "type": {
               "array": [
                 "u8",
@@ -1016,7 +1289,7 @@
             "type": "pubkey"
           },
           {
-            "name": "company_name_hash",
+            "name": "legal_name_hash",
             "type": {
               "array": [
                 "u8",
@@ -1025,16 +1298,7 @@
             }
           },
           {
-            "name": "project_name_hash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "ein_hash",
+            "name": "registry_id_hash",
             "type": {
               "array": [
                 "u8",
@@ -1045,19 +1309,6 @@
           {
             "name": "jurisdiction",
             "type": "string"
-          },
-          {
-            "name": "domain_hash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "primary_wallet",
-            "type": "pubkey"
           },
           {
             "name": "status",
@@ -1076,6 +1327,14 @@
             "type": "string"
           },
           {
+            "name": "project_count",
+            "type": "u32"
+          },
+          {
+            "name": "relationship_count",
+            "type": "u32"
+          },
+          {
             "name": "comment_count",
             "type": "u32"
           },
@@ -1085,6 +1344,47 @@
           },
           {
             "name": "claimed_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Issuer",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "trust_tier",
+            "type": "u8"
+          },
+          {
+            "name": "name_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "metadata_uri",
+            "type": "string"
+          },
+          {
+            "name": "registered_at",
             "type": "i64"
           },
           {
@@ -1109,6 +1409,127 @@
           },
           {
             "name": "liked_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Project",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "project_id",
+            "type": {
+              "array": [
+                "u8",
+                8
+              ]
+            }
+          },
+          {
+            "name": "entity",
+            "type": "pubkey"
+          },
+          {
+            "name": "created_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "name_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "domain_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "metadata_uri",
+            "type": "string"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Relationship",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "entity",
+            "type": "pubkey"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "target_ref",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "attestor_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "evidence_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "evidence_uri",
+            "type": "string"
+          },
+          {
+            "name": "valid_from",
+            "type": "i64"
+          },
+          {
+            "name": "valid_until",
+            "type": "i64"
+          },
+          {
+            "name": "revoked_at",
+            "type": "i64"
+          },
+          {
+            "name": "created_at",
             "type": "i64"
           },
           {
@@ -1145,55 +1566,6 @@
           }
         ]
       }
-    },
-    {
-      "name": "WalletMapping",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "target_wallet",
-            "type": "pubkey"
-          },
-          {
-            "name": "entry",
-            "type": "pubkey"
-          },
-          {
-            "name": "wallet_role",
-            "type": "u8"
-          },
-          {
-            "name": "evidence_hash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "evidence_uri",
-            "type": "string"
-          },
-          {
-            "name": "added_by",
-            "type": "pubkey"
-          },
-          {
-            "name": "is_official",
-            "type": "bool"
-          },
-          {
-            "name": "added_at",
-            "type": "i64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          }
-        ]
-      }
     }
   ],
   "constants": [
@@ -1203,9 +1575,14 @@
       "value": "[99, 111, 109, 109, 101, 110, 116]"
     },
     {
-      "name": "ENTRY_SEED",
+      "name": "ENTITY_SEED",
       "type": "bytes",
-      "value": "[101, 110, 116, 114, 121]"
+      "value": "[101, 110, 116, 105, 116, 121]"
+    },
+    {
+      "name": "ISSUER_SEED",
+      "type": "bytes",
+      "value": "[105, 115, 115, 117, 101, 114]"
     },
     {
       "name": "LIKE_SEED",
@@ -1213,14 +1590,19 @@
       "value": "[108, 105, 107, 101]"
     },
     {
+      "name": "PROJECT_SEED",
+      "type": "bytes",
+      "value": "[112, 114, 111, 106, 101, 99, 116]"
+    },
+    {
+      "name": "REL_SEED",
+      "type": "bytes",
+      "value": "[114, 101, 108]"
+    },
+    {
       "name": "USER_SEED",
       "type": "bytes",
       "value": "[117, 115, 101, 114]"
-    },
-    {
-      "name": "WALLET_MAP_SEED",
-      "type": "bytes",
-      "value": "[119, 97, 108, 108, 101, 116, 95, 109, 97, 112]"
     }
   ]
 }

@@ -6,7 +6,8 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useProgram } from "@/lib/anchor/hooks";
 import {
   fetchCommentsByCommenter,
-  fetchEntriesCreatedBy,
+  fetchEntitiesCreatedBy,
+  fetchIssuer,
   fetchUserProfile,
 } from "@/lib/anchor/client";
 import { shortKey } from "@/lib/utils/format";
@@ -17,30 +18,34 @@ export function HomeSidebar() {
   const { publicKey } = useWallet();
   const program = useProgram();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [entriesCount, setEntriesCount] = useState(0);
-  const [reviewsCount, setReviewsCount] = useState(0);
+  const [entitiesCount, setEntitiesCount] = useState(0);
+  const [signalsCount, setSignalsCount] = useState(0);
+  const [isIssuer, setIsIssuer] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let alive = true;
     if (!program || !publicKey) {
       setProfile(null);
-      setEntriesCount(0);
-      setReviewsCount(0);
+      setEntitiesCount(0);
+      setSignalsCount(0);
+      setIsIssuer(false);
       return;
     }
     setLoading(true);
     (async () => {
       try {
-        const [p, entries, reviews] = await Promise.all([
+        const [p, entities, signals, issuer] = await Promise.all([
           fetchUserProfile(program, publicKey),
-          fetchEntriesCreatedBy(program, publicKey),
+          fetchEntitiesCreatedBy(program, publicKey),
           fetchCommentsByCommenter(program, publicKey),
+          fetchIssuer(program, publicKey),
         ]);
         if (!alive) return;
         setProfile(p as UserProfile | null);
-        setEntriesCount(entries.length);
-        setReviewsCount(reviews.length);
+        setEntitiesCount(entities.length);
+        setSignalsCount(signals.length);
+        setIsIssuer(!!issuer);
       } finally {
         if (alive) setLoading(false);
       }
@@ -58,8 +63,9 @@ export function HomeSidebar() {
             Connect wallet
           </h3>
           <p className="text-sm text-ink-600">
-            ChainTrust is a public record. Connect a Solana wallet to register,
-            review, or claim an entry.
+            ChainTrust is a public on-chain identity graph. Connect a Solana
+            wallet to register an Entity, attest as an Issuer, or resolve a
+            wallet.
           </p>
           <WalletButton />
         </div>
@@ -90,8 +96,8 @@ export function HomeSidebar() {
             </p>
           </div>
           <p className="text-sm text-ink-600">
-            Register a verified user profile to create entries and submit
-            reviews on-chain.
+            Register a verified user profile to create Entities, sign as an
+            Issuer, or post community signals on-chain.
           </p>
           <Link href="/register" className="btn w-full text-center">
             Register on-chain
@@ -124,18 +130,18 @@ export function HomeSidebar() {
       <dl className="grid grid-cols-2 divide-x divide-ink-200 border-b border-ink-200 text-center text-sm">
         <div className="p-3">
           <dt className="text-xs uppercase tracking-wider text-ink-500">
-            Entries
+            Entities
           </dt>
           <dd className="serif mt-1 text-xl font-semibold text-ink-800">
-            {entriesCount}
+            {entitiesCount}
           </dd>
         </div>
         <div className="p-3">
           <dt className="text-xs uppercase tracking-wider text-ink-500">
-            Reviews
+            Signals
           </dt>
           <dd className="serif mt-1 text-xl font-semibold text-ink-800">
-            {reviewsCount}
+            {signalsCount}
           </dd>
         </div>
       </dl>
@@ -148,8 +154,23 @@ export function HomeSidebar() {
           View my profile
         </Link>
         <Link href="/create" className="btn-secondary w-full text-center">
-          Create entry
+          Create Entity
         </Link>
+        <Link href="/resolve" className="btn-secondary w-full text-center">
+          Resolve wallet → entity
+        </Link>
+        {!isIssuer ? (
+          <Link
+            href="/issuer/register"
+            className="btn-secondary w-full text-center"
+          >
+            Become an Issuer
+          </Link>
+        ) : (
+          <p className="hint text-center">
+            ✓ Registered Issuer
+          </p>
+        )}
       </div>
     </aside>
   );

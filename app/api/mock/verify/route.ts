@@ -1,21 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { platformVerify } from "@/lib/mock/verification";
 import { dnsChallenge, verifyDnsClaim } from "@/lib/mock/dns";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
-  const kind = body.kind as "platform" | "dns" | undefined;
-
-  if (kind === "platform") {
-    const result = platformVerify({
-      entryPda: body.entryPda ?? "",
-      companyName: body.companyName ?? "",
-      domain: body.domain ?? "",
-    });
-    return NextResponse.json(result);
-  }
+  const kind = body.kind as "dns" | undefined;
 
   if (kind === "dns") {
     const challenge = body.challenge ?? dnsChallenge(body.wallet ?? "");

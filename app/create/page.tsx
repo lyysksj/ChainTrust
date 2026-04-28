@@ -7,12 +7,12 @@ import { useProgram } from "@/lib/anchor/hooks";
 import { fetchUserProfile } from "@/lib/anchor/client";
 import { EntryForm } from "@/components/entry-form";
 
-export default function CreateEntryPage() {
+export default function CreateEntityPage() {
   const { publicKey } = useWallet();
   const program = useProgram();
-  const [state, setState] = useState<"connect" | "checking" | "register" | "ready">(
-    "connect",
-  );
+  const [state, setState] = useState<
+    "connect" | "checking" | "register" | "ready"
+  >("connect");
 
   useEffect(() => {
     if (!publicKey || !program) {
@@ -31,33 +31,72 @@ export default function CreateEntryPage() {
   }, [publicKey, program]);
 
   return (
-    <div className="space-y-6">
-      <header>
-        <p className="text-xs uppercase tracking-[0.3em] text-ink-500">Step 2</p>
-        <h1 className="serif mt-2 text-3xl font-semibold text-ink-800">
-          Create a company entry
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-ink-600">
-          An entry is a public PDA. It's not owned by you — it belongs to the facts.
-          You can anchor identity, wallets, and evidence; anyone else can add reviews.
-        </p>
-      </header>
+    <div data-screen="create entity">
+      <div className="docnum" style={{ marginBottom: 8 }}>
+        FORM CT-NEW · 2026 EDITION · ART. 5.3
+      </div>
+      <div className="section-h" style={{ borderTop: "none", paddingTop: 0 }}>
+        <h2 className="section-title" style={{ fontSize: 36 }}>
+          File a new Entity.
+        </h2>
+        <span className="section-meta">PDA seeds: [&quot;entity&quot;, entity_id]</span>
+      </div>
+      <p
+        style={{
+          fontFamily: "var(--serif)",
+          fontSize: 17,
+          color: "var(--ink-2)",
+          maxWidth: "70ch",
+          marginTop: -8,
+          marginBottom: 32,
+        }}
+      >
+        The Entity is the off-chain legal anchor of the on-chain identity graph.
+        Once filed, you can register Projects under it and attest relationships
+        (wallets, domains, UBO, hierarchy) on the entity page.
+      </p>
 
       {state === "connect" && (
-        <p className="text-sm text-ink-700">Connect a Solana wallet to continue.</p>
+        <div className="no-result">CONNECT A SOLANA WALLET TO CONTINUE.</div>
       )}
       {state === "checking" && (
-        <p className="text-sm text-ink-700">Checking profile…</p>
+        <div className="no-result">CHECKING PROFILE…</div>
       )}
       {state === "register" && (
-        <div className="border border-ink-200 bg-white p-4 text-sm text-ink-700">
-          <p>You need a user profile before creating an entry.</p>
-          <Link href="/register" className="btn mt-3">
-            Register first
+        <div className="doc-card">
+          <p
+            style={{
+              fontFamily: "var(--serif)",
+              fontSize: 15,
+              color: "var(--ink-2)",
+              margin: "0 0 16px",
+            }}
+          >
+            You need a verified user profile before filing an Entity.
+          </p>
+          <Link href="/register" className="btn btn-primary">
+            Register profile first →
           </Link>
         </div>
       )}
-      {state === "ready" && <EntryForm />}
+      {state === "ready" && (
+        <div className="doc-card">
+          <div className="doc-card-h">
+            <div className="doc-card-title">Entity registration</div>
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 10,
+                color: "var(--ink-3)",
+                letterSpacing: "0.1em",
+              }}
+            >
+              SUBJECT · §1
+            </div>
+          </div>
+          <EntryForm />
+        </div>
+      )}
     </div>
   );
 }

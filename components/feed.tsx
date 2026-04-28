@@ -1,35 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import type { PublicKey } from "@solana/web3.js";
+import { useEffect, useState } from "react";
+import { PublicKey } from "@solana/web3.js";
 import { useProgram } from "@/lib/anchor/hooks";
 import {
-  fetchAllComments,
-  fetchAllEntries,
-  fetchAllUsers,
+  fetchAllEntities,
+  fetchAllIssuers,
+  fetchAllRelationships,
 } from "@/lib/anchor/client";
-import { bytesHex, formatTimestamp, shortKey } from "@/lib/utils/format";
-import { RELATION_LABELS } from "@/types";
-import type {
-  CommentBody,
-  CommentRecord,
-  CompanyEntry,
-  EntryMetadata,
-  UserProfile,
+import { bytesHex, formatTimestamp, shortHash, shortKey } from "@/lib/utils/format";
+import {
+  ISSUER_KIND_LABELS,
+  REL_KIND_META,
 } from "@/types";
+import type { Entity, EntityMetadata, Issuer, Relationship } from "@/types";
 
 const MAX_ITEMS = 30;
 
 type FeedItem = {
-  commentPda: PublicKey;
-  comment: CommentRecord;
-  entryIdHex: string;
-  entryName: string | null;
-  commenterName: string | null;
-  body: CommentBody | null;
-  replyCount: number;
-  commenterRoleLabel: "official" | "creator" | "community";
+  pda: PublicKey;
+  rel: Relationship;
+  entityName: string | null;
+  entityIdHex: string;
+  issuerName: string | null;
+  issuerTier: number;
 };
 
 export function Feed() {
@@ -48,52 +43,43 @@ export function Feed() {
     setError(null);
     (async () => {
       try {
-        const [rawComments, rawEntries, rawUsers] = await Promise.all([
-          fetchAllComments(program),
-          fetchAllEntries(program),
-          fetchAllUsers(program),
+        const [rawRels, rawEntities, rawIssuers] = await Promise.all([
+          fetchAllRelationships(program),
+          fetchAllEntities(program),
+          fetchAllIssuers(program),
         ]);
         if (!alive) return;
 
-        const entryByPda = new Map<
+        const entityByPda = new Map<
           string,
-          {
-            idHex: string;
-            metaUri: string;
-            createdBy: PublicKey;
-            officialWallet: PublicKey;
-            isClaimed: boolean;
-          }
+          { idHex: string; metaUri: string }
         >();
-        for (const e of rawEntries) {
-          const acc = e.account as unknown as CompanyEntry;
-          entryByPda.set(e.publicKey.toBase58(), {
-            idHex: bytesHex(acc.entryId),
+        for (const e of rawEntities) {
+          const acc = e.account as unknown as Entity;
+          entityByPda.set(e.publicKey.toBase58(), {
+            idHex: bytesHex(acc.entityId),
             metaUri: acc.metadataUri,
-            createdBy: acc.createdBy,
-            officialWallet: acc.officialWallet,
-            isClaimed: acc.isClaimed,
           });
         }
 
-        const userByWallet = new Map<string, UserProfile>();
-        for (const u of rawUsers) {
-          const acc = u.account as unknown as UserProfile;
-          userByWallet.set(acc.wallet.toBase58(), acc);
+        const issuerByPda = new Map<string, Issuer>();
+        for (const i of rawIssuers) {
+          issuerByPda.set(i.publicKey.toBase58(), i.account as unknown as Issuer);
         }
 
-        // Count replies per parent_comment
-        const replyCounts = new Map<string, number>();
-        for (const c of rawComments) {
-          const acc = c.account as unknown as CommentRecord;
-          if (acc.parentComment) {
-            const key = acc.parentComment.toBase58();
-            replyCounts.set(key, (replyCounts.get(key) ?? 0) + 1);
-          }
-        }
+        const sorted = rawRels
+          .map((r) => ({
+            publicKey: r.publicKey,
+            account: r.account as unknown as Relationship,
+          }))
+          .sort(
+            (a, b) =>
+              Number(b.account.createdAt) - Number(a.account.createdAt),
+          )
+          .slice(0, MAX_ITEMS);
 
-        const metaByUri = new Map<string, EntryMetadata | null>();
-        async function loadMeta(uri: string): Promise<EntryMetadata | null> {
+        const metaByUri = new Map<string, EntityMetadata | null>();
+        async function loadMeta(uri: string) {
           if (!uri) return null;
           if (metaByUri.has(uri)) return metaByUri.get(uri) ?? null;
           try {
@@ -105,7 +91,7 @@ export function Feed() {
               return null;
             }
             const text = await resp.text();
-            const parsed = JSON.parse(text) as EntryMetadata;
+            const parsed = JSON.parse(text) as EntityMetadata;
             metaByUri.set(uri, parsed);
             return parsed;
           } catch {
@@ -114,68 +100,20 @@ export function Feed() {
           }
         }
 
-        async function loadBody(uri: string): Promise<CommentBody | null> {
-          if (!uri) return null;
-          try {
-            const resp = await fetch(
-              `/api/mock/fetch?uri=${encodeURIComponent(uri)}`,
-            );
-            if (!resp.ok) return null;
-            const text = await resp.text();
-            try {
-              return JSON.parse(text) as CommentBody;
-            } catch {
-              return { body: text } as CommentBody;
-            }
-          } catch {
-            return null;
-          }
-        }
-
-        // Feed shows top-level reviews only
-        const topLevel = rawComments
-          .map((c) => ({
-            publicKey: c.publicKey,
-            account: c.account as unknown as CommentRecord,
-          }))
-          .filter((c) => !c.account.parentComment)
-          .sort(
-            (a, b) =>
-              Number(b.account.submittedAt) - Number(a.account.submittedAt),
-          )
-          .slice(0, MAX_ITEMS);
-
         const hydrated = await Promise.all(
-          topLevel.map(async (c) => {
-            const entryInfo = entryByPda.get(c.account.entry.toBase58());
-            const [meta, body] = await Promise.all([
-              entryInfo ? loadMeta(entryInfo.metaUri) : Promise.resolve(null),
-              loadBody(c.account.contentUri),
-            ]);
-            const commenter = userByWallet.get(c.account.commenter.toBase58());
-            let role: FeedItem["commenterRoleLabel"] = "community";
-            if (entryInfo) {
-              if (
-                entryInfo.isClaimed &&
-                c.account.commenter.equals(entryInfo.officialWallet)
-              ) {
-                role = "official";
-              } else if (c.account.commenter.equals(entryInfo.createdBy)) {
-                role = "creator";
-              }
-            }
+          sorted.map(async (r) => {
+            const entityInfo = entityByPda.get(r.account.entity.toBase58());
+            const meta = entityInfo ? await loadMeta(entityInfo.metaUri) : null;
+            const iss = issuerByPda.get(r.account.issuer.toBase58());
             return {
-              commentPda: c.publicKey,
-              comment: c.account,
-              entryIdHex: entryInfo?.idHex ?? "",
-              entryName:
-                meta?.projectName ?? meta?.legalName ?? null,
-              commenterName: commenter?.username
-                ? `@${commenter.username}`
+              pda: r.publicKey,
+              rel: r.account,
+              entityIdHex: entityInfo?.idHex ?? "",
+              entityName: meta?.legalName ?? null,
+              issuerName: iss
+                ? ISSUER_KIND_LABELS[iss.kind] ?? "Issuer"
                 : null,
-              body,
-              replyCount: replyCounts.get(c.publicKey.toBase58()) ?? 0,
-              commenterRoleLabel: role,
+              issuerTier: iss?.trustTier ?? 3,
             } as FeedItem;
           }),
         );
@@ -195,11 +133,10 @@ export function Feed() {
   if (!program) {
     return (
       <div className="border border-ink-200 bg-white p-6">
-        <p className="hint">Connect wallet to load the public review feed.</p>
+        <p className="hint">Connect a wallet to load the on-chain attestation feed.</p>
       </div>
     );
   }
-
   if (loading) {
     return (
       <div className="border border-ink-200 bg-white p-6">
@@ -207,7 +144,6 @@ export function Feed() {
       </div>
     );
   }
-
   if (error) {
     return (
       <div className="border border-ink-200 bg-white p-6">
@@ -215,13 +151,12 @@ export function Feed() {
       </div>
     );
   }
-
   if (!items.length) {
     return (
       <div className="border border-ink-200 bg-white p-6">
         <p className="hint">
-          No reviews have been anchored yet. Be the first to open an entry and
-          leave a review.
+          No attestations on-chain yet. Register an Entity, become an Issuer,
+          and sign the first relationship.
         </p>
       </div>
     );
@@ -230,98 +165,64 @@ export function Feed() {
   return (
     <ul className="space-y-3">
       {items.map((item) => (
-        <FeedCard key={item.commentPda.toBase58()} item={item} />
+        <FeedCard key={item.pda.toBase58()} item={item} />
       ))}
     </ul>
   );
 }
 
 function FeedCard({ item }: { item: FeedItem }) {
-  const {
-    comment,
-    entryIdHex,
-    entryName,
-    commenterName,
-    body,
-    replyCount,
-    commenterRoleLabel,
-  } = item;
-  const thumbnails = useMemo(
-    () => (body?.images ?? []).slice(0, 3),
-    [body],
-  );
-
+  const meta = REL_KIND_META[item.rel.kind];
+  const revoked = Number(item.rel.revokedAt) > 0;
+  const tierClass =
+    item.issuerTier === 1
+      ? "chip chip-verified"
+      : item.issuerTier === 2
+        ? "chip chip-creator"
+        : "chip chip-community";
   return (
     <li className="border border-ink-200 bg-white">
-      <div className="space-y-3 p-4">
+      <div className="space-y-2 p-4">
         <div className="flex flex-wrap items-center gap-2 text-xs text-ink-500">
-          <span className="font-semibold text-ink-700">
-            {commenterName ?? shortKey(comment.commenter)}
+          <span className={tierClass}>
+            T{item.issuerTier} {item.issuerName ?? "Issuer"}
           </span>
-          <span>reviewed</span>
-          {entryIdHex ? (
+          <span>attested</span>
+          <span className="font-medium text-ink-700">
+            {meta?.label ?? "Relationship"}
+          </span>
+          <span>for</span>
+          {item.entityIdHex ? (
             <Link
-              href={`/entry/${entryIdHex}`}
+              href={`/entry/${item.entityIdHex}`}
               className="serif text-sm font-semibold text-accent hover:underline"
             >
-              {entryName ?? "(unnamed entry)"}
+              {item.entityName ?? "(unnamed entity)"}
             </Link>
           ) : (
             <span className="serif text-sm font-semibold text-ink-700">
-              {entryName ?? "(unknown entry)"}
+              {item.entityName ?? "(unknown entity)"}
             </span>
           )}
-          <span className="ml-auto">{formatTimestamp(comment.submittedAt)}</span>
+          <span className="ml-auto">{formatTimestamp(item.rel.createdAt)}</span>
         </div>
-
-        {body?.headline && (
-          <h4 className="serif text-lg font-semibold text-ink-800">
-            {body.headline}
-          </h4>
-        )}
-        {body?.body && (
-          <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-relaxed text-ink-700">
-            {body.body}
-          </p>
-        )}
-
-        {thumbnails.length > 0 && (
-          <div className="flex gap-2">
-            {thumbnails.map((uri) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={uri}
-                src={`/api/mock/fetch?uri=${encodeURIComponent(uri)}`}
-                alt="review attachment"
-                className="h-16 w-16 border border-ink-200 object-cover"
-              />
-            ))}
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-3 text-xs text-ink-500">
-          {commenterRoleLabel === "official" && (
-            <span className="chip chip-official">Official review</span>
+        <div className="text-sm text-ink-700">
+          target <span className="mono">{shortKey(new PublicKey(Buffer.from(item.rel.targetRef)))}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-ink-500">
+          {Number(item.rel.validUntil) > 0 ? (
+            <span>valid until {formatTimestamp(item.rel.validUntil)}</span>
+          ) : (
+            <span>no expiry</span>
           )}
-          {commenterRoleLabel === "creator" && (
-            <span className="chip chip-creator">Creator review</span>
+          {revoked && (
+            <span className="font-semibold text-red-700">
+              revoked {formatTimestamp(item.rel.revokedAt)}
+            </span>
           )}
-          <span className="chip chip-community">
-            {RELATION_LABELS[comment.relationType] ?? "Other"}
+          <span className="mono ml-auto">
+            ev {shortHash(item.rel.evidenceHash)}
           </span>
-          <span>♥ {comment.likeCount}</span>
-          <span>💬 {replyCount}</span>
-          {comment.officialResponseUri && (
-            <span className="chip chip-official">Official response</span>
-          )}
-          {entryIdHex && (
-            <Link
-              href={`/entry/${entryIdHex}`}
-              className="ml-auto text-accent hover:underline"
-            >
-              View thread →
-            </Link>
-          )}
         </div>
       </div>
     </li>

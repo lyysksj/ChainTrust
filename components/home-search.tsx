@@ -4,15 +4,17 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PublicKey } from "@solana/web3.js";
 import { useProgram } from "@/lib/anchor/hooks";
-import { fetchAllEntries, fetchAllUsers } from "@/lib/anchor/client";
+import { fetchAllEntities, fetchAllUsers } from "@/lib/anchor/client";
 import { bytesHex } from "@/lib/utils/format";
-import type { CompanyEntry, EntryMetadata, UserProfile } from "@/types";
+import { entityIdToCtNumber } from "@/lib/utils/ct-number";
+import type { Entity, EntityMetadata, UserProfile } from "@/types";
 
-type EntryResult = {
-  entryIdHex: string;
+type EntityResult = {
+  entityIdHex: string;
+  ctNumber: string;
   pda: PublicKey;
-  account: CompanyEntry;
-  meta: EntryMetadata | null;
+  account: Entity;
+  meta: EntityMetadata | null;
 };
 
 type UserResult = {
@@ -22,7 +24,7 @@ type UserResult = {
 
 export function HomeSearch() {
   const program = useProgram();
-  const [entries, setEntries] = useState<EntryResult[]>([]);
+  const [entities, setEntities] = useState<EntityResult[]>([]);
   const [users, setUsers] = useState<UserResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
@@ -35,17 +37,18 @@ export function HomeSearch() {
     setLoading(true);
     (async () => {
       try {
-        const [rawEntries, rawUsers] = await Promise.all([
-          fetchAllEntries(program),
+        const [rawEntities, rawUsers] = await Promise.all([
+          fetchAllEntities(program),
           fetchAllUsers(program),
         ]);
         if (!alive) return;
 
         const withMeta = await Promise.all(
-          rawEntries.map(async (e) => {
-            const account = e.account as unknown as CompanyEntry;
-            const entryIdHex = bytesHex(account.entryId);
-            let meta: EntryMetadata | null = null;
+          rawEntities.map(async (e) => {
+            const account = e.account as unknown as Entity;
+            const entityIdHex = bytesHex(account.entityId);
+            const ctNumber = entityIdToCtNumber(account.entityId);
+            let meta: EntityMetadata | null = null;
             if (account.metadataUri) {
               try {
                 const resp = await fetch(
@@ -54,7 +57,7 @@ export function HomeSearch() {
                 if (resp.ok) {
                   const text = await resp.text();
                   try {
-                    meta = JSON.parse(text) as EntryMetadata;
+                    meta = JSON.parse(text) as EntityMetadata;
                   } catch {
                     /* ignore */
                   }
@@ -64,7 +67,8 @@ export function HomeSearch() {
               }
             }
             return {
-              entryIdHex,
+              entityIdHex,
+              ctNumber,
               pda: e.publicKey,
               account,
               meta,
@@ -72,7 +76,7 @@ export function HomeSearch() {
           }),
         );
         if (!alive) return;
-        setEntries(withMeta);
+        setEntities(withMeta);
         setUsers(
           rawUsers.map((u) => ({
             pda: u.publicKey,
@@ -99,19 +103,17 @@ export function HomeSearch() {
 
   const q = query.trim().toLowerCase();
 
-  const matchedEntries = useMemo(() => {
+  const matchedEntities = useMemo(() => {
     if (!q) return [];
-    return entries
+    return entities
       .filter((e) => {
         const legal = (e.meta?.legalName ?? "").toLowerCase();
-        const project = (e.meta?.projectName ?? "").toLowerCase();
         const sites = (e.meta?.websites ?? []).join(" ").toLowerCase();
-        return (
-          legal.includes(q) || project.includes(q) || sites.includes(q)
-        );
+        const ct = e.ctNumber.toLowerCase();
+        return legal.includes(q) || sites.includes(q) || ct.includes(q);
       })
       .slice(0, 8);
-  }, [q, entries]);
+  }, [q, entities]);
 
   const matchedUsers = useMemo(() => {
     if (!q) return [];
@@ -120,7 +122,7 @@ export function HomeSearch() {
       .slice(0, 6);
   }, [q, users]);
 
-  const hasResults = matchedEntries.length + matchedUsers.length > 0;
+  const hasResults = matchedEntities.length + matchedUsers.length > 0;
 
   return (
     <div ref={boxRef} className="relative">
@@ -132,7 +134,7 @@ export function HomeSearch() {
         className="input h-12 text-base"
         placeholder={
           program
-            ? "Search companies or people…"
+            ? "Search by name, domain, CT-Number, or username…"
             : "Connect wallet to enable search"
         }
         value={query}
@@ -146,7 +148,7 @@ export function HomeSearch() {
 
       {open && query && (
         <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-[28rem] overflow-y-auto border border-ink-200 bg-white shadow-lg">
-          {loading && entries.length === 0 ? (
+          {loading && entities.length === 0 ? (
             <p className="hint p-4">Loading…</p>
           ) : !hasResults ? (
             <div className="space-y-2 p-4">
@@ -156,31 +158,29 @@ export function HomeSearch() {
                 className="block text-sm text-accent hover:underline"
                 onClick={() => setOpen(false)}
               >
-                → Create a new entry for "{query}"
+                → Create a new Entity for "{query}"
               </Link>
             </div>
           ) : (
             <div>
-              {matchedEntries.length > 0 && (
+              {matchedEntities.length > 0 && (
                 <section>
                   <p className="bg-ink-50 px-4 py-2 text-xs uppercase tracking-wider text-ink-500">
-                    Companies · {matchedEntries.length}
+                    Entities · {matchedEntities.length}
                   </p>
                   <ul>
-                    {matchedEntries.map((e) => (
+                    {matchedEntities.map((e) => (
                       <li key={e.pda.toBase58()}>
                         <Link
-                          href={`/entry/${e.entryIdHex}`}
+                          href={`/entry/${e.entityIdHex}`}
                           className="block border-b border-ink-100 px-4 py-3 hover:bg-ink-50"
                           onClick={() => setOpen(false)}
                         >
                           <p className="serif text-sm font-semibold text-ink-800">
-                            {e.meta?.projectName ??
-                              e.meta?.legalName ??
-                              "(unnamed)"}
+                            {e.meta?.legalName ?? "(unnamed)"}
                           </p>
                           <p className="text-xs text-ink-500">
-                            {e.meta?.legalName}
+                            <span className="mono">{e.ctNumber}</span>
                             {e.meta?.websites?.[0]
                               ? ` · ${e.meta.websites[0]}`
                               : ""}
