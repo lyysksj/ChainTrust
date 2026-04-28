@@ -27,7 +27,7 @@ const WalletModalProvider = _WalletModalProvider as unknown as React.FC<{
 const RPC =
   process.env.NEXT_PUBLIC_SOLANA_RPC ||
   process.env.NEXT_PUBLIC_RPC_URL ||
-  "http://127.0.0.1:8899";
+  "devnet";
 
 export function Providers({ children }: { children: ReactNode }) {
   const endpoint = useMemo(() => {

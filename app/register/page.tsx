@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
+import {
+  IDKitRequestWidget,
+  orbLegacy,
+  type IDKitResult,
+  type RpContext,
+} from "@worldcoin/idkit";
 import { useProgram } from "@/lib/anchor/hooks";
 import { fetchUserProfile, registerUser } from "@/lib/anchor/client";
 import {
@@ -19,6 +25,22 @@ const EMPTY_EXPERIENCE: WorkExperienceItem = {
   toYear: null,
 };
 
+const WORLDID_APP_ID = process.env.NEXT_PUBLIC_WORLDID_APP_ID ?? "";
+const WORLDID_RP_ID = process.env.NEXT_PUBLIC_WORLDID_RP_ID ?? "";
+const WORLDID_ACTION =
+  process.env.NEXT_PUBLIC_WORLDID_ACTION || "register-chaintrust-user";
+// v4 IDKit takes an `environment` prop ("staging" | "production").
+// Default to "staging" so dev runs work with the simulator out-of-the-box.
+const WORLDID_ENV: "production" | "staging" =
+  process.env.NEXT_PUBLIC_WORLDID_ENV === "production"
+    ? "production"
+    : "staging";
+// v4 requires both an app_id (must start with `app_`) and an rp_id from the
+// developer portal. If either is missing we fall back to dev-mode (no
+// proof-of-personhood gating).
+const worldidEnabled =
+  WORLDID_APP_ID.startsWith("app_") && WORLDID_RP_ID.length > 0;
+
 export default function RegisterPage() {
   const router = useRouter();
   const { publicKey } = useWallet();
@@ -28,6 +50,7 @@ export default function RegisterPage() {
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [existingUsername, setExistingUsername] = useState<string | null>(null);
 
+  // Form state
   const [username, setUsername] = useState("");
   const [headline, setHeadline] = useState("");
   const [expertiseRaw, setExpertiseRaw] = useState("");
@@ -42,6 +65,10 @@ export default function RegisterPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // World ID state
+  const [humanVerified, setHumanVerified] = useState(!worldidEnabled);
+  const [humanCheckLoading, setHumanCheckLoading] = useState(false);
 
   useEffect(() => {
     if (!program || !publicKey) return;
@@ -60,6 +87,22 @@ export default function RegisterPage() {
       alive = false;
     };
   }, [program, publicKey]);
+
+  // Returning user: skip widget if this wallet has already passed World ID.
+  useEffect(() => {
+    if (!worldidEnabled || !publicKey) return;
+    let alive = true;
+    setHumanCheckLoading(true);
+    fetch(`/api/worldid/check?wallet=${publicKey.toBase58()}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (alive && j.verified) setHumanVerified(true);
+      })
+      .finally(() => alive && setHumanCheckLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [publicKey]);
 
   function updateExperience(i: number, patch: Partial<WorkExperienceItem>) {
     setExperience((prev) =>
@@ -99,7 +142,10 @@ export default function RegisterPage() {
         return;
       }
     }
-
+    if (worldidEnabled && !humanVerified) {
+      setError("Verify with World ID before creating a profile.");
+      return;
+    }
     if (!program || !publicKey) {
       setError("Connect a wallet first.");
       return;
@@ -200,10 +246,17 @@ export default function RegisterPage() {
           Register as a verified user
         </h1>
         <p className="mt-2 text-sm text-ink-600">
-          One wallet, one profile. Verified users can create entries, link
-          wallets, leave reviews, and reply.
+          One human, one wallet, one profile. Verified users can create
+          entries, link wallets, leave reviews, and reply.
         </p>
       </header>
+
+      <WorldIdGate
+        humanVerified={humanVerified}
+        loading={humanCheckLoading}
+        onSuccess={() => setHumanVerified(true)}
+        wallet={publicKey.toBase58()}
+      />
 
       <div className="border border-accent/40 bg-accent/5 p-4 text-sm text-ink-700">
         <p className="font-semibold text-accent">All fields below are public.</p>
@@ -232,7 +285,6 @@ export default function RegisterPage() {
             </div>
             <p className="hint mt-1">
               Letters, digits, underscore, or dash. Used in your profile URL.
-              Currently not enforced as globally unique on-chain.
             </p>
           </div>
 
@@ -415,16 +467,146 @@ export default function RegisterPage() {
 
         {error && <p className="error">{error}</p>}
 
-        <button className="btn" disabled={submitting}>
+        <button
+          className="btn"
+          disabled={submitting || (worldidEnabled && !humanVerified)}
+        >
           {submitting ? "Creating profile…" : "Create profile on-chain"}
         </button>
       </form>
+    </div>
+  );
+}
 
-      <p className="hint border-t border-ink-200 pt-4">
-        Anti-sybil check is mocked for the hackathon. A production version
-        would require a lightweight proof-of-personhood check before
-        registration.
+function WorldIdGate({
+  humanVerified,
+  loading,
+  onSuccess,
+  wallet,
+}: {
+  humanVerified: boolean;
+  loading: boolean;
+  onSuccess: () => void;
+  wallet: string;
+}) {
+  const [widgetOpen, setWidgetOpen] = useState(false);
+  const [rpContext, setRpContext] = useState<RpContext | null>(null);
+  const [fetchingSig, setFetchingSig] = useState(false);
+  const [gateError, setGateError] = useState<string | null>(null);
+
+  if (!worldidEnabled) {
+    return (
+      <div className="border border-yellow-500/50 bg-yellow-50 p-4 text-sm text-ink-700">
+        <p className="font-semibold text-yellow-900">
+          ⚠ World ID not configured (development mode)
+        </p>
+        <p className="mt-1">
+          Set <code className="mono">NEXT_PUBLIC_WORLDID_APP_ID</code> and
+          <code className="mono"> NEXT_PUBLIC_WORLDID_RP_ID</code> in
+          <code className="mono"> .env.local</code> to enable proof-of-personhood
+          gating. Without them, anti-sybil is not enforced.
+        </p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="border border-ink-200 bg-white p-4 text-sm text-ink-600">
+        Checking previous World ID verification…
+      </div>
+    );
+  }
+
+  if (humanVerified) {
+    return (
+      <div className="border border-verified/60 bg-verified/5 p-4 text-sm text-ink-700">
+        <p className="font-semibold text-verified">✓ Verified with World ID</p>
+        <p className="mt-1">
+          This wallet has passed proof-of-personhood. Continue filling in your
+          profile below.
+        </p>
+      </div>
+    );
+  }
+
+  async function startVerify() {
+    setGateError(null);
+    setFetchingSig(true);
+    try {
+      const sig = await fetch("/api/worldid/rp-signature", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: WORLDID_ACTION }),
+      }).then((r) => r.json());
+      if (!sig.ok) throw new Error(sig.error ?? "Failed to sign rp_context");
+
+      setRpContext({
+        rp_id: WORLDID_RP_ID,
+        nonce: sig.nonce,
+        created_at: sig.created_at,
+        expires_at: sig.expires_at,
+        signature: sig.sig,
+      });
+      setWidgetOpen(true);
+    } catch (err) {
+      setGateError((err as Error).message ?? "Failed to start verification");
+    } finally {
+      setFetchingSig(false);
+    }
+  }
+
+  async function handleVerify(result: IDKitResult) {
+    const resp = await fetch("/api/worldid/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ result, wallet }),
+    });
+    const json = await resp.json();
+    if (!resp.ok || !json.ok) {
+      throw new Error(json.error ?? "World ID verification failed");
+    }
+  }
+
+  return (
+    <div className="border-2 border-dashed border-accent/50 bg-accent/5 p-4">
+      <p className="font-semibold text-accent">
+        Step 1 — Prove you're a real person
       </p>
+      <p className="mt-1 text-sm text-ink-700">
+        ChainTrust uses World ID to ensure one real human can register only one
+        profile. Your World ID does not reveal who you are; it only confirms
+        you're a unique human in this app's namespace.
+      </p>
+      <div className="mt-3 space-y-2">
+        <button
+          type="button"
+          className="btn"
+          onClick={startVerify}
+          disabled={fetchingSig}
+        >
+          {fetchingSig ? "Preparing…" : "Verify with World ID"}
+        </button>
+        {gateError && <p className="error">{gateError}</p>}
+      </div>
+
+      {rpContext && (
+        <IDKitRequestWidget
+          open={widgetOpen}
+          onOpenChange={setWidgetOpen}
+          app_id={WORLDID_APP_ID as `app_${string}`}
+          action={WORLDID_ACTION}
+          environment={WORLDID_ENV}
+          rp_context={rpContext}
+          allow_legacy_proofs={true}
+          preset={orbLegacy({ signal: wallet })}
+          handleVerify={handleVerify}
+          onSuccess={() => {
+            setWidgetOpen(false);
+            onSuccess();
+          }}
+        />
+      )}
     </div>
   );
 }
