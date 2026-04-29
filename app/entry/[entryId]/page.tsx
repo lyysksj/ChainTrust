@@ -372,15 +372,15 @@ export default function EntityPage({ params }: { params: Params }) {
                 }}
               >
                 <span>
-                  <Dot color="#2a1f3d" />
+                  <Dot color="#492a3a" />
                   T1
                 </span>
                 <span>
-                  <Dot color="#7a6e92" />
+                  <Dot color="#8985cf" />
                   T2
                 </span>
                 <span>
-                  <Dot color="#a89cb8" />
+                  <Dot color="#ca986d" />
                   T3
                 </span>
                 <span style={{ color: "var(--revoked)" }}>·· REVOKED</span>

@@ -1,159 +1,211 @@
 # ChainTrust
 
-An on-chain company identity and reputation layer for Web3 teams on Solana.
+Public identity registry for Web3 entities on Solana.
 
-> Claim gives voice, not control.
+ChainTrust links legal entities, wallets, projects, domains, and issuer-signed attestations in a public, append-only graph. The current codebase is a Next.js 14 dApp backed by an Anchor program on Solana. Community comments still exist, but the core product is now the entity and relationship registry rather than a review-first app.
 
-A ChainTrust company entry is a public PDA. Any verified user can create one; any verified user can submit an append-only review; a representative can claim the entry and publish official responses — but cannot delete reviews. This is the hackathon MVP: four account types, six instructions, a Next.js UI, and honest mocks for heavy integrations.
+## Overview
 
----
+- File on-chain `Entity` records and derive stable CT-Numbers from 8-byte entity IDs.
+- Register `Issuer` accounts with public trust tiers.
+- Create `Project` records under an entity.
+- Attest signed relationships such as `OPERATES_PROJECT`, `CONTROLS_WALLET`, `HAS_DOMAIN`, `PARENT_OF`, and `AUDITED_BY`.
+- Resolve a CT-Number, wallet, or domain back to an entity and inspect its evidence trail.
+- Allow community comments, replies, likes, and append-only official responses.
+- Optionally dual-write relationship attestations to the Solana Attestation Service (SAS).
 
-## Architecture
+Program ID: `HBxcCBx4ZPVnhGazehwZjF72J3neJsz5HyvGoPMTzUPt`
 
-```
-/
-├── anchor/                 # Anchor 0.30.1 program
-│   └── programs/chaintrust # lib.rs / state.rs / instructions.rs / errors.rs / constants.rs
-├── app/                    # Next.js 14 App Router pages + /api/mock/* routes
-├── components/             # UI: navbar, forms, review list, attestations, claim card
+## Stack
+
+- Frontend: Next.js 14, React 18, Tailwind CSS
+- Wallets: Solana Wallet Adapter, Phantom, Solflare
+- On-chain: Anchor 0.30.1 program in `anchor/`
+- Storage: local `mock://` storage by default, optional Pinata-backed `ipfs://`
+- Human verification: optional World ID gate for profile registration
+- Interop: optional SAS dual-write for relationship attestations
+
+## Repository Layout
+
+```text
+.
+├── app/                         # Next.js App Router pages and API routes
+├── components/                  # UI components: forms, graph, review list, wallet UI
 ├── lib/
-│   ├── anchor/             # PDA derivation, client helpers, React hooks, IDL
-│   ├── mock/               # dns, storage, verification, attestations
-│   └── utils/              # hash, format, validation, cn
-└── types/                  # TS types mirroring on-chain accounts
+│   ├── anchor/                  # IDL, PDA helpers, read/write client, React hooks
+│   ├── mock/                    # Mock DNS, storage, and World ID state
+│   ├── sas/                     # SAS config, PDA helpers, instruction builders
+│   ├── storage/                 # Storage abstraction: mock or Pinata/IPFS
+│   └── utils/                   # Hashing, formatting, validation, CT-Number helpers
+├── anchor/                      # Anchor workspace and Solana program
+├── scripts/sas-bootstrap.ts     # One-time SAS bootstrap script
+├── types/                       # TypeScript account and metadata types
+├── ChainTrust_Product_Design.md
+└── ChainTrust_Product_Design_CN.md
 ```
 
-### On-chain model
+## On-Chain Model
 
-| Account         | Seeds                                  |
-|-----------------|----------------------------------------|
-| `UserProfile`   | `["user", wallet]`                     |
-| `CompanyEntry`  | `["entry", entry_id:8]`                |
-| `CommentRecord` | `["comment", entry, commenter, idx:4]` |
-| `WalletMapping` | `["wallet_map", target, entry]`        |
+### Accounts
 
-Instructions: `register_user`, `create_entry`, `add_wallet_mapping`, `submit_comment`, `claim_entry`, `add_official_response`. **There is intentionally no `delete_comment` and no admin override.**
+| Account | Purpose | PDA seeds |
+| --- | --- | --- |
+| `UserProfile` | User identity and metadata URI | `["user", wallet]` |
+| `Issuer` | Attestor authority, kind, trust tier | `["issuer", authority]` |
+| `Entity` | Legal entity anchor for the registry | `["entity", entity_id]` |
+| `Project` | Project filed under an entity | `["project", entity, project_id]` |
+| `Relationship` | Signed edge from entity to wallet/domain/project/entity/person | `["rel", entity, kind, target_ref, issuer]` |
+| `CommentRecord` | Community signal or reply | `["comment", entity, commenter, comment_index]` |
+| `LikeRecord` | Like state for a comment | `["like", comment, liker]` |
 
----
+### Instructions
 
-## Quick start
+`register_user`, `update_user_metadata_uri`, `register_issuer`, `create_entity`, `create_project`, `attest_relationship`, `revoke_relationship`, `claim_entity`, `submit_comment`, `submit_reply`, `like_comment`, `unlike_comment`, `add_official_response`
 
-### 0. Prerequisites
+### Important invariants
 
-- Node 20+ (works with 24)
-- Rust + Cargo
-- Solana CLI ≥ 1.18
-- Anchor CLI 0.30.x — this repo uses 0.32 CLI against anchor-lang 0.30.1, which is fine as long as `platform-tools` v1.54+ is available (newer cargo required by transitive deps)
+- No delete path for relationships or comments.
+- Revocation marks `Relationship.revoked_at`; it does not erase history.
+- Official responses append a new URI; they do not mutate the original comment body or hash.
 
-If your `cargo-build-sbf` reports platform-tools v1.51 and fails with "feature `edition2024` is required", upgrade platform-tools:
+## Key Screens
+
+- `/`: registry home, stats, recent entities, quick resolve
+- `/resolve`: resolve CT-Number, wallet, or domain to an entity
+- `/create`: file a new entity
+- `/entry/[entryId]`: entity profile, graph, relationships, projects, signals, raw view
+- `/attest`: guided attestation flow
+- `/issuers`: issuer registry and trust tier list
+- `/issuer/register`: issuer self-registration
+- `/register`: user registration with optional World ID verification
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 20+
+- Rust and Cargo
+- Solana CLI 1.18+
+- Anchor CLI compatible with `anchor-lang` 0.30.1
+
+If `anchor build` fails with an `edition2024` / platform-tools error, update your Solana platform tools before building.
+
+### 1. Install dependencies
 
 ```bash
-# symlink v1.51 to v1.54 (or install v1.54 directly)
-curl -L -o /tmp/pt-1.54.tar.bz2 \
-  https://github.com/anza-xyz/platform-tools/releases/download/v1.54/platform-tools-linux-x86_64.tar.bz2
-mkdir -p ~/.cache/solana/v1.54/platform-tools
-tar -xjf /tmp/pt-1.54.tar.bz2 -C ~/.cache/solana/v1.54/platform-tools
-mv ~/.cache/solana/v1.51 ~/.cache/solana/v1.51.old 2>/dev/null || true
-ln -s v1.54 ~/.cache/solana/v1.51
+npm install
+cd anchor && npm install
 ```
 
-### 1. Install
+### 2. Point the frontend at localnet
+
+The frontend defaults to `devnet` when no RPC env var is set. For local development, set:
 
 ```bash
-npm install          # frontend
-( cd anchor && npm install )  # smoke-test deps
+NEXT_PUBLIC_SOLANA_RPC=http://127.0.0.1:8899
 ```
 
-### 2. Build the program
+Add it to `.env.local` before running the app.
+
+### 3. Build the program
 
 ```bash
-( cd anchor && anchor build )
-# outputs: anchor/target/deploy/chaintrust.so
-#          anchor/target/idl/chaintrust.json
-#          anchor/target/types/chaintrust.ts
-# Then copy the artifacts used by the frontend:
+cd anchor && anchor build
+```
+
+If you rebuild the program, sync the generated frontend artifacts:
+
+```bash
 cp anchor/target/idl/chaintrust.json lib/anchor/idl/chaintrust.json
 cp anchor/target/types/chaintrust.ts lib/anchor/idl/chaintrust.ts
 ```
 
-### 3. Start a local validator and deploy
+### 4. Start a validator and deploy
+
+Terminal A:
 
 ```bash
-solana-test-validator --reset          # terminal A
+solana-test-validator --reset
+```
+
+Terminal B:
+
+```bash
 solana config set --url http://127.0.0.1:8899
-solana airdrop 10                       # fund wallet if needed
-( cd anchor && anchor deploy --provider.cluster localnet )
+solana airdrop 10
+cd anchor && anchor deploy --provider.cluster localnet
 ```
 
-### 4. Smoke test (end-to-end, CLI)
-
-```bash
-( cd anchor && npm run smoke )
-```
-
-The smoke test registers two users, creates an entry, adds a wallet mapping, submits a review, claims the entry, adds an official response, and asserts that (a) `content_hash` is **unchanged** after the official response, (b) non-official responses are rejected, and (c) there is no `delete_comment` instruction in the IDL.
-
-### 5. Run the frontend
+### 5. Run the app
 
 ```bash
 npm run dev
-# open http://localhost:3000
 ```
 
-By default the app reads `NEXT_PUBLIC_SOLANA_RPC` (falling back to `http://127.0.0.1:8899`). Point at devnet by exporting `NEXT_PUBLIC_SOLANA_RPC=devnet`.
+Open `http://localhost:3000`.
 
----
+## Suggested Demo Flow
 
-## Demo script (under 3 minutes)
+1. Connect a wallet and register a `UserProfile`.
+2. File an `Entity` from `/create`.
+3. Register the same wallet as an `Issuer`.
+4. File an attestation from `/attest`.
+5. Resolve the entity by CT-Number, wallet, or domain on `/resolve`.
+6. Open the entity page to inspect the graph, relationship list, comments, and official responses.
 
-1. **Register** as Alice. Connect wallet → pick a username → "Create profile on-chain".
-2. **Create an entry** for `Acme Protocol`. Attach a primary wallet + one community mapping.
-3. **Switch wallets** (or use a different browser profile) to Bob. Register Bob.
-4. **Submit a review** as Bob from the entry page. Note the hash and PDA shown under the review.
-5. **Switch back to Alice** and click "Start claim". Walk through the mock DNS flow, sign the claim.
-6. Under Bob's review, click "Publish official response". Write a response.
-7. Observe: the review's `content-hash` and `PDA` are unchanged. The official response is a separate, styled-differently card. The reviewer identity, score, timestamp, and body are intact.
+## Environment Variables
 
-Say out loud: **Claim gives voice, not control.**
+Put local overrides in `.env.local`.
 
----
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SOLANA_RPC` | Recommended | RPC endpoint for the frontend. If omitted, the app falls back to `NEXT_PUBLIC_RPC_URL`, then `devnet`. |
+| `NEXT_PUBLIC_RPC_URL` | Optional | Legacy RPC fallback alias. |
+| `NEXT_PUBLIC_WORLDID_APP_ID` | Optional | Enables the World ID registration gate when paired with RP ID. |
+| `NEXT_PUBLIC_WORLDID_RP_ID` | Optional | World ID relying party ID. |
+| `NEXT_PUBLIC_WORLDID_ACTION` | Optional | World ID action name. Defaults to `register-chaintrust-user`. |
+| `NEXT_PUBLIC_WORLDID_ENV` | Optional | `staging` or `production`. |
+| `WORLDID_RP_SIGNING_KEY` | Optional | Server-side key for `/api/worldid/rp-signature`. |
+| `PINATA_JWT` | Optional | Server-side Pinata JWT. If absent, uploads use local mock storage. |
+| `NEXT_PUBLIC_PINATA_GATEWAY` | Optional | Public Pinata gateway host for reading pinned content. |
+| `PINATA_GATEWAY` | Optional | Server-side fallback gateway host. |
+| `NEXT_PUBLIC_SAS_DUAL_WRITE` | Optional | Enables SAS dual-write on relationship attestations. |
+| `NEXT_PUBLIC_SAS_CREDENTIAL_AUTHORITY` | Optional | Authority used to derive the shared SAS credential PDA. |
 
-## What's real vs mocked
+## Storage Modes
 
-**Real (on-chain):**
-- wallet connection, `UserProfile`, `CompanyEntry`, `WalletMapping`, `CommentRecord`
-- append-only model (no delete instruction)
-- claim state transition
-- official-response signature check
-- content-hash anchoring and comment-count invariants
+- Without `PINATA_JWT`, uploads are written to local mock storage under `data/mock-storage/` and returned as `mock://...` URIs.
+- With `PINATA_JWT`, public uploads are pinned to IPFS and returned as `ipfs://...` URIs.
+- Sensitive evidence is flagged as sensitive today, but not yet encrypted. The storage interface is prepared for a future Lit Protocol layer.
 
-**Mocked (under `lib/mock/*` and `app/api/mock/*`):**
-- DNS verification (`_chaintrust.<domain>` TXT lookup)
-- platform verification issuer
-- third-party attestation
-- storage (local JSON files in `data/mock-storage/`)
+## SAS Dual-Write
 
-Each mock has a clean interface, so swapping in a real adapter (IPFS/pin, DNS-over-HTTPS, SAS attestations) is a drop-in change.
+To mirror `Relationship` attestations into SAS:
 
----
-
-## Troubleshooting
-
-**Localnet RPC returns `502 Bad Gateway`** — on WSL2 or machines with an `http_proxy` env var, the proxy intercepts `127.0.0.1:8899`. Bypass it for every shell that talks to the validator or the dev server:
+1. Bootstrap the platform credential and schemas:
 
 ```bash
-unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY
-export no_proxy="127.0.0.1,localhost" NO_PROXY="127.0.0.1,localhost"
+npm run sas:bootstrap
 ```
 
-**`anchor build` fails with `feature edition2024 is required`** — platform-tools v1.51's cargo 1.84 can't parse crates that need Rust 2024 edition (indexmap ≥ 2.14, toml_parser 1.1+, cpufeatures ≥ 0.3). Upgrade to platform-tools v1.54 (see Prerequisites above).
+2. Set:
 
----
+```bash
+NEXT_PUBLIC_SAS_DUAL_WRITE=true
+NEXT_PUBLIC_SAS_CREDENTIAL_AUTHORITY=<bootstrap-authority-pubkey>
+```
 
-## Known limitations (post-hackathon)
+3. Make sure any wallet that signs attestations is in the credential's `authorized_signers` list.
 
-- Claim flow is wallet-only; a production build should bind DNS proof via a verifiable attestation.
-- User registration has no real anti-sybil check.
-- Review metadata is keyed by content hash; no media uploads yet.
-- No indexer — entry/profile pages query accounts by `memcmp` filters directly.
-# ChainTrust
+## Current Limitations
+
+- `anchor/tests/smoke.ts` still targets an older API shape (`create_entry`, `add_wallet_mapping`, older account names) and should be rewritten before relying on it as a current end-to-end test.
+- DNS verification is still mocked.
+- Sensitive evidence is not encrypted yet.
+- Reads currently depend on `getProgramAccounts` filters rather than a dedicated indexer.
+
+## Notes
+
+- The current design direction is documented in `ChainTrust_Product_Design.md`.
+- The Chinese product document lives in `ChainTrust_Product_Design_CN.md`.
+- A Chinese version of this README is available at `README_CN.md`.

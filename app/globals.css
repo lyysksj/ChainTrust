@@ -5,28 +5,52 @@
 /* Wallet adapter default styles */
 @import "@solana/wallet-adapter-react-ui/styles.css";
 
-/* ChainTrust — government/registry aesthetic, lavender paper + ink + stamp */
+/* ChainTrust — government/registry aesthetic, warm cream + plum + vermillion (v0.7) */
 :root {
   color-scheme: light;
-  --paper: #f5f1f7;
-  --paper-2: #ebe4f0;
-  --paper-3: #ddd0e6;
-  --ink: #2a1f3d;
-  --ink-2: #4d4063;
-  --ink-3: #7a6e92;
-  --ink-4: #a89cb8;
-  --rule: #c8b8d6;
-  --rule-soft: #ddd0e6;
-  --stamp: #dcc9f0;
-  --stamp-deep: #a285c4;
-  --stamp-faint: rgba(220, 201, 240, 0.32);
-  --solana-green: #9eb89c;
-  --tier-1: #2a1f3d;
-  --tier-2: #7a6e92;
-  --tier-3: #a89cb8;
-  --good: #9eb89c;
-  --warn: #c4a576;
-  --revoked: #8a6f6f;
+  --paper: #f7f3e5;
+  --paper-2: #efe9d3;
+  --paper-3: #e6dec0;
+  --ink: #492a3a;
+  --ink-2: #6b4858;
+  --ink-3: #8e7280;
+  --ink-4: #b8a3ae;
+  /* Rule: primary rule is now ink-plum (heavier official-document feel),
+     and the lavender-grey takes the soft-rule role. */
+  --rule: #492a3a;
+  --rule-soft: #c2b9d4;
+
+  /* Vermillion wax-seal accent */
+  --stamp: #e3662c;
+  --stamp-deep: #c2491a;
+  --stamp-light: #e78555;
+  --stamp-faint: rgba(227, 102, 44, 0.10);
+
+  /* Periwinkle — primary buttons, claimed status, T2 issuer */
+  --periwinkle: #8985cf;
+  --periwinkle-soft: #acb6f3;
+  --periwinkle-deep: #6e6ab5;
+  --periwinkle-faint: rgba(137, 133, 207, 0.16);
+
+  /* Azure — links and secondary emphasis (also doubles as success/--good) */
+  --azure: #6487e1;
+  --azure-deep: #4a6cc9;
+
+  /* Warm helpers */
+  --caramel: #ca986d;
+  --sand: #dfc7a5;
+  --highlight: #f4bb6e;
+  --orange: #f48d45;
+
+  /* Tier color mapping */
+  --tier-1: #492a3a;   /* ink plum */
+  --tier-2: #8985cf;   /* periwinkle */
+  --tier-3: #ca986d;   /* caramel */
+
+  /* Semantic — success now uses azure; warn promoted to orange */
+  --good: #6487e1;
+  --warn: #f48d45;
+  --revoked: #c2491a;  /* stamp-deep — vermillion, more decisive than muted */
 
   --serif: 'Source Serif 4', 'Times New Roman', Georgia, serif;
   --sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
@@ -47,7 +71,8 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
-/* Soft lavender wash + subtle paper texture */
+/* Cream-paper texture: periwinkle wash top-left, caramel wash bottom-right,
+   subtle horizontal paper grain. Multiply blend deepens the cream. */
 body::before {
   content: '';
   position: fixed;
@@ -55,9 +80,10 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background-image:
-    radial-gradient(circle at 18% 22%, rgba(220, 201, 240, 0.45) 0%, transparent 50%),
-    radial-gradient(circle at 82% 78%, rgba(158, 184, 156, 0.10) 0%, transparent 55%),
-    repeating-linear-gradient(0deg, transparent 0 3px, rgba(42, 31, 61, 0.012) 3px 4px);
+    radial-gradient(circle at 15% 20%, rgba(137, 133, 207, 0.10) 0%, transparent 55%),
+    radial-gradient(circle at 85% 80%, rgba(202, 152, 109, 0.08) 0%, transparent 60%),
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(73, 42, 58, 0.014) 3px 4px);
+  mix-blend-mode: multiply;
 }
 body > * { position: relative; z-index: 1; }
 
@@ -136,7 +162,7 @@ button { font-family: inherit; cursor: pointer; }
   font-weight: 600;
   font-size: 16px;
   background: var(--stamp);
-  color: var(--ink);
+  color: var(--paper);
   position: relative;
   align-self: center;
 }
@@ -144,8 +170,8 @@ button { font-family: inherit; cursor: pointer; }
   content: '';
   position: absolute;
   inset: 2px;
-  border: 0.5px solid var(--ink);
-  opacity: 0.4;
+  border: 0.5px solid var(--paper);
+  opacity: 0.5;
 }
 .brand-name {
   font-family: var(--serif);
@@ -179,25 +205,25 @@ button { font-family: inherit; cursor: pointer; }
 }
 .nav-link:hover { background: var(--paper-2); }
 .nav-link.active {
-  background: var(--stamp-deep);
+  background: var(--ink);
   color: var(--paper);
 }
 .nav-wallet {
   margin-left: 12px;
   font-family: var(--mono);
   font-size: 11px;
-  border: 1px solid var(--stamp);
+  border: 1px solid var(--ink);
   padding: 6px 10px;
   background: transparent;
   color: var(--ink);
 }
-.nav-wallet:hover { background: var(--stamp-deep); color: var(--paper); border-color: var(--stamp-deep); }
+.nav-wallet:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .nav-wallet.connected {
-  border-color: var(--good);
-  background: rgba(158, 184, 156, 0.16);
-  color: #4a6648;
+  border-color: var(--periwinkle);
+  background: rgba(137, 133, 207, 0.14);
+  color: #4d49a3;
 }
-.nav-wallet.connected:hover { background: rgba(158, 184, 156, 0.28); color: #4a6648; }
+.nav-wallet.connected:hover { background: rgba(137, 133, 207, 0.24); color: #4d49a3; }
 
 .page {
   max-width: 1280px;
@@ -235,18 +261,20 @@ button { font-family: inherit; cursor: pointer; }
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 10px 16px;
-  border: 1.5px solid var(--stamp);
+  border: 1.5px solid var(--ink);
   background: transparent;
   color: var(--ink);
   cursor: pointer;
   transition: all 0.1s;
 }
-.btn:hover { background: var(--stamp-deep); color: var(--paper); border-color: var(--stamp-deep); }
+.btn:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-primary { background: var(--stamp-deep); color: var(--paper); border-color: var(--stamp-deep); }
-.btn-primary:hover { background: var(--stamp); border-color: var(--stamp); color: var(--ink); }
-.btn-stamp { background: var(--stamp-deep); border-color: var(--stamp-deep); color: var(--paper); }
-.btn-stamp:hover { background: var(--stamp); border-color: var(--stamp); color: var(--ink); }
+/* Primary CTA — periwinkle (most actions, "Resolve", "Open") */
+.btn-primary { background: var(--periwinkle); color: var(--paper); border-color: var(--periwinkle); }
+.btn-primary:hover { background: #6f6abf; border-color: #6f6abf; color: var(--paper); }
+/* Stamp CTA — vermillion (decisive on-chain commit, "Sign & file") */
+.btn-stamp { background: var(--stamp); border-color: var(--stamp); color: var(--paper); }
+.btn-stamp:hover { background: var(--stamp-deep); border-color: var(--stamp-deep); color: var(--paper); }
 .btn-ghost { border-color: var(--rule-soft); }
 .btn-ghost:hover { border-color: var(--ink); background: transparent; color: var(--ink); }
 .btn-secondary {
@@ -298,8 +326,8 @@ button { font-family: inherit; cursor: pointer; }
   line-height: 1.4;
 }
 .tier-1 { color: var(--paper); background: var(--ink); border-color: var(--ink); }
-.tier-2 { color: var(--ink); background: var(--stamp); border-color: var(--stamp-deep); }
-.tier-3 { color: var(--ink-2); background: var(--paper-2); border-color: var(--rule); }
+.tier-2 { color: var(--paper); background: var(--periwinkle); border-color: var(--periwinkle-deep); }
+.tier-3 { color: var(--ink); background: var(--sand); border-color: var(--caramel); }
 
 /* ---------- Status pills ---------- */
 .status {
@@ -316,9 +344,9 @@ button { font-family: inherit; cursor: pointer; }
   border: 1px solid;
 }
 .status-platform { color: var(--paper); background: var(--ink); border-color: var(--ink); }
-.status-claimed { color: var(--ink); background: var(--stamp-faint); border-color: var(--stamp-deep); }
-.status-unverified { color: var(--ink-3); background: var(--paper-2); border-color: var(--ink-4); }
-.status-revoked { color: var(--paper); background: var(--revoked); border-color: var(--revoked); }
+.status-claimed { color: var(--paper); background: var(--periwinkle); border-color: var(--periwinkle-deep); }
+.status-unverified { color: var(--ink-3); background: var(--paper-2); border-color: var(--rule); }
+.status-revoked { color: var(--paper); background: var(--stamp-deep); border-color: var(--stamp-deep); }
 
 /* Legacy chip namespace (homepage/profile/etc still reference these classes). */
 .chip {
@@ -337,11 +365,11 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--ink-2);
 }
 .chip-verified { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-.chip-claimed { background: var(--stamp-faint); color: var(--ink); border-color: var(--stamp-deep); }
-.chip-unverified { background: var(--paper-2); color: var(--ink-3); border-color: var(--ink-4); }
-.chip-official { background: var(--stamp-faint); color: var(--ink); border-color: var(--stamp-deep); }
+.chip-claimed { background: var(--periwinkle); color: var(--paper); border-color: var(--periwinkle-deep); }
+.chip-unverified { background: var(--paper-2); color: var(--ink-3); border-color: var(--rule); }
+.chip-official { background: var(--periwinkle-faint); color: var(--periwinkle-deep); border-color: var(--periwinkle); }
 .chip-community { background: var(--paper-2); color: var(--ink-2); border-color: var(--rule); }
-.chip-creator { background: var(--paper-3); color: var(--ink); border-color: var(--rule); }
+.chip-creator { background: var(--paper-3); color: var(--ink); border-color: var(--caramel); }
 
 /* ---------- Stamp seal ---------- */
 .stamp-seal {
@@ -473,15 +501,15 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---------- Resolve bar ---------- */
 .resolve-bar {
-  border: 1.5px solid var(--stamp-deep);
-  background: var(--paper-2);
+  border: 1.5px solid var(--ink);
+  background: var(--paper);
   padding: 20px 24px;
   display: grid;
   grid-template-columns: auto 1fr auto;
   gap: 16px;
   align-items: center;
   position: relative;
-  box-shadow: 0 0 32px rgba(162, 133, 196, 0.18);
+  box-shadow: 0 0 32px rgba(73, 42, 58, 0.10);
 }
 .resolve-bar::before {
   content: 'RESOLVE';
@@ -494,7 +522,7 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.16em;
-  color: var(--stamp-deep);
+  color: var(--stamp);
 }
 .resolve-bar input {
   font-family: var(--mono);
@@ -701,6 +729,8 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--ink);
   border-bottom-color: var(--stamp);
 }
+/* Vermillion underline on active tabs reads as a hand-applied stamp; the
+   double-rule below is the inactive baseline. */
 .tab .count {
   font-family: var(--mono);
   font-size: 9px;
@@ -726,7 +756,7 @@ button { font-family: inherit; cursor: pointer; }
   position: relative;
 }
 .rel-row:last-child { border-bottom: none; }
-.rel-row.revoked { background: repeating-linear-gradient(135deg, transparent 0 8px, rgba(138, 111, 111, 0.06) 8px 16px); }
+.rel-row.revoked { background: repeating-linear-gradient(135deg, transparent 0 8px, rgba(227, 102, 44, 0.05) 8px 16px); }
 .rel-row.revoked .rel-target,
 .rel-row.revoked .rel-kind,
 .rel-row.revoked .rel-target-sub { text-decoration: line-through; color: var(--ink-3); }
@@ -767,7 +797,7 @@ button { font-family: inherit; cursor: pointer; }
   text-align: right;
 }
 .rel-validity .v-date { display: block; color: var(--ink); font-size: 11px; }
-.rel-validity .v-revoked { color: var(--revoked); }
+.rel-validity .v-revoked { color: var(--stamp); }
 .rel-evidence {
   grid-column: 1 / -1;
   margin-top: 8px;
@@ -812,8 +842,8 @@ button { font-family: inherit; cursor: pointer; }
 }
 .graph-svg-wrap {
   background:
-    repeating-linear-gradient(0deg, transparent 0 39px, rgba(42, 31, 61, 0.06) 39px 40px),
-    repeating-linear-gradient(90deg, transparent 0 39px, rgba(42, 31, 61, 0.06) 39px 40px),
+    repeating-linear-gradient(0deg, transparent 0 39px, rgba(73, 42, 58, 0.05) 39px 40px),
+    repeating-linear-gradient(90deg, transparent 0 39px, rgba(73, 42, 58, 0.05) 39px 40px),
     var(--paper);
 }
 
@@ -853,7 +883,7 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--ink-2);
   margin-right: 8px;
 }
-.signal-type.dispute { color: var(--revoked); border-color: var(--revoked); }
+.signal-type.dispute { color: var(--stamp); border-color: var(--stamp); }
 .signal-type.praise { color: var(--good); border-color: var(--good); }
 .signal-type.addendum { color: var(--ink-2); border-color: var(--ink-3); }
 .signal-type.incident { color: var(--warn); border-color: var(--warn); }
@@ -1119,13 +1149,13 @@ button { font-family: inherit; cursor: pointer; }
   align-items: center;
   gap: 10px;
   text-transform: uppercase;
-  box-shadow: 0 8px 24px rgba(42, 31, 61, 0.25);
+  box-shadow: 0 8px 24px rgba(73, 42, 58, 0.30);
 }
-.toast .stamp-mark { color: var(--stamp); }
+.toast .stamp-mark { color: var(--stamp-light); }
 
 /* ---------- Marquee CTA strip ---------- */
 .cta-strip {
-  background: linear-gradient(135deg, #3d2f5a 0%, #2a1f3d 100%);
+  background: var(--ink);
   color: var(--paper);
   padding: 32px;
   display: grid;
@@ -1145,12 +1175,12 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--paper);
 }
 .cta-strip h3 em { color: var(--stamp); font-style: italic; }
-.cta-strip .btn { background: var(--stamp); color: var(--ink); border-color: var(--stamp); }
+.cta-strip .btn { background: var(--stamp); color: var(--paper); border-color: var(--stamp); }
 .cta-strip .btn:hover { background: var(--paper); color: var(--ink); border-color: var(--paper); }
 
-/* ---------- Wallet adapter override (lavender registry style) ---------- */
+/* ---------- Wallet adapter override (registry style) ---------- */
 .wallet-adapter-button-trigger {
-  background: var(--stamp-deep) !important;
+  background: var(--periwinkle) !important;
   border-radius: 0 !important;
   font-family: var(--mono) !important;
   font-weight: 600 !important;
@@ -1162,7 +1192,7 @@ button { font-family: inherit; cursor: pointer; }
   text-transform: uppercase !important;
   color: var(--paper) !important;
 }
-.wallet-adapter-button-trigger:hover { background: var(--stamp) !important; color: var(--ink) !important; }
+.wallet-adapter-button-trigger:hover { background: var(--periwinkle-deep) !important; color: var(--paper) !important; }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1100px) {

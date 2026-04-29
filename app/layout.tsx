@@ -7,7 +7,7 @@ import { Footer } from "@/components/footer";
 export const metadata: Metadata = {
   title: "ChainTrust · Public Identity Registry",
   description:
-    "The on-chain Dun & Bradstreet for Web3. Signed, time-stamped, append-only identity graph anchored on Solana.",
+    "The signed identity registry for Web3. A public ledger that links legal entities to the wallets, contracts and domains they operate on Solana.",
 };
 
 export default function RootLayout({

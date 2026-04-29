@@ -121,16 +121,17 @@ export default function HomePage() {
         <div className="hero-row">
           <div>
             <h1 className="hero-title">
-              The on-chain<br />
-              <em>Dun &amp; Bradstreet</em><br />
+              The signed<br />
+              <em>identity registry</em><br />
               for Web3.
             </h1>
             <p className="hero-sub">
-              A signed, time-stamped registry that links real-world legal
-              entities to the wallets, contracts, projects and domains they
-              operate on Solana. Not reviews. Not consensus.{" "}
+              A public ledger that links real-world legal entities to the
+              wallets, contracts, projects and domains they operate on Solana.
+              Every edge is signed by a named issuer, time-bounded, and
+              revocable.{" "}
               <strong>
-                Cited evidence, by named issuers, with no delete key.
+                Cited evidence, no consensus games, no delete key.
               </strong>
             </p>
             <div className="hero-cta">

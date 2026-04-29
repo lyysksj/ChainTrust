@@ -120,7 +120,7 @@ export function IdentityGraph({ entity, entityAccount, refreshKey }: Props) {
           markerHeight="6"
           orient="auto"
         >
-          <path d="M0,0 L10,5 L0,10 z" fill="#2a1f3d" />
+          <path d="M0,0 L10,5 L0,10 z" fill="#492a3a" />
         </marker>
         <marker
           id="arrow-revoked"
@@ -131,18 +131,18 @@ export function IdentityGraph({ entity, entityAccount, refreshKey }: Props) {
           markerHeight="6"
           orient="auto"
         >
-          <path d="M0,0 L10,5 L0,10 z" fill="#8a6f6f" />
+          <path d="M0,0 L10,5 L0,10 z" fill="#c2491a" />
         </marker>
         <linearGradient id="center-grad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#2a1f3d" />
-          <stop offset="100%" stopColor="#3d2f5a" />
+          <stop offset="0%" stopColor="#5a3a4a" />
+          <stop offset="100%" stopColor="#492a3a" />
         </linearGradient>
       </defs>
 
       {/* Edges */}
       {nodes.map((n) => {
         const revoked = Number(n.rel.account.revokedAt) > 0;
-        const stroke = revoked ? "#8a6f6f" : "#7a6e92";
+        const stroke = revoked ? "#c2491a" : "#8985cf";
         const dash = revoked ? "5 4" : "none";
         const dx = n.x - cx;
         const dy = n.y - cy;
@@ -173,7 +173,7 @@ export function IdentityGraph({ entity, entityAccount, refreshKey }: Props) {
               textAnchor="middle"
               fontFamily="'IBM Plex Mono', monospace"
               fontSize="8"
-              fill={revoked ? "#8a6f6f" : "#7a6e92"}
+              fill={revoked ? "#c2491a" : "#8985cf"}
               letterSpacing="0.06em"
             >
               {verb}
@@ -188,7 +188,7 @@ export function IdentityGraph({ entity, entityAccount, refreshKey }: Props) {
           width="140"
           height="60"
           fill="url(#center-grad)"
-          stroke="#2a1f3d"
+          stroke="#492a3a"
           strokeWidth="1.5"
         />
         <text
@@ -198,7 +198,7 @@ export function IdentityGraph({ entity, entityAccount, refreshKey }: Props) {
           fontFamily="'Source Serif 4', serif"
           fontSize="13"
           fontWeight="600"
-          fill="#f5f1f7"
+          fill="#f7f3e5"
         >
           ENTITY
         </text>
@@ -208,7 +208,7 @@ export function IdentityGraph({ entity, entityAccount, refreshKey }: Props) {
           textAnchor="middle"
           fontFamily="'IBM Plex Mono', monospace"
           fontSize="9"
-          fill="#dcc9f0"
+          fill="#e78555"
           letterSpacing="0.06em"
         >
           {ctNumber}
@@ -219,7 +219,7 @@ export function IdentityGraph({ entity, entityAccount, refreshKey }: Props) {
           textAnchor="middle"
           fontFamily="'IBM Plex Mono', monospace"
           fontSize="8"
-          fill="#a89cb8"
+          fill="#dfc7a5"
           letterSpacing="0.1em"
         >
           {entityAccount.jurisdiction.toUpperCase()}
@@ -356,17 +356,15 @@ function buildNodes(
   return nodes;
 }
 
+function tierColor(tier: number): string {
+  return tier === 1 ? "#492a3a" : tier === 2 ? "#8985cf" : "#ca986d";
+}
+
 function renderNode(n: Node) {
   const revoked = Number(n.rel.account.revokedAt) > 0;
-  const stroke = revoked
-    ? "#8a6f6f"
-    : n.tier === 1
-      ? "#2a1f3d"
-      : n.tier === 2
-        ? "#7a6e92"
-        : "#a89cb8";
+  const stroke = revoked ? "#c2491a" : tierColor(n.tier);
   const strokeDash = revoked ? "4 3" : "none";
-  const fill = revoked ? "#ebe4f0" : "#f5f1f7";
+  const fill = revoked ? "#efeada" : "#f7f3e5";
   const NW = 110;
   const NH = 38;
   return (
@@ -389,7 +387,7 @@ function renderNode(n: Node) {
         fontFamily="'Source Serif 4', serif"
         fontSize="11"
         fontWeight="600"
-        fill={revoked ? "#a89cb8" : "#2a1f3d"}
+        fill={revoked ? "#b4a4af" : "#492a3a"}
         style={{ textDecoration: revoked ? "line-through" : "none" }}
       >
         {n.label}
@@ -400,19 +398,12 @@ function renderNode(n: Node) {
         textAnchor="middle"
         fontFamily="'IBM Plex Mono', monospace"
         fontSize="8"
-        fill={revoked ? "#a89cb8" : "#7a6e92"}
+        fill={revoked ? "#b4a4af" : "#91798a"}
         letterSpacing="0.04em"
       >
         {n.sub}
       </text>
-      <circle
-        cx={6}
-        cy={6}
-        r={3}
-        fill={
-          n.tier === 1 ? "#2a1f3d" : n.tier === 2 ? "#7a6e92" : "#a89cb8"
-        }
-      />
+      <circle cx={6} cy={6} r={3} fill={tierColor(n.tier)} />
     </g>
   );
 }
