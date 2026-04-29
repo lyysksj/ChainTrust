@@ -9,6 +9,8 @@ const LINKS = [
   { href: "/resolve", label: "Resolve", match: (p: string) => p.startsWith("/resolve") },
   { href: "/attest", label: "Attest", match: (p: string) => p.startsWith("/attest") },
   { href: "/issuers", label: "Issuers", match: (p: string) => p.startsWith("/issuers") || p.startsWith("/issuer") },
+  { href: "/register", label: "Register", match: (p: string) => p.startsWith("/register") },
+  { href: "/create", label: "+ Entity", match: (p: string) => p.startsWith("/create") },
 ];
 
 function todayLabel(): string {

@@ -39,7 +39,9 @@ export default function CreateEntityPage() {
         <h2 className="section-title" style={{ fontSize: 36 }}>
           File a new Entity.
         </h2>
-        <span className="section-meta">PDA seeds: [&quot;entity&quot;, entity_id]</span>
+        <span className="section-meta">
+          PDA seeds: [&quot;entity&quot;, entity_id]
+        </span>
       </div>
       <p
         style={{
@@ -51,9 +53,10 @@ export default function CreateEntityPage() {
           marginBottom: 32,
         }}
       >
-        The Entity is the off-chain legal anchor of the on-chain identity graph.
-        Once filed, you can register Projects under it and attest relationships
-        (wallets, domains, UBO, hierarchy) on the entity page.
+        The Entity is the off-chain legal anchor of the on-chain identity
+        graph. Once filed, you receive a stable CT-Number and can register
+        Projects, attest relationships, or be claimed by an authorized
+        representative.
       </p>
 
       {state === "connect" && (
@@ -79,24 +82,7 @@ export default function CreateEntityPage() {
           </Link>
         </div>
       )}
-      {state === "ready" && (
-        <div className="doc-card">
-          <div className="doc-card-h">
-            <div className="doc-card-title">Entity registration</div>
-            <div
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 10,
-                color: "var(--ink-3)",
-                letterSpacing: "0.1em",
-              }}
-            >
-              SUBJECT · §1
-            </div>
-          </div>
-          <EntryForm />
-        </div>
-      )}
+      {state === "ready" && <EntryForm />}
     </div>
   );
 }

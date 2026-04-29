@@ -5,9 +5,11 @@ import Link from "next/link";
 import { PublicKey } from "@solana/web3.js";
 import { useProgram } from "@/lib/anchor/hooks";
 import {
+  fetchAllRelationships,
   fetchCommentsByCommenter,
   fetchEntitiesByOfficialWallet,
   fetchEntitiesCreatedBy,
+  fetchIssuer,
   fetchUserProfile,
 } from "@/lib/anchor/client";
 import {
@@ -16,10 +18,22 @@ import {
   shortHash,
   shortKey,
 } from "@/lib/utils/format";
+import { entityIdToCtNumber } from "@/lib/utils/ct-number";
+import {
+  StatusPill,
+  TierPill,
+} from "@/components/registry-bits";
+import {
+  COMMENT_RELATION_LABELS,
+  ISSUER_KIND_LABELS,
+  ISSUER_TIER_LABELS,
+} from "@/types";
 import type {
   CommentRecord,
   Entity,
   EntityMetadata,
+  Issuer,
+  Relationship,
   UserMetadata,
   UserProfile,
 } from "@/types";
@@ -39,6 +53,7 @@ export default function ProfilePage({ params }: { params: Params }) {
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [meta, setMeta] = useState<UserMetadata | null>(null);
+  const [issuer, setIssuer] = useState<Issuer | null>(null);
   const [entities, setEntities] = useState<
     { publicKey: PublicKey; account: Entity }[]
   >([]);
@@ -47,6 +62,9 @@ export default function ProfilePage({ params }: { params: Params }) {
   >([]);
   const [comments, setComments] = useState<
     { publicKey: PublicKey; account: CommentRecord }[]
+  >([]);
+  const [signedRels, setSignedRels] = useState<
+    { publicKey: PublicKey; account: Relationship }[]
   >([]);
   const [loading, setLoading] = useState(true);
 
@@ -59,10 +77,12 @@ export default function ProfilePage({ params }: { params: Params }) {
         const p = await fetchUserProfile(program, wallet);
         if (!alive) return;
         setProfile(p);
-        const [e, ve, c] = await Promise.all([
+        const [e, ve, c, iss, allRels] = await Promise.all([
           fetchEntitiesCreatedBy(program, wallet),
           fetchEntitiesByOfficialWallet(program, wallet),
           fetchCommentsByCommenter(program, wallet),
+          fetchIssuer(program, wallet),
+          fetchAllRelationships(program),
         ]);
         if (!alive) return;
         setEntities(
@@ -82,6 +102,18 @@ export default function ProfilePage({ params }: { params: Params }) {
             publicKey: x.publicKey,
             account: x.account as unknown as CommentRecord,
           })),
+        );
+        setIssuer((iss as Issuer | null) ?? null);
+
+        // Filter relationships signed by this wallet's authority.
+        const target = wallet.toBase58();
+        setSignedRels(
+          allRels
+            .map((r) => ({
+              publicKey: r.publicKey,
+              account: r.account as unknown as Relationship,
+            }))
+            .filter((r) => r.account.attestorAuthority.toBase58() === target),
         );
       } finally {
         if (alive) setLoading(false);
@@ -113,8 +145,7 @@ export default function ProfilePage({ params }: { params: Params }) {
     };
   }, [profile?.metadataUri]);
 
-  // Fetch metadata for verified-rep entities so the badge can show the project
-  // name.
+  // Pull entity metadata for the verified-rep callout.
   const [verifiedEntryNames, setVerifiedEntryNames] = useState<
     Record<string, string>
   >({});
@@ -150,72 +181,203 @@ export default function ProfilePage({ params }: { params: Params }) {
     };
   }, [verifiedEntities]);
 
-  if (!wallet) return <p className="hint">Invalid wallet address.</p>;
+  if (!wallet) {
+    return (
+      <div className="no-result">INVALID WALLET ADDRESS</div>
+    );
+  }
+
+  const activeSigned = signedRels.filter(
+    (r) => Number(r.account.revokedAt) === 0,
+  ).length;
+  const revokedSigned = signedRels.length - activeSigned;
 
   return (
-    <div className="space-y-10">
-      <header className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.3em] text-ink-500">
-          User profile
-        </p>
-        <div className="flex flex-wrap items-baseline gap-3">
-          <h1 className="serif text-4xl font-semibold text-ink-800">
-            {profile?.username ? `@${profile.username}` : shortKey(wallet)}
+    <div data-screen="user profile">
+      <div className="docnum" style={{ marginBottom: 8 }}>
+        FORM CT-USR · PUBLIC PROFILE
+      </div>
+
+      {/* Header */}
+      <div className="entity-head">
+        <div>
+          <div className="ct-num-big">
+            WALLET · {shortKey(wallet, 10)}
+          </div>
+          <h1>
+            {profile?.username ? `@${profile.username}` : shortKey(wallet, 6)}
           </h1>
-          {verifiedEntities.length > 0 && (
-            <span className="chip chip-official text-[11px]">
-              ✓ Official representative
-            </span>
+          {meta?.headline ? (
+            <p className="summary">{meta.headline}</p>
+          ) : profile ? (
+            <p className="summary">
+              ChainTrust user since{" "}
+              {formatTimestamp(profile.registeredAt)}.
+            </p>
+          ) : (
+            <p className="summary">
+              This wallet has not registered a ChainTrust profile yet.{" "}
+              <Link
+                href="/register"
+                style={{
+                  color: "var(--stamp-deep)",
+                  textDecoration: "underline",
+                }}
+              >
+                Register profile →
+              </Link>
+            </p>
           )}
+
+          <div className="entity-meta-grid">
+            <div className="entity-meta-cell">
+              <div className="label">USERNAME</div>
+              <div className="v">
+                {profile?.username ? `@${profile.username}` : "—"}
+              </div>
+            </div>
+            <div className="entity-meta-cell">
+              <div className="label">REGISTERED</div>
+              <div className="v">
+                {profile ? formatTimestamp(profile.registeredAt) : "—"}
+              </div>
+            </div>
+            <div className="entity-meta-cell">
+              <div className="label">ENTITIES FILED</div>
+              <div className="v">{entities.length}</div>
+            </div>
+            <div className="entity-meta-cell">
+              <div className="label">CLAIMED ENTITIES</div>
+              <div className="v">{verifiedEntities.length}</div>
+            </div>
+            <div className="entity-meta-cell">
+              <div className="label">SIGNALS POSTED</div>
+              <div className="v">{comments.length}</div>
+            </div>
+            <div className="entity-meta-cell">
+              <div className="label">EDGES SIGNED</div>
+              <div className="v">
+                {signedRels.length} · {revokedSigned} revoked
+              </div>
+            </div>
+            <div className="entity-meta-cell">
+              <div className="label">ISSUER ROLE</div>
+              <div className="v">
+                {issuer
+                  ? `T${issuer.trustTier} · ${ISSUER_KIND_LABELS[issuer.kind] ?? "Issuer"}`
+                  : "—"}
+              </div>
+            </div>
+            <div className="entity-meta-cell">
+              <div className="label">WALLET</div>
+              <div className="v">{shortKey(wallet, 8)}</div>
+            </div>
+          </div>
         </div>
-        {meta?.headline && (
-          <p className="serif text-lg text-ink-700">{meta.headline}</p>
-        )}
-        {verifiedEntities.length > 0 && (
-          <p className="text-sm text-claimed">
-            Verified representative for{" "}
-            {verifiedEntities.map((e, i) => {
-              const name =
-                verifiedEntryNames[e.publicKey.toBase58()] ?? "(loading)";
-              return (
+
+        <div className="entity-head-side">
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              alignItems: "flex-start",
+            }}
+          >
+            {profile ? (
+              <span className="status status-platform">
+                ● Verified user
+              </span>
+            ) : (
+              <span className="status status-unverified">
+                ○ Unregistered
+              </span>
+            )}
+            {issuer && <TierPill tier={issuer.trustTier} />}
+            {verifiedEntities.length > 0 && (
+              <span className="status status-claimed">
+                ◆ Official representative
+              </span>
+            )}
+          </div>
+
+          {issuer && (
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 10,
+                color: "var(--ink-3)",
+                letterSpacing: "0.04em",
+                lineHeight: 1.6,
+              }}
+            >
+              ISSUER · {ISSUER_KIND_LABELS[issuer.kind] ?? "—"}
+              <br />
+              TIER · {ISSUER_TIER_LABELS[issuer.trustTier] ?? "—"}
+              <br />
+              REGISTERED ·{" "}
+              {formatTimestamp(issuer.registeredAt)}
+            </div>
+          )}
+
+          {verifiedEntities.length > 0 && (
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 10,
+                color: "var(--stamp-deep)",
+                letterSpacing: "0.04em",
+                lineHeight: 1.6,
+              }}
+            >
+              REPRESENTS ·{" "}
+              {verifiedEntities.map((e, i) => (
                 <span key={e.publicKey.toBase58()}>
                   <Link
                     href={`/entry/${bytesHex(e.account.entityId)}`}
-                    className="font-semibold underline"
+                    style={{
+                      color: "var(--stamp-deep)",
+                      textDecoration: "underline",
+                    }}
                   >
-                    {name}
+                    {verifiedEntryNames[e.publicKey.toBase58()] ?? "(loading)"}
                   </Link>
-                  {i < verifiedEntities.length - 1 ? ", " : ""}
+                  {i < verifiedEntities.length - 1 ? " · " : ""}
                 </span>
-              );
-            })}
-          </p>
-        )}
-        <p className="text-sm text-ink-600">
-          {profile ? (
-            <>Verified {formatTimestamp(profile.registeredAt)}</>
-          ) : (
-            <>
-              This wallet has not registered a ChainTrust profile yet.{" "}
-              <Link href="/register" className="underline">
-                Register
-              </Link>
-              .
-            </>
+              ))}
+            </div>
           )}
+        </div>
+      </div>
+
+      {loading && (
+        <p
+          className="hint"
+          style={{ marginBottom: 24 }}
+        >
+          LOADING ON-CHAIN RECORDS…
         </p>
-        <p className="mono text-xs text-ink-500">{wallet.toBase58()}</p>
-      </header>
+      )}
 
-      {loading && <p className="hint">Loading on-chain records…</p>}
-
-      {profile && meta?.expertise && meta.expertise.length > 0 && (
-        <Section title="Expertise">
-          <div className="flex flex-wrap gap-2">
+      {/* About / expertise */}
+      {meta?.expertise && meta.expertise.length > 0 && (
+        <Section title="Expertise" meta="OFF-CHAIN METADATA">
+          <div
+            style={{ display: "flex", flexWrap: "wrap", gap: 8 }}
+          >
             {meta.expertise.map((tag) => (
               <span
                 key={tag}
-                className="border border-ink-300 bg-white px-2.5 py-1 text-xs text-ink-700"
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 11,
+                  letterSpacing: "0.04em",
+                  border: "1px solid var(--rule)",
+                  background: "var(--paper-2)",
+                  color: "var(--ink-2)",
+                  padding: "3px 10px",
+                  textTransform: "uppercase",
+                }}
               >
                 {tag}
               </span>
@@ -224,147 +386,268 @@ export default function ProfilePage({ params }: { params: Params }) {
         </Section>
       )}
 
-      {profile &&
-        meta?.workExperience &&
-        meta.workExperience.length > 0 && (
-          <Section title="Work experience">
-            <ul className="space-y-2">
-              {meta.workExperience.map((exp, i) => (
-                <li
-                  key={i}
-                  className="flex items-baseline justify-between border border-ink-200 bg-white px-4 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-ink-800">
-                      {exp.role}
-                    </p>
-                    <p className="text-sm text-ink-600">{exp.company}</p>
-                  </div>
-                  <span className="mono text-xs text-ink-500">
+      {meta?.workExperience && meta.workExperience.length > 0 && (
+        <Section title="Work experience" meta="OFF-CHAIN METADATA">
+          <div className="rel-list">
+            {meta.workExperience.map((exp, i) => (
+              <div
+                key={i}
+                className="rel-row"
+                style={{
+                  gridTemplateColumns: "1fr 200px",
+                  cursor: "default",
+                }}
+              >
+                <div>
+                  <div className="rel-target">{exp.role}</div>
+                  <div className="rel-target-sub">{exp.company}</div>
+                </div>
+                <span className="rel-validity">
+                  <span className="v-date">
                     {exp.fromYear ?? "—"} – {exp.toYear ?? "now"}
                   </span>
-                </li>
-              ))}
-            </ul>
-          </Section>
-        )}
-
-      {profile && meta?.links && hasAnyLink(meta.links) && (
-        <Section title="Links">
-          <ul className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-            {meta.links.x && (
-              <li>
-                <a
-                  href={meta.links.x}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent hover:underline"
-                >
-                  X · {hostnameOf(meta.links.x)}
-                </a>
-              </li>
-            )}
-            {meta.links.github && (
-              <li>
-                <a
-                  href={meta.links.github}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent hover:underline"
-                >
-                  GitHub · {hostnameOf(meta.links.github)}
-                </a>
-              </li>
-            )}
-            {meta.links.linkedin && (
-              <li>
-                <a
-                  href={meta.links.linkedin}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent hover:underline"
-                >
-                  LinkedIn · {hostnameOf(meta.links.linkedin)}
-                </a>
-              </li>
-            )}
-            {meta.links.site && (
-              <li>
-                <a
-                  href={meta.links.site}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent hover:underline"
-                >
-                  Site · {hostnameOf(meta.links.site)}
-                </a>
-              </li>
-            )}
-          </ul>
+                </span>
+              </div>
+            ))}
+          </div>
         </Section>
       )}
 
-      {profile && meta?.about && (
-        <Section title="About">
-          <p className="max-w-3xl whitespace-pre-wrap text-sm leading-relaxed text-ink-700">
+      {meta?.about && (
+        <Section title="About" meta="OFF-CHAIN METADATA">
+          <p
+            style={{
+              fontFamily: "var(--serif)",
+              fontSize: 16,
+              lineHeight: 1.55,
+              color: "var(--ink-2)",
+              maxWidth: "70ch",
+              whiteSpace: "pre-wrap",
+              margin: 0,
+            }}
+          >
             {meta.about}
           </p>
         </Section>
       )}
 
-      <Section title="Entities created">
+      {meta?.links && hasAnyLink(meta.links) && (
+        <Section title="Links">
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 16,
+              fontFamily: "var(--mono)",
+              fontSize: 12,
+            }}
+          >
+            {meta.links.x && (
+              <ExtLink label="X" url={meta.links.x} />
+            )}
+            {meta.links.github && (
+              <ExtLink label="GitHub" url={meta.links.github} />
+            )}
+            {meta.links.linkedin && (
+              <ExtLink label="LinkedIn" url={meta.links.linkedin} />
+            )}
+            {meta.links.site && (
+              <ExtLink label="Site" url={meta.links.site} />
+            )}
+          </div>
+        </Section>
+      )}
+
+      {/* On-chain entity list */}
+      <Section
+        title="Entities filed"
+        meta={`${entities.length} ${entities.length === 1 ? "ENTRY" : "ENTRIES"}`}
+      >
         {entities.length === 0 ? (
-          <p className="hint">No entities created by this wallet.</p>
+          <div className="no-result">
+            NO ENTITIES FILED BY THIS WALLET
+          </div>
         ) : (
-          <ul className="space-y-2">
-            {entities.map((e) => (
-              <li
-                key={e.publicKey.toBase58()}
-                className="flex items-center justify-between border border-ink-200 bg-white px-4 py-3"
-              >
-                <div>
-                  <p className="mono text-xs text-ink-500">
-                    entity {bytesHex(e.account.entityId)}
-                  </p>
-                  <p className="text-sm">
-                    {e.account.jurisdiction} · {e.account.projectCount}{" "}
-                    project(s) · {e.account.relationshipCount} attestation(s)
-                  </p>
-                </div>
+          <>
+            <div
+              className="entity-row head"
+              style={{
+                gridTemplateColumns:
+                  "140px 1fr 160px 140px 100px 36px",
+              }}
+            >
+              <span className="label">CT-Number</span>
+              <span className="label">Entity</span>
+              <span className="label">Jurisdiction</span>
+              <span className="label">Status</span>
+              <span className="label">Filed</span>
+              <span></span>
+            </div>
+            {entities.map((e) => {
+              const ct = entityIdToCtNumber(e.account.entityId);
+              const idHex = bytesHex(e.account.entityId);
+              return (
                 <Link
-                  href={`/entry/${bytesHex(e.account.entityId)}`}
-                  className="btn-secondary"
+                  key={e.publicKey.toBase58()}
+                  href={`/entry/${idHex}`}
+                  className="entity-row"
+                  style={{
+                    gridTemplateColumns:
+                      "140px 1fr 160px 140px 100px 36px",
+                    textDecoration: "none",
+                    color: "inherit",
+                  }}
                 >
-                  Open
+                  <span className="ct-num">{ct}</span>
+                  <div>
+                    <div className="ent-name">
+                      {verifiedEntryNames[e.publicKey.toBase58()] ?? `Entity ${idHex.slice(0, 6)}`}
+                    </div>
+                    <div className="ent-sub">
+                      {e.account.projectCount} project ·{" "}
+                      {e.account.relationshipCount} attestation
+                    </div>
+                  </div>
+                  <span className="ent-juris">
+                    {e.account.jurisdiction}
+                  </span>
+                  <StatusPill
+                    status={e.account.status}
+                    claimed={e.account.isClaimed}
+                  />
+                  <span
+                    style={{
+                      fontFamily: "var(--mono)",
+                      fontSize: 11,
+                      color: "var(--ink-3)",
+                    }}
+                  >
+                    {formatTimestamp(e.account.createdAt)}
+                  </span>
+                  <span className="arrow">→</span>
                 </Link>
-              </li>
-            ))}
-          </ul>
+              );
+            })}
+          </>
         )}
       </Section>
 
-      <Section title="Community signals submitted">
-        {comments.length === 0 ? (
-          <p className="hint">No community signals submitted yet.</p>
+      {/* Signed relationships */}
+      <Section
+        title="Edges signed by this wallet"
+        meta={`${signedRels.length} signed · ${activeSigned} active · ${revokedSigned} revoked`}
+      >
+        {signedRels.length === 0 ? (
+          <div className="no-result">
+            NO RELATIONSHIPS SIGNED. REGISTER AS AN ISSUER FIRST.
+          </div>
         ) : (
-          <ul className="space-y-2">
-            {comments.map((c) => (
-              <li
+          <div className="rel-list">
+            {signedRels.slice(0, 12).map((r) => {
+              const revoked = Number(r.account.revokedAt) > 0;
+              return (
+                <div
+                  key={r.publicKey.toBase58()}
+                  className={`rel-row ${revoked ? "revoked" : ""}`}
+                  style={{
+                    gridTemplateColumns: "130px 1fr 160px 100px",
+                  }}
+                >
+                  <div className="rel-kind">
+                    KIND · {r.account.kind}
+                  </div>
+                  <div>
+                    <div className="rel-target">
+                      Edge {shortKey(r.publicKey, 4)}
+                    </div>
+                    <div className="rel-target-sub">
+                      ENTITY ·{" "}
+                      <Link
+                        href={`/entry/${shortKey(r.account.entity, 8)}`}
+                        style={{ color: "var(--stamp-deep)" }}
+                      >
+                        {shortKey(r.account.entity, 8)}
+                      </Link>
+                    </div>
+                  </div>
+                  <span
+                    style={{
+                      fontFamily: "var(--mono)",
+                      fontSize: 11,
+                      color: "var(--ink-2)",
+                    }}
+                  >
+                    target {shortHash(r.account.targetRef, 6)}
+                  </span>
+                  <div className="rel-validity">
+                    {revoked ? (
+                      <>
+                        <span className="v-revoked">Revoked</span>
+                        <span className="v-date v-revoked">
+                          {formatTimestamp(r.account.revokedAt)}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span>From</span>
+                        <span className="v-date">
+                          {formatTimestamp(r.account.validFrom)}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Section>
+
+      {/* Community signals */}
+      <Section
+        title="Community signals submitted"
+        meta={`${comments.length} signal${comments.length !== 1 ? "s" : ""}`}
+      >
+        {comments.length === 0 ? (
+          <div className="no-result">
+            NO COMMUNITY SIGNALS SUBMITTED YET
+          </div>
+        ) : (
+          <div className="rel-list">
+            {comments.slice(0, 20).map((c) => (
+              <div
                 key={c.publicKey.toBase58()}
-                className="border border-ink-200 bg-white px-4 py-3"
+                className="rel-row"
+                style={{
+                  gridTemplateColumns: "100px 1fr 160px",
+                  cursor: "default",
+                }}
               >
-                <p className="text-xs text-ink-500">
-                  on entity{" "}
-                  <span className="mono">{shortKey(c.account.entity)}</span>
-                  {" · "}
-                  submitted {formatTimestamp(c.account.submittedAt)}
-                </p>
-                <p className="mono mt-1 text-[11px] text-ink-500">
-                  content-hash {shortHash(c.account.contentHash)}
-                </p>
-              </li>
+                <div className="rel-kind">
+                  {(COMMENT_RELATION_LABELS[c.account.relationType] ?? "Reply").toUpperCase()}
+                </div>
+                <div>
+                  <div className="rel-target">
+                    Signal #{c.account.commentIndex}
+                  </div>
+                  <div className="rel-target-sub">
+                    on entity {shortKey(c.account.entity, 6)} · hash{" "}
+                    {shortHash(c.account.contentHash, 8)}
+                  </div>
+                </div>
+                <span
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 11,
+                    color: "var(--ink-3)",
+                    textAlign: "right",
+                  }}
+                >
+                  {formatTimestamp(c.account.submittedAt)}
+                </span>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </Section>
     </div>
@@ -373,16 +656,37 @@ export default function ProfilePage({ params }: { params: Params }) {
 
 function Section({
   title,
+  meta,
   children,
 }: {
   title: string;
+  meta?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-t border-ink-200 pt-6">
-      <h2 className="serif mb-3 text-xl font-semibold text-ink-800">{title}</h2>
+    <section style={{ marginBottom: 36 }}>
+      <div className="section-h">
+        <h2 className="section-title">{title}</h2>
+        {meta && <span className="section-meta">{meta}</span>}
+      </div>
       {children}
     </section>
+  );
+}
+
+function ExtLink({ label, url }: { label: string; url: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        color: "var(--stamp-deep)",
+        textDecoration: "underline",
+      }}
+    >
+      {label} · {hostnameOf(url)}
+    </a>
   );
 }
 

@@ -21,7 +21,7 @@ import {
   shortHash,
   shortKey,
 } from "@/lib/utils/format";
-import { Stamp, StatusPill } from "@/components/registry-bits";
+import { Stamp, StatusPill, Toast } from "@/components/registry-bits";
 import { RelRowCompact } from "@/components/rel-row";
 import { IdentityGraph } from "@/components/identity-graph";
 import { ReviewList } from "@/components/review-list";
@@ -55,6 +55,7 @@ export default function EntityPage({ params }: { params: Params }) {
   const router = useRouter();
   const { publicKey } = useWallet();
   const [tab, setTab] = useState<Tab>("graph");
+  const [toast, setToast] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const idBytes = useMemo(() => hexToBytes(params.entryId), [params.entryId]);
@@ -290,7 +291,10 @@ export default function EntityPage({ params }: { params: Params }) {
               type="button"
               className="btn btn-ghost"
               onClick={() => {
-                navigator.clipboard?.writeText(window.location.href);
+                navigator.clipboard
+                  ?.writeText(window.location.href)
+                  .then(() => setToast("Citable URL copied"))
+                  .catch(() => setToast("Copy failed — copy from address bar"));
               }}
             >
               ⎘ Copy citable URL
@@ -400,6 +404,7 @@ export default function EntityPage({ params }: { params: Params }) {
                     pda={r.publicKey}
                     rel={r.account}
                     issuer={issuers.get(r.account.issuer.toBase58()) ?? null}
+                    onRevoked={refresh}
                   />
                 ))
             )}
@@ -448,6 +453,7 @@ export default function EntityPage({ params }: { params: Params }) {
                     pda={r.publicKey}
                     rel={r.account}
                     issuer={issuers.get(r.account.issuer.toBase58()) ?? null}
+                    onRevoked={refresh}
                   />
                 ))
             )}
@@ -605,6 +611,8 @@ export default function EntityPage({ params }: { params: Params }) {
           </pre>
         </div>
       )}
+
+      <Toast message={toast} onClose={() => setToast(null)} />
     </div>
   );
 }

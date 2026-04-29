@@ -1,11 +1,15 @@
 "use client";
 
+import { useState } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import type { Issuer, Relationship } from "@/types";
 import {
   ISSUER_KIND_LABELS,
   REL_KIND_META,
 } from "@/types";
+import { useProgram } from "@/lib/anchor/hooks";
+import { revokeRelationship } from "@/lib/anchor/client";
 import { formatTimestamp, shortHash, shortKey } from "@/lib/utils/format";
 import { IssuerBadge } from "@/components/registry-bits";
 
@@ -35,7 +39,6 @@ function targetLabel(rel: Relationship, issuerName?: string | null): string {
     if (rel.kind === 6) return "Subsidiary entity";
     return "Entity reference";
   }
-  // wallet
   return rel.kind === 2 ? "Deployer wallet" : "Controlled wallet";
 }
 
@@ -43,11 +46,15 @@ export function RelRowCompact({
   pda,
   rel,
   issuer,
+  onRevoked,
 }: {
   pda: PublicKey;
   rel: Relationship;
   issuer: Issuer | null;
+  onRevoked?: () => void;
 }) {
+  const { publicKey } = useWallet();
+  const program = useProgram();
   const meta = REL_KIND_META[rel.kind];
   const revoked = Number(rel.revokedAt) > 0;
   const tier = issuer?.trustTier ?? 3;
@@ -57,6 +64,36 @@ export function RelRowCompact({
   const authorityShort = issuer
     ? shortKey(issuer.authority, 4)
     : shortKey(rel.attestorAuthority, 4);
+
+  const canRevoke =
+    !revoked &&
+    !!publicKey &&
+    !!program &&
+    publicKey.toBase58() === rel.attestorAuthority.toBase58();
+
+  const [revoking, setRevoking] = useState(false);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
+
+  async function onRevoke() {
+    if (!program || !publicKey) return;
+    if (
+      !window.confirm(
+        "Revoke this attestation? The PDA stays on-chain — only `revoked_at` is set. This is itself a public, signed event.",
+      )
+    ) {
+      return;
+    }
+    setRevoking(true);
+    setRevokeError(null);
+    try {
+      await revokeRelationship(program, publicKey, pda);
+      onRevoked?.();
+    } catch (err) {
+      setRevokeError((err as Error).message ?? "Revoke failed");
+    } finally {
+      setRevoking(false);
+    }
+  }
 
   return (
     <div className={`rel-row ${revoked ? "revoked" : ""}`}>
@@ -121,6 +158,33 @@ export function RelRowCompact({
           <strong>PDA</strong>
           {shortKey(pda, 6)}
         </span>
+        {canRevoke && (
+          <span style={{ marginLeft: "auto" }}>
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={onRevoke}
+              disabled={revoking}
+              style={{
+                borderColor: "var(--revoked)",
+                color: "var(--revoked)",
+              }}
+            >
+              {revoking ? "Revoking…" : "◆ Revoke"}
+            </button>
+          </span>
+        )}
+        {revokeError && (
+          <span
+            style={{
+              color: "var(--revoked)",
+              fontFamily: "var(--mono)",
+              fontSize: 10,
+            }}
+          >
+            ERROR · {revokeError.toUpperCase().slice(0, 60)}
+          </span>
+        )}
       </div>
     </div>
   );

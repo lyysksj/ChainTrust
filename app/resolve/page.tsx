@@ -50,6 +50,7 @@ function ResolvePage() {
 
   const [query, setQuery] = useState(initialQuery);
   const [submitted, setSubmitted] = useState(initialQuery);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ResolveResult>(null);
@@ -185,7 +186,7 @@ function ResolvePage() {
     return () => {
       alive = false;
     };
-  }, [program, submitted]);
+  }, [program, submitted, refreshKey]);
 
   function submit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -382,6 +383,7 @@ function ResolvePage() {
                     issuer={
                       issuers.get(h.account.issuer.toBase58()) ?? null
                     }
+                    onRevoked={() => setRefreshKey((k) => k + 1)}
                   />
                 ))}
               </div>
@@ -408,6 +410,7 @@ function ResolvePage() {
                 pda={h.publicKey}
                 rel={h.account}
                 issuer={issuers.get(h.account.issuer.toBase58()) ?? null}
+                onRevoked={() => setRefreshKey((k) => k + 1)}
               />
             ))}
           </div>

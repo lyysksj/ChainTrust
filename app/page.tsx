@@ -144,6 +144,13 @@ export default function HomePage() {
               <button
                 type="button"
                 className="btn btn-ghost"
+                onClick={() => router.push("/create")}
+              >
+                + File an Entity
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
                 onClick={() => router.push("/attest")}
               >
                 File an attestation
@@ -220,6 +227,50 @@ export default function HomePage() {
           <div className="stat-v">{counts.revoked}</div>
           <div className="stat-l">Revoked (still on record)</div>
         </div>
+      </div>
+
+      {/* Filer onboarding strip */}
+      <div className="section-h">
+        <h2 className="section-title">New here? File in three steps.</h2>
+        <span className="section-meta">§ ONBOARDING · ART. 5</span>
+      </div>
+      <div className="principles" style={{ marginBottom: 48 }}>
+        <Link
+          href="/register"
+          className="principle"
+          style={{ textDecoration: "none", color: "inherit" }}
+        >
+          <div className="principle-num">STEP 01 / USER</div>
+          <h3 className="principle-title">Register profile →</h3>
+          <p className="principle-body">
+            Connect a Solana wallet and claim a username (with optional
+            World&nbsp;ID anti-sybil). Required for everything below.
+          </p>
+        </Link>
+        <Link
+          href="/create"
+          className="principle"
+          style={{ textDecoration: "none", color: "inherit" }}
+        >
+          <div className="principle-num">STEP 02 / ENTITY</div>
+          <h3 className="principle-title">File a new Entity →</h3>
+          <p className="principle-body">
+            Open a public legal-entity record. Get a stable CT-Number short
+            code that anyone can cite or resolve.
+          </p>
+        </Link>
+        <Link
+          href="/issuer/register"
+          className="principle"
+          style={{ textDecoration: "none", color: "inherit" }}
+        >
+          <div className="principle-num">STEP 03 / ISSUER</div>
+          <h3 className="principle-title">Become an Issuer →</h3>
+          <p className="principle-body">
+            Register an authority key with a public trust tier so you can
+            sign Relationship attestations on Entities.
+          </p>
+        </Link>
       </div>
 
       {/* Principles */}

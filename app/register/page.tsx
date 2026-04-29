@@ -16,28 +16,18 @@ import {
   validateOptionalUrl,
   validateUsername,
 } from "@/lib/utils/validation";
-import type { UserMetadata, WorkExperienceItem } from "@/types";
-
-const EMPTY_EXPERIENCE: WorkExperienceItem = {
-  company: "",
-  role: "",
-  fromYear: null,
-  toYear: null,
-};
+import { Stamp } from "@/components/registry-bits";
+import { shortKey } from "@/lib/utils/format";
+import type { UserMetadata } from "@/types";
 
 const WORLDID_APP_ID = process.env.NEXT_PUBLIC_WORLDID_APP_ID ?? "";
 const WORLDID_RP_ID = process.env.NEXT_PUBLIC_WORLDID_RP_ID ?? "";
 const WORLDID_ACTION =
   process.env.NEXT_PUBLIC_WORLDID_ACTION || "register-chaintrust-user";
-// v4 IDKit takes an `environment` prop ("staging" | "production").
-// Default to "staging" so dev runs work with the simulator out-of-the-box.
 const WORLDID_ENV: "production" | "staging" =
   process.env.NEXT_PUBLIC_WORLDID_ENV === "production"
     ? "production"
     : "staging";
-// v4 requires both an app_id (must start with `app_`) and an rp_id from the
-// developer portal. If either is missing we fall back to dev-mode (no
-// proof-of-personhood gating).
 const worldidEnabled =
   WORLDID_APP_ID.startsWith("app_") && WORLDID_RP_ID.length > 0;
 
@@ -50,18 +40,16 @@ export default function RegisterPage() {
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [existingUsername, setExistingUsername] = useState<string | null>(null);
 
-  // Form state
+  // Core form (3 fields)
   const [username, setUsername] = useState("");
   const [headline, setHeadline] = useState("");
-  const [expertiseRaw, setExpertiseRaw] = useState("");
-  const [experience, setExperience] = useState<WorkExperienceItem[]>([
-    { ...EMPTY_EXPERIENCE },
-  ]);
+  const [about, setAbout] = useState("");
+
+  // Advanced (collapsible)
   const [linkX, setLinkX] = useState("");
   const [linkGithub, setLinkGithub] = useState("");
   const [linkLinkedin, setLinkLinkedin] = useState("");
   const [linkSite, setLinkSite] = useState("");
-  const [about, setAbout] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +76,6 @@ export default function RegisterPage() {
     };
   }, [program, publicKey]);
 
-  // Returning user: skip widget if this wallet has already passed World ID.
   useEffect(() => {
     if (!worldidEnabled || !publicKey) return;
     let alive = true;
@@ -104,22 +91,18 @@ export default function RegisterPage() {
     };
   }, [publicKey]);
 
-  function updateExperience(i: number, patch: Partial<WorkExperienceItem>) {
-    setExperience((prev) =>
-      prev.map((e, idx) => (idx === i ? { ...e, ...patch } : e)),
-    );
-  }
-  function addExperience() {
-    setExperience((prev) => [...prev, { ...EMPTY_EXPERIENCE }]);
-  }
-  function removeExperience(i: number) {
-    setExperience((prev) => prev.filter((_, idx) => idx !== i));
-  }
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
+    if (!program || !publicKey) {
+      setError("Connect a wallet first.");
+      return;
+    }
+    if (worldidEnabled && !humanVerified) {
+      setError("Verify with World ID before filing your profile.");
+      return;
+    }
     const uerr = validateUsername(username);
     if (uerr) {
       setError(uerr);
@@ -142,41 +125,18 @@ export default function RegisterPage() {
         return;
       }
     }
-    if (worldidEnabled && !humanVerified) {
-      setError("Verify with World ID before creating a profile.");
-      return;
-    }
-    if (!program || !publicKey) {
-      setError("Connect a wallet first.");
-      return;
-    }
 
     setSubmitting(true);
     try {
-      const expertise = expertiseRaw
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const liveExperience = experience
-        .filter((e) => e.company.trim() || e.role.trim())
-        .map((e) => ({
-          company: e.company.trim(),
-          role: e.role.trim(),
-          fromYear: e.fromYear ?? null,
-          toYear: e.toYear ?? null,
-        }));
-
       const metadata: UserMetadata = {
         headline: headline.trim(),
-        expertise,
-        workExperience: liveExperience,
+        about: about.trim() || undefined,
         links: {
           x: linkX.trim() || undefined,
           github: linkGithub.trim() || undefined,
           linkedin: linkLinkedin.trim() || undefined,
           site: linkSite.trim() || undefined,
         },
-        about: about.trim() || undefined,
       };
 
       const up = await fetch("/api/mock/upload", {
@@ -196,51 +156,450 @@ export default function RegisterPage() {
     }
   }
 
+  // ---- Pre-form gates ----
+
   if (!publicKey) {
     return (
-      <Prose>
-        <h1 className="serif text-3xl font-semibold text-ink-800">Register</h1>
-        <p>Connect your Solana wallet to register a ChainTrust user profile.</p>
-      </Prose>
+      <div data-screen="register">
+        <PageHeader />
+        <div className="no-result">CONNECT A SOLANA WALLET TO CONTINUE.</div>
+      </div>
     );
   }
 
   if (checking) {
     return (
-      <Prose>
-        <h1 className="serif text-3xl font-semibold text-ink-800">Register</h1>
-        <p>Checking on-chain profile…</p>
-      </Prose>
+      <div data-screen="register">
+        <PageHeader />
+        <div className="no-result">CHECKING ON-CHAIN PROFILE…</div>
+      </div>
     );
   }
 
   if (alreadyRegistered) {
     return (
-      <Prose>
-        <h1 className="serif text-3xl font-semibold text-ink-800">
-          Already registered
-        </h1>
-        <p>
-          This wallet already has an on-chain profile{" "}
-          {existingUsername && (
-            <>
-              (<span className="mono">@{existingUsername}</span>)
-            </>
-          )}
-          .
-        </p>
-        <button
-          className="btn"
-          onClick={() => router.push(`/profile/${publicKey.toBase58()}`)}
-        >
-          Go to profile
-        </button>
-      </Prose>
+      <div data-screen="register">
+        <PageHeader />
+        <div className="doc-card" style={{ maxWidth: 640 }}>
+          <div
+            className="docnum"
+            style={{ marginBottom: 8, color: "var(--stamp-deep)" }}
+          >
+            ◆ ALREADY ON RECORD
+          </div>
+          <p
+            style={{
+              fontFamily: "var(--serif)",
+              fontSize: 16,
+              color: "var(--ink)",
+              margin: "0 0 16px",
+            }}
+          >
+            This wallet already has an on-chain profile{" "}
+            {existingUsername && (
+              <>
+                (
+                <span className="mono" style={{ color: "var(--stamp-deep)" }}>
+                  @{existingUsername}
+                </span>
+                ).
+              </>
+            )}
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => router.push(`/profile/${publicKey.toBase58()}`)}
+          >
+            Open profile →
+          </button>
+        </div>
+      </div>
     );
   }
 
+  // ---- Layout: wizard left / live preview right ----
+
   return (
-    <div className="max-w-2xl">
+    <div data-screen="register">
+      <PageHeader />
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.4fr 1fr",
+          gap: 32,
+          alignItems: "start",
+        }}
+      >
+        {/* LEFT */}
+        <div>
+          {/* Step 1 — World ID gate */}
+          <WorldIdGate
+            humanVerified={humanVerified}
+            loading={humanCheckLoading}
+            onSuccess={() => setHumanVerified(true)}
+            wallet={publicKey.toBase58()}
+          />
+
+          {/* Step 2 — Disclosure notice (only after gate, not blocking) */}
+          {humanVerified && (
+            <div
+              className="doc-card"
+              style={{
+                marginTop: 24,
+                borderColor: "var(--stamp-deep)",
+                background: "var(--paper-2)",
+              }}
+            >
+              <div
+                className="docnum"
+                style={{ marginBottom: 6, color: "var(--stamp-deep)" }}
+              >
+                ◆ § 2 · DISCLOSURE NOTICE
+              </div>
+              <p
+                style={{
+                  fontFamily: "var(--serif)",
+                  fontSize: 15,
+                  color: "var(--ink)",
+                  margin: "0 0 8px",
+                  lineHeight: 1.55,
+                }}
+              >
+                <strong>
+                  Everything below is publicly readable, append-only, and
+                  cannot be deleted.
+                </strong>
+              </p>
+              <p
+                style={{
+                  fontFamily: "var(--serif)",
+                  fontSize: 14,
+                  color: "var(--ink-2)",
+                  margin: 0,
+                  lineHeight: 1.55,
+                }}
+              >
+                Your username and a pointer to off-chain metadata are written
+                to Solana under PDA <span className="mono">
+                  [&quot;user&quot;, {shortKey(publicKey, 4)}]
+                </span>
+                . Do not enter information you would not want a stranger to
+                read in five years.
+              </p>
+            </div>
+          )}
+
+          {/* Step 3 — The form */}
+          {humanVerified && (
+            <form
+              onSubmit={onSubmit}
+              className="doc-card"
+              style={{ marginTop: 24 }}
+            >
+              <div className="doc-card-h">
+                <div className="doc-card-title">§ 3 · User record</div>
+                <div
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 10,
+                    color: "var(--ink-3)",
+                    letterSpacing: "0.1em",
+                  }}
+                >
+                  3 FIELDS · CORE
+                </div>
+              </div>
+
+              <div className="form-row">
+                <label className="label">Handle (on-chain)</label>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "auto 1fr",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--mono)",
+                      fontSize: 14,
+                      color: "var(--stamp-deep)",
+                      fontWeight: 600,
+                    }}
+                  >
+                    @
+                  </span>
+                  <input
+                    value={username}
+                    onChange={(e) =>
+                      setUsername(
+                        e.target.value
+                          .toLowerCase()
+                          .replace(/[^a-z0-9_-]/g, ""),
+                      )
+                    }
+                    placeholder="acme_compliance"
+                    maxLength={32}
+                  />
+                </div>
+                <div className="hint">
+                  Letters, digits, underscore, dash. Used in your profile URL
+                  and across the registry.
+                </div>
+              </div>
+
+              <div className="form-row">
+                <label className="label">Display name / role line</label>
+                <input
+                  value={headline}
+                  onChange={(e) => setHeadline(e.target.value)}
+                  placeholder="Compliance lead at Acme · KYB analyst"
+                  maxLength={120}
+                />
+                <div className="hint">
+                  One line, shown next to your handle. This is what consumers
+                  see when judging your role on the registry.
+                </div>
+              </div>
+
+              <div className="form-row">
+                <label className="label">About (optional · one line)</label>
+                <input
+                  value={about}
+                  onChange={(e) => setAbout(e.target.value)}
+                  placeholder="What kinds of attestations you sign or rely on."
+                  maxLength={200}
+                />
+              </div>
+
+              <details
+                style={{
+                  borderTop: "1px solid var(--rule-soft)",
+                  paddingTop: 16,
+                  marginTop: 8,
+                }}
+              >
+                <summary
+                  style={{
+                    cursor: "pointer",
+                    fontFamily: "var(--mono)",
+                    fontSize: 11,
+                    letterSpacing: "0.08em",
+                    color: "var(--stamp-deep)",
+                    fontWeight: 600,
+                    marginBottom: 12,
+                  }}
+                >
+                  ▸ EXTERNAL LINKS (optional · X · GitHub · LinkedIn · Site)
+                </summary>
+                <div className="form-grid-2">
+                  <div className="form-row">
+                    <label className="label">X / Twitter</label>
+                    <input
+                      value={linkX}
+                      onChange={(e) => setLinkX(e.target.value)}
+                      placeholder="https://x.com/handle"
+                      maxLength={200}
+                    />
+                  </div>
+                  <div className="form-row">
+                    <label className="label">GitHub</label>
+                    <input
+                      value={linkGithub}
+                      onChange={(e) => setLinkGithub(e.target.value)}
+                      placeholder="https://github.com/handle"
+                      maxLength={200}
+                    />
+                  </div>
+                  <div className="form-row">
+                    <label className="label">LinkedIn</label>
+                    <input
+                      value={linkLinkedin}
+                      onChange={(e) => setLinkLinkedin(e.target.value)}
+                      placeholder="https://linkedin.com/in/handle"
+                      maxLength={200}
+                    />
+                  </div>
+                  <div className="form-row">
+                    <label className="label">Personal website</label>
+                    <input
+                      value={linkSite}
+                      onChange={(e) => setLinkSite(e.target.value)}
+                      placeholder="https://yourdomain.dev"
+                      maxLength={200}
+                    />
+                  </div>
+                </div>
+              </details>
+
+              {error && (
+                <p className="error" style={{ marginTop: 8 }}>
+                  {error}
+                </p>
+              )}
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginTop: 24,
+                  paddingTop: 16,
+                  borderTop: "1px solid var(--rule-soft)",
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => router.push("/")}
+                >
+                  ← Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-stamp"
+                  disabled={
+                    submitting || (worldidEnabled && !humanVerified)
+                  }
+                >
+                  {submitting ? "FILING…" : "◆ Sign & file user record"}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+
+        {/* RIGHT — live preview */}
+        <div className="doc-card" style={{ position: "sticky", top: 24 }}>
+          <div className="doc-card-h">
+            <div className="doc-card-title">Live preview</div>
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 10,
+                color: "var(--ink-3)",
+                letterSpacing: "0.1em",
+              }}
+            >
+              UNFILED DRAFT
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <div className="docnum" style={{ marginBottom: 4 }}>
+              WALLET
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 11,
+                color: "var(--ink-2)",
+                wordBreak: "break-all",
+              }}
+            >
+              {publicKey.toBase58()}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <div className="docnum" style={{ marginBottom: 4 }}>
+              HANDLE
+            </div>
+            {username ? (
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 16,
+                  color: "var(--stamp-deep)",
+                  fontWeight: 600,
+                }}
+              >
+                @{username}
+              </div>
+            ) : (
+              <div className="hint">— HANDLE NOT SET —</div>
+            )}
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <div className="docnum" style={{ marginBottom: 4 }}>
+              DISPLAY LINE
+            </div>
+            {headline ? (
+              <div
+                style={{
+                  fontFamily: "var(--serif)",
+                  fontSize: 16,
+                  fontWeight: 600,
+                  lineHeight: 1.3,
+                }}
+              >
+                {headline}
+              </div>
+            ) : (
+              <div className="hint">— DISPLAY LINE NOT SET —</div>
+            )}
+          </div>
+
+          {about && (
+            <div style={{ marginBottom: 16 }}>
+              <div className="docnum" style={{ marginBottom: 4 }}>
+                ABOUT
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--serif)",
+                  fontSize: 13,
+                  color: "var(--ink-2)",
+                  lineHeight: 1.5,
+                }}
+              >
+                {about}
+              </div>
+            </div>
+          )}
+
+          <div
+            className="rule-h-soft"
+            style={{
+              paddingTop: 14,
+              fontFamily: "var(--mono)",
+              fontSize: 10,
+              color: "var(--ink-3)",
+              letterSpacing: "0.04em",
+              lineHeight: 1.7,
+            }}
+          >
+            <div>WORLD ID · {humanVerified ? "✓ VERIFIED" : "PENDING"}</div>
+            <div>
+              EXTERNAL LINKS ·{" "}
+              {[linkX, linkGithub, linkLinkedin, linkSite].filter((s) =>
+                s.trim(),
+              ).length}
+            </div>
+            <div>METADATA URI · ipfs://… (assigned at signing)</div>
+          </div>
+
+          <div
+            style={{
+              marginTop: 18,
+              display: "flex",
+              justifyContent: "flex-end",
+            }}
+          >
+            <Stamp text="Pending" sub="UNFILED" size="small" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PageHeader() {
+  return (
+    <>
       <div className="docnum" style={{ marginBottom: 8 }}>
         FORM CT-USR · 2026 EDITION · ART. 5.1
       </div>
@@ -259,237 +618,15 @@ export default function RegisterPage() {
           color: "var(--ink-2)",
           maxWidth: "70ch",
           marginTop: -8,
-          marginBottom: 24,
+          marginBottom: 32,
         }}
       >
         One human, one wallet, one profile. Verified users can file entities,
-        sign as issuers, and add community signals on-chain.
+        sign as issuers, and add community signals on-chain. Authority on
+        the registry comes from <em>signed attestations</em>, not from
+        biographical detail — so this form is intentionally short.
       </p>
-
-      <WorldIdGate
-        humanVerified={humanVerified}
-        loading={humanCheckLoading}
-        onSuccess={() => setHumanVerified(true)}
-        wallet={publicKey.toBase58()}
-      />
-
-      <div className="border border-accent/40 bg-accent/5 p-4 text-sm text-ink-700">
-        <p className="font-semibold text-accent">All fields below are public.</p>
-        <p className="mt-1">
-          Your username and a pointer to your profile metadata are written to
-          Solana. Headline, expertise, work history, links, and about are
-          stored at that pointer (mocked locally for the demo; IPFS in
-          production). Anyone can read them. Don't enter information you don't
-          want public.
-        </p>
-      </div>
-
-      <form onSubmit={onSubmit} className="space-y-6">
-        <section className="space-y-4">
-          <div>
-            <label className="label">Username (handle)</label>
-            <div className="mt-1 flex items-center gap-2">
-              <span className="text-ink-500">@</span>
-              <input
-                className="input"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="alice_web3"
-                maxLength={32}
-              />
-            </div>
-            <p className="hint mt-1">
-              Letters, digits, underscore, or dash. Used in your profile URL.
-            </p>
-          </div>
-
-          <div>
-            <label className="label">Headline</label>
-            <input
-              className="input mt-1"
-              value={headline}
-              onChange={(e) => setHeadline(e.target.value)}
-              placeholder="Smart contract auditor at Trail of Bits"
-              maxLength={120}
-            />
-            <p className="hint mt-1">
-              One line. This is the main thing other users see when judging
-              whether your reviews are credible.
-            </p>
-          </div>
-
-          <div>
-            <label className="label">Areas of expertise</label>
-            <input
-              className="input mt-1"
-              value={expertiseRaw}
-              onChange={(e) => setExpertiseRaw(e.target.value)}
-              placeholder="Solana, MEV, Smart contract audits"
-              maxLength={200}
-            />
-            <p className="hint mt-1">Comma-separated. Up to 5 tags.</p>
-          </div>
-        </section>
-
-        <section className="space-y-3 border-t border-ink-200 pt-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="serif text-lg font-semibold text-ink-800">
-                Work experience
-              </h2>
-              <p className="hint">
-                Optional. Helps reviewers gauge the weight of your reviews.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={addExperience}
-            >
-              + Add role
-            </button>
-          </div>
-          <div className="space-y-2">
-            {experience.map((exp, i) => (
-              <div
-                key={i}
-                className="grid grid-cols-1 gap-2 rounded-sm border border-ink-200 bg-white p-3 md:grid-cols-[2fr_2fr_80px_80px_auto]"
-              >
-                <input
-                  className="input"
-                  value={exp.company}
-                  onChange={(e) =>
-                    updateExperience(i, { company: e.target.value })
-                  }
-                  placeholder="Company"
-                  maxLength={80}
-                />
-                <input
-                  className="input"
-                  value={exp.role}
-                  onChange={(e) =>
-                    updateExperience(i, { role: e.target.value })
-                  }
-                  placeholder="Role"
-                  maxLength={80}
-                />
-                <input
-                  className="input"
-                  value={exp.fromYear ?? ""}
-                  onChange={(e) =>
-                    updateExperience(i, {
-                      fromYear: e.target.value
-                        ? Number(e.target.value)
-                        : null,
-                    })
-                  }
-                  placeholder="From"
-                  type="number"
-                  min={1950}
-                  max={2100}
-                />
-                <input
-                  className="input"
-                  value={exp.toYear ?? ""}
-                  onChange={(e) =>
-                    updateExperience(i, {
-                      toYear: e.target.value ? Number(e.target.value) : null,
-                    })
-                  }
-                  placeholder="To"
-                  type="number"
-                  min={1950}
-                  max={2100}
-                />
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => removeExperience(i)}
-                  disabled={experience.length === 1}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-          <p className="hint">
-            Leave the year fields empty to omit dates. "To" empty means
-            current.
-          </p>
-        </section>
-
-        <section className="space-y-4 border-t border-ink-200 pt-6">
-          <div>
-            <h2 className="serif text-lg font-semibold text-ink-800">Links</h2>
-            <p className="hint">
-              Optional. External profiles other users can use to verify you.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div>
-              <label className="label">X / Twitter</label>
-              <input
-                className="input mt-1"
-                value={linkX}
-                onChange={(e) => setLinkX(e.target.value)}
-                placeholder="https://x.com/alice"
-                maxLength={200}
-              />
-            </div>
-            <div>
-              <label className="label">GitHub</label>
-              <input
-                className="input mt-1"
-                value={linkGithub}
-                onChange={(e) => setLinkGithub(e.target.value)}
-                placeholder="https://github.com/alice"
-                maxLength={200}
-              />
-            </div>
-            <div>
-              <label className="label">LinkedIn</label>
-              <input
-                className="input mt-1"
-                value={linkLinkedin}
-                onChange={(e) => setLinkLinkedin(e.target.value)}
-                placeholder="https://linkedin.com/in/alice"
-                maxLength={200}
-              />
-            </div>
-            <div>
-              <label className="label">Personal website</label>
-              <input
-                className="input mt-1"
-                value={linkSite}
-                onChange={(e) => setLinkSite(e.target.value)}
-                placeholder="https://alice.dev"
-                maxLength={200}
-              />
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-2 border-t border-ink-200 pt-6">
-          <label className="label">About (optional)</label>
-          <textarea
-            className="textarea mt-1"
-            value={about}
-            onChange={(e) => setAbout(e.target.value)}
-            placeholder="Anything else worth knowing — focus areas, prior work, what kinds of projects you'll review."
-            maxLength={1500}
-          />
-        </section>
-
-        {error && <p className="error">{error}</p>}
-
-        <button
-          className="btn"
-          disabled={submitting || (worldidEnabled && !humanVerified)}
-        >
-          {submitting ? "Creating profile…" : "Create profile on-chain"}
-        </button>
-      </form>
-    </div>
+    </>
   );
 }
 
@@ -511,15 +648,32 @@ function WorldIdGate({
 
   if (!worldidEnabled) {
     return (
-      <div className="border border-yellow-500/50 bg-yellow-50 p-4 text-sm text-ink-700">
-        <p className="font-semibold text-yellow-900">
-          ⚠ World ID not configured (development mode)
-        </p>
-        <p className="mt-1">
-          Set <code className="mono">NEXT_PUBLIC_WORLDID_APP_ID</code> and
-          <code className="mono"> NEXT_PUBLIC_WORLDID_RP_ID</code> in
-          <code className="mono"> .env.local</code> to enable proof-of-personhood
-          gating. Without them, anti-sybil is not enforced.
+      <div
+        className="doc-card"
+        style={{
+          borderColor: "var(--warn)",
+          background: "rgba(196, 165, 118, 0.08)",
+        }}
+      >
+        <div
+          className="docnum"
+          style={{ marginBottom: 6, color: "var(--warn)" }}
+        >
+          ⚠ § 1 · DEV MODE — World ID NOT CONFIGURED
+        </div>
+        <p
+          style={{
+            fontFamily: "var(--serif)",
+            fontSize: 14,
+            color: "var(--ink-2)",
+            margin: 0,
+            lineHeight: 1.55,
+          }}
+        >
+          Set <code className="mono">NEXT_PUBLIC_WORLDID_APP_ID</code> and{" "}
+          <code className="mono">NEXT_PUBLIC_WORLDID_RP_ID</code> in{" "}
+          <code className="mono">.env.local</code> to enforce
+          proof-of-personhood. Without them, anti-sybil is bypassed.
         </p>
       </div>
     );
@@ -527,19 +681,41 @@ function WorldIdGate({
 
   if (loading) {
     return (
-      <div className="border border-ink-200 bg-white p-4 text-sm text-ink-600">
-        Checking previous World ID verification…
+      <div className="doc-card">
+        <div className="docnum" style={{ marginBottom: 6 }}>
+          § 1 · CHECKING WORLD ID…
+        </div>
+        <p className="hint">CHECKING PREVIOUS PROOF-OF-PERSONHOOD…</p>
       </div>
     );
   }
 
   if (humanVerified) {
     return (
-      <div className="border border-verified/60 bg-verified/5 p-4 text-sm text-ink-700">
-        <p className="font-semibold text-verified">✓ Verified with World ID</p>
-        <p className="mt-1">
-          This wallet has passed proof-of-personhood. Continue filling in your
-          profile below.
+      <div
+        className="doc-card"
+        style={{
+          borderColor: "var(--good)",
+          background: "rgba(158, 184, 156, 0.10)",
+        }}
+      >
+        <div
+          className="docnum"
+          style={{ marginBottom: 6, color: "#4a6648" }}
+        >
+          ✓ § 1 · VERIFIED WITH WORLD ID
+        </div>
+        <p
+          style={{
+            fontFamily: "var(--serif)",
+            fontSize: 14,
+            color: "var(--ink)",
+            margin: 0,
+            lineHeight: 1.55,
+          }}
+        >
+          This wallet has passed proof-of-personhood. Continue below to file
+          your record.
         </p>
       </div>
     );
@@ -584,26 +760,53 @@ function WorldIdGate({
   }
 
   return (
-    <div className="border-2 border-dashed border-accent/50 bg-accent/5 p-4">
-      <p className="font-semibold text-accent">
-        Step 1 — Prove you're a real person
-      </p>
-      <p className="mt-1 text-sm text-ink-700">
-        ChainTrust uses World ID to ensure one real human can register only one
-        profile. Your World ID does not reveal who you are; it only confirms
-        you're a unique human in this app's namespace.
-      </p>
-      <div className="mt-3 space-y-2">
-        <button
-          type="button"
-          className="btn"
-          onClick={startVerify}
-          disabled={fetchingSig}
+    <div
+      className="doc-card"
+      style={{
+        borderColor: "var(--stamp-deep)",
+        background: "var(--paper-2)",
+      }}
+    >
+      <div className="doc-card-h">
+        <div className="doc-card-title">§ 1 · Proof-of-personhood</div>
+        <div
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 10,
+            color: "var(--ink-3)",
+            letterSpacing: "0.1em",
+          }}
         >
-          {fetchingSig ? "Preparing…" : "Verify with World ID"}
-        </button>
-        {gateError && <p className="error">{gateError}</p>}
+          GATE · REQUIRED
+        </div>
       </div>
+      <p
+        style={{
+          fontFamily: "var(--serif)",
+          fontSize: 15,
+          color: "var(--ink-2)",
+          margin: "0 0 16px",
+          lineHeight: 1.55,
+        }}
+      >
+        ChainTrust uses <strong>World ID</strong> so that one real human can
+        register only one profile per wallet. Your World ID does not reveal
+        your identity — it only confirms you are a unique human within this
+        app&apos;s namespace.
+      </p>
+      <button
+        type="button"
+        className="btn btn-stamp"
+        onClick={startVerify}
+        disabled={fetchingSig}
+      >
+        {fetchingSig ? "PREPARING…" : "◆ Verify with World ID"}
+      </button>
+      {gateError && (
+        <p className="error" style={{ marginTop: 12 }}>
+          {gateError}
+        </p>
+      )}
 
       {rpContext && (
         <IDKitRequestWidget
@@ -624,8 +827,4 @@ function WorldIdGate({
       )}
     </div>
   );
-}
-
-function Prose({ children }: { children: React.ReactNode }) {
-  return <div className="max-w-xl space-y-3 text-sm text-ink-700">{children}</div>;
 }

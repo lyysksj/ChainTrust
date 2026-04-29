@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 // ---------- Stamp seal ----------
 export function Stamp({
@@ -83,12 +83,18 @@ export function IssuerBadge({
 export function Toast({
   message,
   onClose,
+  durationMs = 2400,
 }: {
   message: string | null;
   onClose: () => void;
+  durationMs?: number;
 }) {
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(onClose, durationMs);
+    return () => clearTimeout(t);
+  }, [message, onClose, durationMs]);
   if (!message) return null;
-  // auto-dismiss handled by caller
   return (
     <div className="toast">
       <span className="stamp-mark">●</span>
@@ -96,6 +102,7 @@ export function Toast({
       <button
         type="button"
         onClick={onClose}
+        aria-label="dismiss"
         style={{
           marginLeft: 12,
           background: "transparent",
