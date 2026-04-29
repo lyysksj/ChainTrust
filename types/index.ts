@@ -93,10 +93,23 @@ export type LikeRecord = {
 
 export type FilerRole = "first-party" | "third-party";
 
+/**
+ * EntityMetadata — public, plaintext IPFS payload.
+ *
+ * Privacy contract:
+ *   - This object is uploaded to PUBLIC IPFS. Anyone with the metadataUri
+ *     CID can read every field. Treat as published.
+ *   - The raw registry ID is INTENTIONALLY NOT INCLUDED. Only the hex of
+ *     SHA-256("{countryCode}:{registryId}") is exposed, matching the on-chain
+ *     `registry_id_hash`. The plaintext registry ID never leaves the user's
+ *     browser.
+ *   - For sensitive fields (UBO docs, audit work papers, internal compliance
+ *     evidence), use EvidenceMetadata + sensitivity="sensitive" instead.
+ */
 export type EntityMetadata = {
   legalName: string;
   tradeName?: string;
-  registryId: string;
+  registryIdHashHex: string; // hex of sha256(`${countryCode}:${rawRegistryId}`); raw never stored
   countryCode: string;
   countryLabel: string;
   entityType?: string;
@@ -111,6 +124,32 @@ export type EntityMetadata = {
   filerRole?: FilerRole;
   filerStatement?: string;
   evidenceNote?: string;
+};
+
+/**
+ * EvidenceMetadata — payload referenced by Relationship.evidence_uri.
+ *
+ * `sensitivity: "public"`  — uploaded to plaintext IPFS, anyone can read.
+ * `sensitivity: "sensitive"` — uploaded to plaintext IPFS for now BUT the
+ *   client is expected to wrap it in a `LitEnvelope` before upload once Lit
+ *   Protocol integration ships. The schema reserves the field; consumers
+ *   must fall back gracefully when `litCondition` is absent.
+ */
+export type EvidenceSensitivity = "public" | "sensitive";
+
+export type EvidenceMetadata = {
+  sensitivity: EvidenceSensitivity;
+  notes?: string;
+  /** When sensitivity === "sensitive", the actual encrypted payload + Lit
+   * access conditions live here. Until Lit is wired, this is undefined and
+   * the body lives in `notes` (still public). Mark sensitive intent so
+   * consumers can refuse to display until decrypt is supported. */
+  litCondition?: {
+    chain: string;
+    accessControlConditions: unknown;
+    ciphertext: string; // base64
+    dataToEncryptHash: string;
+  };
 };
 
 export type ProjectMetadata = {

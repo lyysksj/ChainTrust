@@ -180,10 +180,18 @@ export function EntryForm() {
     try {
       setProgress("Uploading entity metadata…");
       const liveWebsites = websites.map((w) => w.trim()).filter(Boolean);
+      // Privacy: hash the registry ID client-side. Raw value never leaves
+      // the browser. Only the hex prefix is stored in the public IPFS doc.
+      const registryIdHashBytes = sha256Bytes(
+        `${countryCode}:${registryId.trim()}`,
+      );
+      const registryIdHashHex = registryIdHashBytes
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
       const metadata: EntityMetadata = {
         legalName: legalName.trim(),
         tradeName: tradeName.trim() || undefined,
-        registryId: registryId.trim(),
+        registryIdHashHex,
         countryCode,
         countryLabel: country.label,
         entityType,
@@ -220,7 +228,7 @@ export function EntryForm() {
       await createEntity(program, publicKey, {
         entityId,
         legalNameHash: sha256Bytes(legalName.trim()),
-        registryIdHash: sha256Bytes(`${countryCode}:${registryId.trim()}`),
+        registryIdHash: registryIdHashBytes,
         jurisdiction: countryCode,
         metadataUri: up.uri,
       });

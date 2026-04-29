@@ -208,7 +208,11 @@ export default function EntityPage({ params }: { params: Params }) {
           <div className="entity-meta-grid">
             <div className="entity-meta-cell">
               <div className="label">REGISTRY ID</div>
-              <div className="v">{meta?.registryId ?? "—"}</div>
+              <div className="v">
+                {meta?.registryIdHashHex
+                  ? `0x${meta.registryIdHashHex.slice(0, 12)}…`
+                  : "—"}
+              </div>
             </div>
             <div className="entity-meta-cell">
               <div className="label">JURISDICTION</div>

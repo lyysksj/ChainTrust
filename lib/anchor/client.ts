@@ -21,6 +21,20 @@ import {
   relationshipPda,
   userProfilePda,
 } from "./pdas";
+import {
+  sasCredentialAuthority,
+  sasDualWriteEnabled,
+} from "@/lib/sas/config";
+import {
+  sasAttestationPda,
+  sasCredentialPda,
+  sasSchemaPda,
+} from "@/lib/sas/pdas";
+import {
+  buildCloseAttestationIx,
+  buildCreateAttestationIx,
+  encodeChainTrustAttestationData,
+} from "@/lib/sas/instructions";
 
 const COMMITMENT: Commitment = "confirmed";
 
@@ -328,7 +342,8 @@ export async function attestRelationship(
     params.targetRef,
     issuer,
   );
-  return program.methods
+
+  const builder = program.methods
     .attestRelationship(
       params.kind,
       params.targetRef,
@@ -343,8 +358,43 @@ export async function attestRelationship(
       relationship,
       signer,
       systemProgram: SystemProgram.programId,
-    })
-    .rpc();
+    });
+
+  // Path C — SAS dual-write. Bundles a SAS create_attestation IX into the
+  // SAME transaction so that either both succeed or both fail. Opt-in via
+  // NEXT_PUBLIC_SAS_DUAL_WRITE=true; requires bootstrap script to have
+  // provisioned the platform Credential + Schema PDAs and added the
+  // signer's wallet to authorized_signers.
+  if (sasDualWriteEnabled()) {
+    const credAuthority = sasCredentialAuthority();
+    if (credAuthority) {
+      const credential = sasCredentialPda(credAuthority);
+      const schema = sasSchemaPda(credential, params.kind);
+      const sasAttestation = sasAttestationPda(credential, schema, relationship);
+      const data = encodeChainTrustAttestationData({
+        entity: params.entity,
+        kind: params.kind,
+        targetRef: params.targetRef,
+        evidenceHash: params.evidenceHash,
+        validFrom: params.validFrom,
+        validUntil: params.validUntil,
+        revokedAt: 0,
+      });
+      const sasIx = buildCreateAttestationIx({
+        payer: signer,
+        authority: signer, // must be in credential.authorized_signers
+        credential,
+        schema,
+        attestation: sasAttestation,
+        nonce: relationship,
+        data,
+        expiry: params.validUntil, // 0 = never expires
+      });
+      builder.postInstructions([sasIx]);
+    }
+  }
+
+  return builder.rpc();
 }
 
 export async function revokeRelationship(
@@ -353,14 +403,47 @@ export async function revokeRelationship(
   relationship: PublicKey,
 ): Promise<string> {
   const [issuer] = issuerPda(signer);
-  return program.methods
+
+  const builder = program.methods
     .revokeRelationship()
     .accountsPartial({
       relationship,
       issuer,
       signer,
-    })
-    .rpc();
+    });
+
+  // Path C — when revoking on ChainTrust, also close the mirrored SAS
+  // attestation. SAS doesn't support tombstones (close deletes the PDA),
+  // so the SAS view shows the attestation has been retracted while our
+  // on-chain Relationship.revoked_at preserves the full audit trail.
+  if (sasDualWriteEnabled()) {
+    const credAuthority = sasCredentialAuthority();
+    if (credAuthority) {
+      // Need the relationship account to find its kind so we can derive the
+      // matching SAS schema + attestation PDA. Fetch it once.
+      const rel = await program.account.relationship.fetchNullable(
+        relationship,
+      );
+      if (rel) {
+        const credential = sasCredentialPda(credAuthority);
+        const schema = sasSchemaPda(credential, rel.kind);
+        const sasAttestation = sasAttestationPda(
+          credential,
+          schema,
+          relationship,
+        );
+        const sasIx = buildCloseAttestationIx({
+          payer: signer,
+          authority: signer,
+          credential,
+          attestation: sasAttestation,
+        });
+        builder.postInstructions([sasIx]);
+      }
+    }
+  }
+
+  return builder.rpc();
 }
 
 export async function claimEntity(

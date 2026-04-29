@@ -347,7 +347,10 @@ export default function HomePage() {
                     {row.meta?.legalName ?? "(metadata pending)"}
                   </div>
                   <div className="ent-sub">
-                    {row.meta?.registryId ?? "—"} · INC{" "}
+                    {row.meta?.registryIdHashHex
+                      ? `id·0x${row.meta.registryIdHashHex.slice(0, 8)}…`
+                      : "—"}{" "}
+                    · INC{" "}
                     {formatTimestamp(row.account.createdAt)}
                   </div>
                 </div>

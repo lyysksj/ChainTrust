@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
+import { useConnection } from "@solana/wallet-adapter-react";
 import { useProgram } from "@/lib/anchor/hooks";
 import {
   fetchAllEntities,
@@ -12,7 +13,7 @@ import {
   fetchRelationshipsForTargetWallet,
 } from "@/lib/anchor/client";
 import { entityIdToCtNumber } from "@/lib/utils/ct-number";
-import { bytesHex, formatTimestamp } from "@/lib/utils/format";
+import { bytesHex, formatTimestamp, shortKey } from "@/lib/utils/format";
 import { Stamp, StatusPill } from "@/components/registry-bits";
 import { RelRowCompact } from "@/components/rel-row";
 import { COUNTRIES } from "@/types";
@@ -22,6 +23,16 @@ import type {
   Issuer,
   Relationship,
 } from "@/types";
+import {
+  sasCredentialAuthority,
+  SAS_SCHEMA_NAMES,
+} from "@/lib/sas/config";
+import { sasCredentialPda } from "@/lib/sas/pdas";
+import {
+  fetchSasAttestationsByCredential,
+  filterSasByEntity,
+  type SasAttestationRecord,
+} from "@/lib/sas/reader";
 
 export default function ResolveRoute() {
   return (
@@ -55,6 +66,8 @@ function ResolvePage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ResolveResult>(null);
   const [issuers, setIssuers] = useState<Map<string, Issuer>>(new Map());
+  const [sasRecords, setSasRecords] = useState<SasAttestationRecord[]>([]);
+  const { connection } = useConnection();
 
   useEffect(() => {
     if (initialQuery && initialQuery !== submitted) {
@@ -188,6 +201,41 @@ function ResolvePage() {
     };
   }, [program, submitted, refreshKey]);
 
+  // Path D — fetch SAS attestations once we have a resolved entity. Reads
+  // are cheap (one getProgramAccounts) and run independently from the main
+  // resolve effect so a missing/unconfigured SAS Credential doesn't block
+  // the primary flow.
+  useEffect(() => {
+    if (!connection || !result?.entity) {
+      setSasRecords([]);
+      return;
+    }
+    const credAuthority = sasCredentialAuthority();
+    if (!credAuthority) {
+      setSasRecords([]);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const credential = sasCredentialPda(credAuthority);
+        const all = await fetchSasAttestationsByCredential(
+          connection as Connection,
+          credential,
+        );
+        if (!alive) return;
+        setSasRecords(filterSasByEntity(all, result.pda));
+      } catch (err) {
+        // SAS bootstrap may not have run yet; silent fall-back.
+        console.warn("SAS read failed:", err);
+        if (alive) setSasRecords([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [connection, result?.pda, refreshKey]);
+
   function submit(e?: React.FormEvent) {
     e?.preventDefault();
     setSubmitted(query.trim());
@@ -319,7 +367,10 @@ function ResolvePage() {
                 <div className="ct-line">{result.ctNumber}</div>
                 <h2>{result.meta?.legalName ?? "(metadata pending)"}</h2>
                 <div className="meta-line">
-                  {result.meta?.registryId ?? "—"} ·{" "}
+                  {result.meta?.registryIdHashHex
+                    ? `id·0x${result.meta.registryIdHashHex.slice(0, 8)}…`
+                    : "—"}{" "}
+                  ·{" "}
                   {(country?.label ?? result.entity.jurisdiction).toUpperCase()}{" "}
                   · FILED {formatTimestamp(result.entity.createdAt)}
                 </div>
@@ -414,8 +465,106 @@ function ResolvePage() {
               />
             ))}
           </div>
+
+          {/* Path D — Cross-program SAS view */}
+          <SasMirrorSection records={sasRecords} ctNumber={result.ctNumber} />
         </>
       )}
+    </div>
+  );
+}
+
+function SasMirrorSection({
+  records,
+  ctNumber,
+}: {
+  records: SasAttestationRecord[];
+  ctNumber: string;
+}) {
+  if (records.length === 0) {
+    return (
+      <div style={{ marginTop: 32 }}>
+        <div className="section-h">
+          <h2 className="section-title" style={{ fontSize: 20 }}>
+            Cross-program · Solana Attestation Service
+          </h2>
+          <span className="section-meta">SAS · NO MIRRORED RECORDS</span>
+        </div>
+        <div className="no-result">
+          NO SAS ATTESTATIONS UNDER THE CHAINTRUST CREDENTIAL FOR {ctNumber}.
+          <br />
+          <span style={{ color: "var(--ink-4)" }}>
+            Either dual-write is disabled, or the Credential / Schemas have
+            not been bootstrapped on this cluster yet.
+          </span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ marginTop: 32 }}>
+      <div className="section-h">
+        <h2 className="section-title" style={{ fontSize: 20 }}>
+          Cross-program · Solana Attestation Service
+        </h2>
+        <span className="section-meta">
+          {records.length} mirrored attestation
+          {records.length !== 1 ? "s" : ""} · readable by any SAS-aware app
+        </span>
+      </div>
+      <div className="rel-list">
+        {records.map((r) => {
+          const kind = r.decoded?.kind ?? 0;
+          const label = SAS_SCHEMA_NAMES[kind] ?? `KIND_${kind}`;
+          const revoked =
+            r.decoded ? Number(r.decoded.revokedAt) > 0 : false;
+          return (
+            <div
+              key={r.pda.toBase58()}
+              className={`rel-row ${revoked ? "revoked" : ""}`}
+              style={{
+                gridTemplateColumns: "140px 1fr 200px 120px",
+              }}
+            >
+              <div className="rel-kind">SAS · {label}</div>
+              <div>
+                <div className="rel-target">SAS attestation</div>
+                <div className="rel-target-sub">
+                  PDA · {shortKey(r.pda, 6)} · NONCE ·{" "}
+                  {shortKey(r.nonce, 6)}
+                </div>
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 11,
+                  color: "var(--ink-2)",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                signer {shortKey(r.signer, 6)}
+              </div>
+              <div className="rel-validity">
+                <span>SAS expiry</span>
+                <span className="v-date">
+                  {r.expiry > 0 ? formatTimestamp(r.expiry) : "Open"}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p
+        style={{
+          fontFamily: "var(--mono)",
+          fontSize: 10,
+          color: "var(--ink-3)",
+          letterSpacing: "0.04em",
+          marginTop: 12,
+        }}
+      >
+        SOURCE · 22zoJMtdu4tQc2PzL74ZUT7FrwgB1Udec8DdW4yw4BdG · sas-lib v1
+      </p>
     </div>
   );
 }

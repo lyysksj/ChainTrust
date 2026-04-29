@@ -251,7 +251,10 @@ function AttestPage() {
     try {
       let evUri = evidenceUri.trim();
       if (!evUri && evidenceNotes.trim()) {
-        const up = await fetch("/api/mock/upload", {
+        // Evidence URIs may carry sensitive material (UBO docs, audit
+        // packets, internal compliance evidence). Mark accordingly so phase 3
+        // Lit-encrypted upload can take over without UI changes.
+        const up = await fetch("/api/mock/upload?sensitivity=sensitive", {
           method: "POST",
           headers: { "content-type": "text/plain" },
           body: JSON.stringify({ note: evidenceNotes.trim() }),

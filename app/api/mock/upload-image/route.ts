@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { putBinary } from "@/lib/mock/storage";
+import { putImagePublic } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -38,8 +38,13 @@ export async function POST(req: NextRequest) {
       file.type === "image/jpeg"
         ? "jpg"
         : file.type.split("/")[1] ?? "bin";
-    const { uri, hashHex } = await putBinary(buf, ext);
-    return NextResponse.json({ uri, hashHex, contentType: file.type });
+    const result = await putImagePublic(buf, ext);
+    return NextResponse.json({
+      uri: result.uri,
+      hashHex: result.hashHex,
+      contentType: file.type,
+      backend: result.backend,
+    });
   } catch (err) {
     return NextResponse.json(
       { error: String((err as Error).message ?? err) },
