@@ -6,11 +6,15 @@ export const PROGRAM_ID = new PublicKey(
 
 const USER = Buffer.from("user");
 const ISSUER = Buffer.from("issuer");
+const CONFIG = Buffer.from("config");
+const ISSUER_TIER_REQUEST = Buffer.from("issuer_tier_request");
 const ENTITY = Buffer.from("entity");
 const PROJECT = Buffer.from("project");
 const REL = Buffer.from("rel");
 const COMMENT = Buffer.from("comment");
 const LIKE = Buffer.from("like");
+const HUMANPROOF = Buffer.from("humanproof");
+const NULLIFIER = Buffer.from("nullifier");
 
 export function userProfilePda(wallet: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync([USER, wallet.toBuffer()], PROGRAM_ID);
@@ -18,6 +22,20 @@ export function userProfilePda(wallet: PublicKey): [PublicKey, number] {
 
 export function issuerPda(authority: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync([ISSUER, authority.toBuffer()], PROGRAM_ID);
+}
+
+export function registryConfigPda(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([CONFIG], PROGRAM_ID);
+}
+
+export function issuerTierRequestPda(
+  issuer: PublicKey,
+  requestedTier: number,
+): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [ISSUER_TIER_REQUEST, issuer.toBuffer(), Buffer.from([requestedTier])],
+    PROGRAM_ID,
+  );
 }
 
 export function entityPda(entityId: number[] | Uint8Array): [PublicKey, number] {
@@ -71,6 +89,24 @@ export function likeRecordPda(
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [LIKE, comment.toBuffer(), liker.toBuffer()],
+    PROGRAM_ID,
+  );
+}
+
+export function humanProofPda(wallet: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [HUMANPROOF, wallet.toBuffer()],
+    PROGRAM_ID,
+  );
+}
+
+export function nullifierRecordPda(
+  nullifierHash: number[] | Uint8Array,
+): [PublicKey, number] {
+  const buf = Buffer.from(nullifierHash);
+  if (buf.length !== 32) throw new Error("nullifier_hash must be 32 bytes");
+  return PublicKey.findProgramAddressSync(
+    [NULLIFIER, buf],
     PROGRAM_ID,
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
+import bs58 from "bs58";
 import {
   IDKitRequestWidget,
   orbLegacy,
@@ -11,6 +12,7 @@ import {
 } from "@worldcoin/idkit";
 import { useProgram } from "@/lib/anchor/hooks";
 import { fetchUserProfile, registerUser } from "@/lib/anchor/client";
+import { uploadMetadata } from "@/lib/upload-client";
 import {
   validateHeadline,
   validateOptionalUrl,
@@ -33,7 +35,7 @@ const worldidEnabled =
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const program = useProgram();
 
   const [checking, setChecking] = useState(false);
@@ -139,13 +141,11 @@ export default function RegisterPage() {
         },
       };
 
-      const up = await fetch("/api/mock/upload", {
-        method: "POST",
-        headers: { "content-type": "text/plain" },
-        body: JSON.stringify(metadata),
-      }).then((r) => r.json());
-      if (!up.uri) throw new Error(up.error ?? "Upload failed");
-
+      const up = await uploadMetadata(
+        publicKey,
+        signMessage,
+        JSON.stringify(metadata),
+      );
       await registerUser(program, publicKey, username, up.uri);
       router.push(`/profile/${publicKey.toBase58()}`);
     } catch (err) {
@@ -641,6 +641,7 @@ function WorldIdGate({
   onSuccess: () => void;
   wallet: string;
 }) {
+  const { signMessage } = useWallet();
   const [widgetOpen, setWidgetOpen] = useState(false);
   const [rpContext, setRpContext] = useState<RpContext | null>(null);
   const [fetchingSig, setFetchingSig] = useState(false);
@@ -748,10 +749,40 @@ function WorldIdGate({
   }
 
   async function handleVerify(result: IDKitResult) {
+    if (!signMessage) {
+      throw new Error(
+        "Connected wallet does not support message signing. Use a wallet that exposes signMessage (e.g. Phantom, Backpack).",
+      );
+    }
+    // Step A — server-issued, wallet-bound challenge.
+    const chResp = await fetch(
+      `/api/worldid/challenge?wallet=${encodeURIComponent(wallet)}`,
+    );
+    if (!chResp.ok) {
+      throw new Error("Could not fetch World ID challenge");
+    }
+    const ch = (await chResp.json()) as {
+      nonce: string;
+      message: string;
+      expiresAt: number;
+    };
+    if (!ch?.nonce || !ch?.message) {
+      throw new Error("Bad challenge payload");
+    }
+    // Step B — wallet signs the challenge so the server can prove the wallet
+    // owner is the one binding the nullifier.
+    const sig = await signMessage(new TextEncoder().encode(ch.message));
+    const signature = bs58.encode(sig);
+
     const resp = await fetch("/api/worldid/verify", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ result, wallet }),
+      body: JSON.stringify({
+        result,
+        wallet,
+        nonce: ch.nonce,
+        signature,
+      }),
     });
     const json = await resp.json();
     if (!resp.ok || !json.ok) {

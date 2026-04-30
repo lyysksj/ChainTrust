@@ -1,22 +1,36 @@
-import { NextRequest, NextResponse } from "next/server";
-import { putContent, type Sensitivity } from "@/lib/storage";
+/**
+ * Open metadata-upload endpoint — DEPRECATED.
+ *
+ * This used to be a free, unauthenticated text-pin endpoint. Anyone could
+ * scribble to the storage backend, attach the resulting URI to an Entity /
+ * Comment / Issuer record on chain, and burn through your IPFS quota. The
+ * authenticated replacement is `/api/upload/metadata` (challenge + wallet
+ * signature + per-wallet rate limit).
+ *
+ * In production the route is hard-disabled. In dev it's also disabled by
+ * default to make sure no caller accidentally regresses; flip
+ * `ALLOW_LEGACY_MOCK_UPLOAD=true` in `.env.local` if you really need it for
+ * a one-off script.
+ */
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-export async function POST(req: NextRequest) {
-  try {
-    const sensitivity = (req.nextUrl.searchParams.get("sensitivity") ??
-      "public") as Sensitivity;
-    const body = await req.text();
-    if (!body) {
-      return NextResponse.json({ error: "Body required" }, { status: 400 });
-    }
-    const result = await putContent(body, sensitivity);
-    return NextResponse.json(result);
-  } catch (err) {
+const ALLOW_LEGACY = process.env.ALLOW_LEGACY_MOCK_UPLOAD === "true";
+
+export async function POST() {
+  if (!ALLOW_LEGACY) {
     return NextResponse.json(
-      { error: String((err as Error).message ?? err) },
-      { status: 500 },
+      {
+        error:
+          "Deprecated. Use POST /api/upload/metadata with x-pubkey / x-signature / x-nonce headers.",
+        replacement: "/api/upload/metadata",
+      },
+      { status: 410 },
     );
   }
+  return NextResponse.json(
+    { error: "Legacy fallback enabled but no implementation in this build" },
+    { status: 501 },
+  );
 }

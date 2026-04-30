@@ -12,6 +12,7 @@ import {
 } from "@/lib/anchor/client";
 import { CommentForm } from "@/components/comment-form";
 import { formatTimestamp, shortHash, shortKey } from "@/lib/utils/format";
+import { uploadMetadata } from "@/lib/upload-client";
 import { COMMENT_RELATION_LABELS } from "@/types";
 import type { CommentBody, CommentRecord } from "@/types";
 
@@ -167,7 +168,7 @@ function CommentNode({
 }) {
   const { item, children } = node;
   const { account: comment, publicKey: commentPda } = item;
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const program = useProgram();
   const [body, setBody] = useState<CommentBody | null>(null);
   const [responseBody, setResponseBody] = useState<string | null>(null);
@@ -284,12 +285,7 @@ function CommentNode({
     setResponseError(null);
     try {
       const content = JSON.stringify({ body: responseDraft.trim() });
-      const up = await fetch("/api/mock/upload", {
-        method: "POST",
-        headers: { "content-type": "text/plain" },
-        body: content,
-      }).then((r) => r.json());
-      if (!up.uri) throw new Error(up.error ?? "Upload failed");
+      const up = await uploadMetadata(publicKey, signMessage, content);
       await addOfficialResponse(
         program,
         publicKey,
@@ -326,20 +322,20 @@ function CommentNode({
               if (role === "official") {
                 return (
                   <span className="chip chip-official">
-                    {isReply ? "Official reply" : "Official review"}
+                    {isReply ? "Official reply" : "Official response"}
                   </span>
                 );
               }
               if (role === "creator") {
                 return (
                   <span className="chip chip-creator">
-                    {isReply ? "Creator reply" : "Creator review"}
+                    {isReply ? "Creator reply" : "Creator signal"}
                   </span>
                 );
               }
               return (
                 <span className="chip chip-community">
-                  {isReply ? "Reply" : "Community review"}
+                  {isReply ? "Reply" : "Community signal"}
                 </span>
               );
             })()}
@@ -372,7 +368,7 @@ function CommentNode({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={`/api/mock/fetch?uri=${encodeURIComponent(uri)}`}
-                  alt="review attachment"
+                  alt="signal attachment"
                   className="h-24 w-24 border border-ink-200 object-cover hover:opacity-80"
                 />
               </a>
@@ -431,7 +427,7 @@ function CommentNode({
         )}
       </div>
 
-      {/* Official response block — only on top-level reviews */}
+      {/* Official response block — only on top-level signals */}
       {!isReply && comment.officialResponseUri ? (
         <div className="border-t-2 border-claimed bg-claimed/5 p-4">
           <div className="flex items-center justify-between gap-2 text-xs text-claimed">
@@ -443,7 +439,7 @@ function CommentNode({
           </p>
           <p className="hint mt-2">
             Official response is a separate record. It does not alter the
-            original review hash above.
+            original signal hash above.
           </p>
         </div>
       ) : !isReply && canRespond ? (

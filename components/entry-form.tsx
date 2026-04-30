@@ -16,6 +16,7 @@ import {
 } from "@/lib/utils/validation";
 import { bytesHex } from "@/lib/utils/format";
 import { Stamp } from "@/components/registry-bits";
+import { uploadMetadata } from "@/lib/upload-client";
 import {
   COUNTRIES,
   ENTITY_TYPES,
@@ -48,7 +49,7 @@ const FILER_DECLARATIONS: Record<FilerRole, string> = {
 
 export function EntryForm() {
   const router = useRouter();
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const program = useProgram();
 
   const [step, setStep] = useState<Step>(1);
@@ -214,12 +215,11 @@ export function EntryForm() {
             ? "First-party self-filing."
             : "Third-party observation pending claim.",
       };
-      const up = await fetch("/api/mock/upload", {
-        method: "POST",
-        headers: { "content-type": "text/plain" },
-        body: JSON.stringify(metadata),
-      }).then((r) => r.json());
-      if (!up.uri) throw new Error(up.error ?? "Upload failed");
+      const up = await uploadMetadata(
+        publicKey,
+        signMessage,
+        JSON.stringify(metadata),
+      );
 
       setProgress("Filing Entity on-chain…");
       const entityId = randomEntityId();

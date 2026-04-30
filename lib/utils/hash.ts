@@ -28,6 +28,21 @@ export function bytesToHex(bytes: number[] | Uint8Array): string {
     .join("");
 }
 
+/** Inverse of bytesToHex. Accepts an optional `0x` prefix. Throws on
+ *  malformed input — a 64-char hex string is the only valid sha256 form on
+ *  the on-chain `evidence_hash` field. */
+export function hexToBytes(hex: string): number[] {
+  const clean = hex.startsWith("0x") || hex.startsWith("0X") ? hex.slice(2) : hex;
+  if (clean.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(clean)) {
+    throw new Error("Invalid hex string");
+  }
+  const out: number[] = [];
+  for (let i = 0; i < clean.length; i += 2) {
+    out.push(parseInt(clean.slice(i, i + 2), 16));
+  }
+  return out;
+}
+
 /** Short content-addressable id for mock storage paths. */
 export function contentId(body: string): string {
   return sha256Hex(body).slice(0, 24);

@@ -13,6 +13,20 @@ import { revokeRelationship } from "@/lib/anchor/client";
 import { formatTimestamp, shortHash, shortKey } from "@/lib/utils/format";
 import { IssuerBadge } from "@/components/registry-bits";
 
+/**
+ * Evidence URI router. `mock://` and `ipfs://` URIs go through our local
+ * fetch proxy because the dev/preview gateway needs server-side resolution.
+ * Anything `http(s)://` opens in a new tab directly so the user gets the
+ * real link they pasted in the attest form.
+ */
+function evidenceHref(uri: string): string {
+  const lower = uri.toLowerCase();
+  if (lower.startsWith("http://") || lower.startsWith("https://")) {
+    return uri;
+  }
+  return `/api/mock/fetch?uri=${encodeURIComponent(uri)}`;
+}
+
 function targetSubLine(rel: Relationship): string {
   const meta = REL_KIND_META[rel.kind];
   const tt = meta?.targetType ?? "wallet";
@@ -139,7 +153,7 @@ export function RelRowCompact({
           <span>
             <strong>URI</strong>
             <a
-              href={`/api/mock/fetch?uri=${encodeURIComponent(rel.evidenceUri)}`}
+              href={evidenceHref(rel.evidenceUri)}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: "var(--stamp-deep)" }}

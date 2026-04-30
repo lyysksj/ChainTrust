@@ -6,13 +6,15 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { useProgram } from "@/lib/anchor/hooks";
 import {
-  fetchAllEntities,
   fetchAllIssuers,
+  fetchEntitiesByIdPrefix,
   fetchEntityByPda,
   fetchRelationshipsForEntity,
+  fetchRelationshipsForTargetHash,
   fetchRelationshipsForTargetWallet,
 } from "@/lib/anchor/client";
-import { entityIdToCtNumber } from "@/lib/utils/ct-number";
+import { sha256Bytes } from "@/lib/utils/hash";
+import { ctNumberToPrefixBytes, entityIdToCtNumber } from "@/lib/utils/ct-number";
 import { bytesHex, formatTimestamp, shortKey } from "@/lib/utils/format";
 import { Stamp, StatusPill } from "@/components/registry-bits";
 import { RelRowCompact } from "@/components/rel-row";
@@ -90,10 +92,7 @@ function ResolvePage() {
     (async () => {
       try {
         const q = submitted.trim();
-        const [allEntities, allIssuersRaw] = await Promise.all([
-          fetchAllEntities(program),
-          fetchAllIssuers(program),
-        ]);
+        const allIssuersRaw = await fetchAllIssuers(program);
         const issuerMap = new Map<string, Issuer>();
         for (const i of allIssuersRaw) {
           issuerMap.set(
@@ -103,14 +102,38 @@ function ResolvePage() {
         }
         if (alive) setIssuers(issuerMap);
 
-        // 1) match by CT-Number directly
+        // 1) match by CT-Number directly. The CT-Number is derived from the
+        // first 5 bytes of entity_id, so we narrow with a 5-byte memcmp filter
+        // on entity_id before enumerating — bounded RPC payload regardless of
+        // how many entities exist on chain.
         const upperQ = q.toUpperCase();
-        const byCt = allEntities.find((e) => {
-          const acc = e.account as unknown as Entity;
-          return entityIdToCtNumber(acc.entityId).toUpperCase() === upperQ;
-        });
+        const ctMatch = /^CT-[0-9A-Z]{4}-[0-9A-Z]{4}$/.test(upperQ);
+        let byCt:
+          | {
+              publicKey: PublicKey;
+              account: Entity;
+            }
+          | null = null;
+        if (ctMatch) {
+          let prefix: number[];
+          try {
+            prefix = ctNumberToPrefixBytes(upperQ);
+          } catch {
+            prefix = [];
+          }
+          if (prefix.length === 5) {
+            const candidates = await fetchEntitiesByIdPrefix(program, prefix);
+            for (const e of candidates) {
+              const acc = e.account as unknown as Entity;
+              if (entityIdToCtNumber(acc.entityId).toUpperCase() === upperQ) {
+                byCt = { publicKey: e.publicKey, account: acc };
+                break;
+              }
+            }
+          }
+        }
         if (byCt) {
-          const acc = byCt.account as unknown as Entity;
+          const acc = byCt.account;
           const rels = await fetchRelationshipsForEntity(
             program,
             byCt.publicKey,
@@ -165,11 +188,9 @@ function ResolvePage() {
             const matchType =
               hits[0].account.kind === 1
                 ? "PROJECT REF"
-                : hits[0].account.kind === 4
-                  ? "DOMAIN"
-                  : hits[0].account.kind === 5 || hits[0].account.kind === 6
-                    ? "ENTITY REF"
-                    : "WALLET";
+                : hits[0].account.kind === 5 || hits[0].account.kind === 6
+                  ? "ENTITY REF"
+                  : "WALLET";
             setResult({
               matchType,
               entity: entityAccount,
@@ -184,6 +205,62 @@ function ResolvePage() {
               })),
             });
             return;
+          }
+        }
+
+        // 3) try as a domain — normalize and SHA-256 hash, then query by
+        // target_ref. We accept inputs like `acme.xyz`, `https://acme.xyz/`,
+        // `https://www.acme.xyz` and reduce to a canonical hostname.
+        const looksLikeDomain = !pk && /\./.test(q) && q.length <= 253;
+        if (looksLikeDomain) {
+          const domain = normalizeDomain(q);
+          if (domain) {
+            const hash = sha256Bytes(domain);
+            const hitsRaw = await fetchRelationshipsForTargetHash(
+              program,
+              hash,
+            );
+            // Only kind=4 (HAS_DOMAIN) targets are domains, but other kinds
+            // could in principle reuse the same hash; filter to kind=4 to
+            // avoid false positives.
+            const domainHits = hitsRaw.filter(
+              (r) => (r.account as unknown as Relationship).kind === 4,
+            );
+            if (domainHits.length > 0) {
+              const hits = domainHits.map((r) => ({
+                publicKey: r.publicKey,
+                account: r.account as unknown as Relationship,
+              }));
+              const entityKey = hits[0].account.entity;
+              const entityAccount = (await fetchEntityByPda(
+                program,
+                entityKey,
+              )) as Entity | null;
+              if (!entityAccount) {
+                setError("Domain found but entity is missing.");
+                return;
+              }
+              const allRelsRaw = await fetchRelationshipsForEntity(
+                program,
+                entityKey,
+              );
+              const meta = await loadMeta(entityAccount.metadataUri);
+              if (!alive) return;
+              setResult({
+                matchType: `DOMAIN · ${domain}`,
+                entity: entityAccount,
+                pda: entityKey,
+                meta,
+                ctNumber: entityIdToCtNumber(entityAccount.entityId),
+                entityIdHex: bytesHex(entityAccount.entityId),
+                hits,
+                rels: allRelsRaw.map((r) => ({
+                  publicKey: r.publicKey,
+                  account: r.account as unknown as Relationship,
+                })),
+              });
+              return;
+            }
           }
         }
 
@@ -279,7 +356,7 @@ function ResolvePage() {
           marginBottom: 28,
         }}
       >
-        Paste any wallet pubkey, contract PDA, domain, or CT-Number. The
+        Paste any wallet pubkey, domain, or CT-Number. The
         registry returns the operating Entity, the chain of signed evidence,
         and the issuer behind every edge.
       </p>
@@ -315,12 +392,6 @@ function ResolvePage() {
           ))}
         </div>
       </form>
-
-      {!program && (
-        <div className="no-result">
-          CONNECT A WALLET TO QUERY THE REGISTRY.
-        </div>
-      )}
 
       {loading && (
         <div className="no-result">RESOLVING · QUERYING SOLANA…</div>
@@ -578,4 +649,37 @@ async function loadMeta(uri: string): Promise<EntityMetadata | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Reduce a user-input string to a canonical hostname for hashing.
+ * Returns null if the input cannot reasonably be parsed as a domain.
+ *
+ * Conventions for the registry:
+ *   - lowercase
+ *   - strip protocol, path, query, fragment, port
+ *   - strip leading "www."
+ *   - require at least one dot and ASCII / dash / dot only
+ */
+function normalizeDomain(input: string): string | null {
+  let s = input.trim().toLowerCase();
+  if (!s) return null;
+  // Try URL parsing if it looks protocol-prefixed.
+  if (/^[a-z]+:\/\//.test(s)) {
+    try {
+      const u = new URL(s);
+      s = u.hostname;
+    } catch {
+      // fall through to manual cleanup
+    }
+  }
+  // Strip path / query / fragment / port if any survived.
+  s = s.split("/")[0].split("?")[0].split("#")[0].split(":")[0];
+  // Strip leading "www."
+  if (s.startsWith("www.")) s = s.slice(4);
+  // Validate
+  if (!s.includes(".")) return null;
+  if (!/^[a-z0-9.-]+$/.test(s)) return null;
+  if (s.length > 253) return null;
+  return s;
 }

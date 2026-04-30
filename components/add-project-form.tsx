@@ -6,6 +6,7 @@ import type { PublicKey } from "@solana/web3.js";
 import { useProgram } from "@/lib/anchor/hooks";
 import { createProject } from "@/lib/anchor/client";
 import { randomProjectId, sha256Bytes } from "@/lib/utils/hash";
+import { uploadMetadata } from "@/lib/upload-client";
 
 type Props = {
   entity: PublicKey;
@@ -21,7 +22,7 @@ function domainFromUrl(url: string): string {
 }
 
 export function AddProjectForm({ entity, onCreated }: Props) {
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const program = useProgram();
 
   const [name, setName] = useState("");
@@ -48,12 +49,11 @@ export function AddProjectForm({ entity, onCreated }: Props) {
         domain: domain.trim() || undefined,
         description: description.trim() || undefined,
       };
-      const up = await fetch("/api/mock/upload", {
-        method: "POST",
-        headers: { "content-type": "text/plain" },
-        body: JSON.stringify(metadata),
-      }).then((r) => r.json());
-      if (!up.uri) throw new Error(up.error ?? "Upload failed");
+      const up = await uploadMetadata(
+        publicKey,
+        signMessage,
+        JSON.stringify(metadata),
+      );
 
       const projectId = randomProjectId();
       const primaryDomain = domain ? domainFromUrl(domain) : "";

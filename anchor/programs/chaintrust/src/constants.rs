@@ -1,9 +1,14 @@
 use anchor_lang::prelude::*;
+use anchor_lang::pubkey;
 
 #[constant]
 pub const USER_SEED: &[u8] = b"user";
 #[constant]
 pub const ISSUER_SEED: &[u8] = b"issuer";
+#[constant]
+pub const CONFIG_SEED: &[u8] = b"config";
+#[constant]
+pub const ISSUER_TIER_REQUEST_SEED: &[u8] = b"issuer_tier_request";
 #[constant]
 pub const ENTITY_SEED: &[u8] = b"entity";
 #[constant]
@@ -14,6 +19,20 @@ pub const REL_SEED: &[u8] = b"rel";
 pub const COMMENT_SEED: &[u8] = b"comment";
 #[constant]
 pub const LIKE_SEED: &[u8] = b"like";
+#[constant]
+pub const HUMANPROOF_SEED: &[u8] = b"humanproof";
+#[constant]
+pub const NULLIFIER_SEED: &[u8] = b"nullifier";
+
+// Bootstrap admin: only this wallet can call `initialize_registry_config`.
+// Hard-coded so an attacker cannot front-run init after deploy.
+//
+// REPLACE BEFORE DEPLOY: set this to the wallet you trust to bootstrap the
+// registry admin. Default value is the System Program pubkey, which is not
+// a valid signer — leaving it unchanged will brick `initialize_registry_config`
+// on purpose so a real deployment is forced to set it.
+pub const REGISTRY_BOOTSTRAP_ADMIN: Pubkey =
+    pubkey!("11111111111111111111111111111111");
 
 pub const MAX_USERNAME_LEN: usize = 32;
 pub const MAX_METADATA_URI_LEN: usize = 200;
@@ -21,6 +40,7 @@ pub const MAX_JURISDICTION_LEN: usize = 64;
 pub const MAX_CONTENT_URI_LEN: usize = 200;
 pub const MAX_EVIDENCE_URI_LEN: usize = 200;
 pub const MAX_OFFICIAL_RESPONSE_URI_LEN: usize = 200;
+pub const MAX_REVIEW_NOTE_URI_LEN: usize = 200;
 
 // Entity status
 pub const STATUS_UNVERIFIED: u8 = 0;
@@ -36,6 +56,12 @@ pub const ISSUER_KIND_MAX: u8 = 6;
 pub const ISSUER_TIER_MIN: u8 = 1;
 pub const ISSUER_TIER_MAX: u8 = 3;
 pub const ISSUER_TIER_DEFAULT: u8 = 3;
+pub const ISSUER_TIER_PLATFORM: u8 = 1;
+pub const ISSUER_TIER_KNOWN_THIRD_PARTY: u8 = 2;
+
+pub const TIER_REQUEST_PENDING: u8 = 0;
+pub const TIER_REQUEST_APPROVED: u8 = 1;
+pub const TIER_REQUEST_REJECTED: u8 = 2;
 
 // Relationship kinds — verb encodes both target type and verb.
 // Target ref interpretation depends on kind (see TARGET_KIND_* below).

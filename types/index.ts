@@ -11,6 +11,12 @@ export type UserProfile = {
   bump: number;
 };
 
+export type RegistryConfig = {
+  adminAuthority: PublicKey;
+  initializedAt: BN;
+  bump: number;
+};
+
 export type Issuer = {
   authority: PublicKey;
   kind: number;
@@ -18,6 +24,19 @@ export type Issuer = {
   nameHash: number[];
   metadataUri: string;
   registeredAt: BN;
+  bump: number;
+};
+
+export type IssuerTierRequest = {
+  issuer: PublicKey;
+  requester: PublicKey;
+  requestedTier: number;
+  status: number;
+  noteHash: number[];
+  noteUri: string;
+  requestedAt: BN;
+  resolvedAt: BN;
+  reviewedBy: PublicKey;
   bump: number;
 };
 
@@ -86,6 +105,21 @@ export type LikeRecord = {
   comment: PublicKey;
   liker: PublicKey;
   likedAt: BN;
+  bump: number;
+};
+
+export type HumanProof = {
+  wallet: PublicKey;
+  nullifierHash: number[];
+  verifiedAt: BN;
+  attestedBy: PublicKey;
+  bump: number;
+};
+
+export type NullifierRecord = {
+  wallet: PublicKey;
+  nullifierHash: number[];
+  verifiedAt: BN;
   bump: number;
 };
 
@@ -224,6 +258,12 @@ export const ISSUER_TIER_LABELS: Record<number, string> = {
   1: "Tier 1 · Platform / Regulated",
   2: "Tier 2 · Known Third-party",
   3: "Tier 3 · Community / Self",
+};
+
+export const ISSUER_TIER_REQUEST_STATUS_LABELS: Record<number, string> = {
+  0: "Pending",
+  1: "Approved",
+  2: "Rejected",
 };
 
 // Relationship kinds (must match constants.rs)

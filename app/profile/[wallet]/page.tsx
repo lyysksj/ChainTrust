@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { useProgram } from "@/lib/anchor/hooks";
 import {
@@ -11,6 +12,7 @@ import {
   fetchEntitiesCreatedBy,
   fetchIssuer,
   fetchUserProfile,
+  updateUserMetadataUri,
 } from "@/lib/anchor/client";
 import {
   bytesHex,
@@ -20,9 +22,14 @@ import {
 } from "@/lib/utils/format";
 import { entityIdToCtNumber } from "@/lib/utils/ct-number";
 import {
+  validateHeadline,
+  validateOptionalUrl,
+} from "@/lib/utils/validation";
+import {
   StatusPill,
   TierPill,
 } from "@/components/registry-bits";
+import { uploadMetadata } from "@/lib/upload-client";
 import {
   COMMENT_RELATION_LABELS,
   ISSUER_KIND_LABELS,
@@ -42,6 +49,7 @@ type Params = { wallet: string };
 
 export default function ProfilePage({ params }: { params: Params }) {
   const program = useProgram();
+  const { publicKey: connectedWallet, signMessage } = useWallet();
 
   const wallet = useMemo(() => {
     try {
@@ -67,6 +75,16 @@ export default function ProfilePage({ params }: { params: Params }) {
     { publicKey: PublicKey; account: Relationship }[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [editOpen, setEditOpen] = useState(false);
+  const [draftHeadline, setDraftHeadline] = useState("");
+  const [draftAbout, setDraftAbout] = useState("");
+  const [draftLinkX, setDraftLinkX] = useState("");
+  const [draftLinkGithub, setDraftLinkGithub] = useState("");
+  const [draftLinkLinkedin, setDraftLinkLinkedin] = useState("");
+  const [draftLinkSite, setDraftLinkSite] = useState("");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!program || !wallet) return;
@@ -145,6 +163,15 @@ export default function ProfilePage({ params }: { params: Params }) {
     };
   }, [profile?.metadataUri]);
 
+  useEffect(() => {
+    setDraftHeadline(meta?.headline ?? "");
+    setDraftAbout(meta?.about ?? "");
+    setDraftLinkX(meta?.links?.x ?? "");
+    setDraftLinkGithub(meta?.links?.github ?? "");
+    setDraftLinkLinkedin(meta?.links?.linkedin ?? "");
+    setDraftLinkSite(meta?.links?.site ?? "");
+  }, [meta]);
+
   // Pull entity metadata for the verified-rep callout.
   const [verifiedEntryNames, setVerifiedEntryNames] = useState<
     Record<string, string>
@@ -187,10 +214,79 @@ export default function ProfilePage({ params }: { params: Params }) {
     );
   }
 
+  const isOwner =
+    !!connectedWallet && connectedWallet.toBase58() === wallet.toBase58();
   const activeSigned = signedRels.filter(
     (r) => Number(r.account.revokedAt) === 0,
   ).length;
   const revokedSigned = signedRels.length - activeSigned;
+
+  async function saveProfileEdits(e: React.FormEvent) {
+    e.preventDefault();
+    setSaveError(null);
+    setSaveNotice(null);
+
+    if (!program || !connectedWallet || !isOwner) {
+      setSaveError("Connect the owner wallet to edit this profile.");
+      return;
+    }
+
+    const trimmedHeadline = draftHeadline.trim();
+    if (trimmedHeadline) {
+      const headlineError = validateHeadline(trimmedHeadline);
+      if (headlineError) {
+        setSaveError(headlineError);
+        return;
+      }
+    } else if (draftHeadline.length > 120) {
+      setSaveError("Headline must be 120 characters or fewer.");
+      return;
+    }
+
+    for (const [label, value] of [
+      ["X", draftLinkX],
+      ["GitHub", draftLinkGithub],
+      ["LinkedIn", draftLinkLinkedin],
+      ["Website", draftLinkSite],
+    ] as const) {
+      const linkError = validateOptionalUrl(value);
+      if (linkError) {
+        setSaveError(`${label}: ${linkError}`);
+        return;
+      }
+    }
+
+    const nextMetadata: UserMetadata = {
+      ...meta,
+      headline: trimmedHeadline || undefined,
+      about: draftAbout.trim() || undefined,
+      links: {
+        x: draftLinkX.trim() || undefined,
+        github: draftLinkGithub.trim() || undefined,
+        linkedin: draftLinkLinkedin.trim() || undefined,
+        site: draftLinkSite.trim() || undefined,
+      },
+    };
+
+    setSaving(true);
+    try {
+      const up = await uploadMetadata(
+        connectedWallet,
+        signMessage,
+        JSON.stringify(nextMetadata),
+      );
+
+      await updateUserMetadataUri(program, connectedWallet, up.uri);
+      setMeta(nextMetadata);
+      setProfile((prev) => (prev ? { ...prev, metadataUri: up.uri } : prev));
+      setEditOpen(false);
+      setSaveNotice("Profile updated on-chain.");
+    } catch (err) {
+      setSaveError((err as Error).message ?? "Failed to update profile");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div data-screen="user profile">
@@ -347,6 +443,35 @@ export default function ProfilePage({ params }: { params: Params }) {
               ))}
             </div>
           )}
+
+          {isOwner && profile && (
+            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-stamp"
+                onClick={() => {
+                  setSaveError(null);
+                  setSaveNotice(null);
+                  setEditOpen((open) => !open);
+                }}
+              >
+                {editOpen ? "Close editor" : "Edit profile"}
+              </button>
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 10,
+                  color: "var(--ink-3)",
+                  letterSpacing: "0.04em",
+                  lineHeight: 1.6,
+                }}
+              >
+                USERNAME IS FIXED AFTER REGISTRATION.
+                <br />
+                HEADLINE, ABOUT, AND LINKS CAN BE UPDATED.
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -357,6 +482,146 @@ export default function ProfilePage({ params }: { params: Params }) {
         >
           LOADING ON-CHAIN RECORDS…
         </p>
+      )}
+
+      {saveNotice && (
+        <div
+          className="doc-card"
+          style={{
+            marginBottom: 24,
+            borderColor: "var(--good)",
+            background: "rgba(158, 184, 156, 0.10)",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontFamily: "var(--mono)",
+              fontSize: 11,
+              color: "var(--good)",
+              letterSpacing: "0.06em",
+            }}
+          >
+            ◆ {saveNotice.toUpperCase()}
+          </p>
+        </div>
+      )}
+
+      {isOwner && profile && editOpen && (
+        <Section title="Edit profile" meta="OWNER ACTION · ON-CHAIN METADATA UPDATE">
+          <form onSubmit={saveProfileEdits} className="doc-card">
+            <div className="doc-card-h">
+              <div className="doc-card-title">Update public profile metadata</div>
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 10,
+                  color: "var(--ink-3)",
+                  letterSpacing: "0.1em",
+                }}
+              >
+                USERNAME LOCKED
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="label">Headline</label>
+                <input
+                  className="input mt-1"
+                  value={draftHeadline}
+                  onChange={(e) => setDraftHeadline(e.target.value)}
+                  placeholder="Compliance lead at Acme · KYB analyst"
+                  maxLength={120}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="label">About</label>
+                <textarea
+                  className="textarea mt-1"
+                  value={draftAbout}
+                  onChange={(e) => setDraftAbout(e.target.value)}
+                  placeholder="What kinds of attestations you sign or rely on."
+                  maxLength={4000}
+                />
+              </div>
+              <div>
+                <label className="label">X</label>
+                <input
+                  className="input mt-1"
+                  value={draftLinkX}
+                  onChange={(e) => setDraftLinkX(e.target.value)}
+                  placeholder="https://x.com/handle"
+                  maxLength={200}
+                />
+              </div>
+              <div>
+                <label className="label">GitHub</label>
+                <input
+                  className="input mt-1"
+                  value={draftLinkGithub}
+                  onChange={(e) => setDraftLinkGithub(e.target.value)}
+                  placeholder="https://github.com/handle"
+                  maxLength={200}
+                />
+              </div>
+              <div>
+                <label className="label">LinkedIn</label>
+                <input
+                  className="input mt-1"
+                  value={draftLinkLinkedin}
+                  onChange={(e) => setDraftLinkLinkedin(e.target.value)}
+                  placeholder="https://linkedin.com/in/handle"
+                  maxLength={200}
+                />
+              </div>
+              <div>
+                <label className="label">Website</label>
+                <input
+                  className="input mt-1"
+                  value={draftLinkSite}
+                  onChange={(e) => setDraftLinkSite(e.target.value)}
+                  placeholder="https://yourdomain.dev"
+                  maxLength={200}
+                />
+              </div>
+            </div>
+
+            {saveError && <p className="error">{saveError}</p>}
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                marginTop: 20,
+              }}
+            >
+              <p
+                className="hint"
+                style={{ margin: 0, maxWidth: "52ch" }}
+              >
+                This updates the profile metadata URI only. Your wallet and username stay unchanged.
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    setEditOpen(false);
+                    setSaveError(null);
+                  }}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button className="btn btn-primary" disabled={saving}>
+                  {saving ? "Saving…" : "Save profile"}
+                </button>
+              </div>
+            </div>
+          </form>
+        </Section>
       )}
 
       {/* About / expertise */}

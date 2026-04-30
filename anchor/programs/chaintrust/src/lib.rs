@@ -21,11 +21,32 @@ pub mod chaintrust {
         instructions::register_user(ctx, username, metadata_uri)
     }
 
+    pub fn attest_human_proof(
+        ctx: Context<AttestHumanProof>,
+        nullifier_hash: [u8; 32],
+    ) -> Result<()> {
+        instructions::attest_human_proof(ctx, nullifier_hash)
+    }
+
     pub fn update_user_metadata_uri(
         ctx: Context<UpdateUserMetadataUri>,
         metadata_uri: String,
     ) -> Result<()> {
         instructions::update_user_metadata_uri(ctx, metadata_uri)
+    }
+
+    pub fn initialize_registry_config(
+        ctx: Context<InitializeRegistryConfig>,
+        admin_authority: Pubkey,
+    ) -> Result<()> {
+        instructions::initialize_registry_config(ctx, admin_authority)
+    }
+
+    pub fn update_registry_admin(
+        ctx: Context<UpdateRegistryAdmin>,
+        new_admin_authority: Pubkey,
+    ) -> Result<()> {
+        instructions::update_registry_admin(ctx, new_admin_authority)
     }
 
     pub fn register_issuer(
@@ -36,6 +57,23 @@ pub mod chaintrust {
         metadata_uri: String,
     ) -> Result<()> {
         instructions::register_issuer(ctx, kind, trust_tier, name_hash, metadata_uri)
+    }
+
+    pub fn request_issuer_tier(
+        ctx: Context<RequestIssuerTier>,
+        requested_tier: u8,
+        note_hash: [u8; 32],
+        note_uri: String,
+    ) -> Result<()> {
+        instructions::request_issuer_tier(ctx, requested_tier, note_hash, note_uri)
+    }
+
+    pub fn review_issuer_tier(
+        ctx: Context<ReviewIssuerTier>,
+        requested_tier: u8,
+        approve: bool,
+    ) -> Result<()> {
+        instructions::review_issuer_tier(ctx, requested_tier, approve)
     }
 
     pub fn create_entity(
@@ -66,8 +104,8 @@ pub mod chaintrust {
         instructions::create_project(ctx, project_id, name_hash, domain_hash, metadata_uri)
     }
 
-    pub fn attest_relationship(
-        ctx: Context<AttestRelationship>,
+    pub fn attest_relationship<'info>(
+        ctx: Context<'_, '_, '_, 'info, AttestRelationship<'info>>,
         kind: u8,
         target_ref: [u8; 32],
         evidence_hash: [u8; 32],

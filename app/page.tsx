@@ -182,7 +182,7 @@ export default function HomePage() {
         <div className="resolve-bar">
           <span className="resolve-bar-icon">›_</span>
           <input
-            placeholder="Paste a wallet pubkey, contract PDA, domain, or CT-Number…"
+            placeholder="Paste a wallet pubkey, domain, or CT-Number…"
             value={resolveQuery}
             onChange={(e) => setResolveQuery(e.target.value)}
             autoComplete="off"
@@ -318,9 +318,7 @@ export default function HomePage() {
 
       {recent.length === 0 ? (
         <div className="no-result">
-          {program
-            ? "NO ENTITIES ON-CHAIN YET — BE THE FIRST TO FILE."
-            : "CONNECT A WALLET TO LOAD THE PUBLIC REGISTRY."}
+          NO ENTITIES ON-CHAIN YET — BE THE FIRST TO FILE.
         </div>
       ) : (
         <>
@@ -385,7 +383,7 @@ export default function HomePage() {
       {/* Manifesto strip */}
       <section className="manifesto">
         <div className="manifesto-row">
-          <div className="label">REPEAT DURING DEMO</div>
+          <div className="label">PHILOSOPHY</div>
           <div>
             <p className="manifesto-quote">
               &ldquo;Claim gives voice, not control.&rdquo;
@@ -404,7 +402,7 @@ export default function HomePage() {
       {/* CTA strip */}
       <div className="cta-strip">
         <h3>
-          Resolve any wallet, contract, or domain
+          Resolve any wallet or domain
           <br />
           to the <em>operating entity</em> behind it.
         </h3>

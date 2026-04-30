@@ -137,6 +137,115 @@ export type Chaintrust = {
       ]
     },
     {
+      "name": "attestHumanProof",
+      "discriminator": [
+        42,
+        137,
+        228,
+        60,
+        16,
+        64,
+        36,
+        184
+      ],
+      "accounts": [
+        {
+          "name": "registryConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "humanProof",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  109,
+                  97,
+                  110,
+                  112,
+                  114,
+                  111,
+                  111,
+                  102
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nullifierRecord",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  108,
+                  108,
+                  105,
+                  102,
+                  105,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "nullifierHash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "wallet"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nullifierHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "claimEntity",
       "discriminator": [
         152,
@@ -172,6 +281,12 @@ export type Chaintrust = {
               }
             ]
           }
+        },
+        {
+          "name": "officerProof"
+        },
+        {
+          "name": "officerIssuer"
         },
         {
           "name": "signer",
@@ -583,6 +698,32 @@ export type Chaintrust = {
                   115,
                   101,
                   114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "humanProof",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  109,
+                  97,
+                  110,
+                  112,
+                  114,
+                  111,
+                  111,
+                  102
                 ]
               },
               {
@@ -1070,6 +1211,32 @@ export type Chaintrust = {
         13,
         194
       ]
+    },
+    {
+      "name": "humanProof",
+      "discriminator": [
+        225,
+        188,
+        237,
+        208,
+        200,
+        82,
+        85,
+        45
+      ]
+    },
+    {
+      "name": "nullifierRecord",
+      "discriminator": [
+        56,
+        18,
+        57,
+        175,
+        69,
+        202,
+        189,
+        70
+      ]
     }
   ],
   "errors": [
@@ -1197,6 +1364,91 @@ export type Chaintrust = {
       "code": 6024,
       "name": "likeCountOverflow",
       "msg": "Like count underflow / overflow"
+    },
+    {
+      "code": 6025,
+      "name": "selfRegistrationRequiresTierThree",
+      "msg": "Self-registration is restricted to Tier 3"
+    },
+    {
+      "code": 6026,
+      "name": "invalidTierReviewTarget",
+      "msg": "Only Tier 1 or Tier 2 can be requested through review"
+    },
+    {
+      "code": 6027,
+      "name": "unauthorizedRegistryAdmin",
+      "msg": "The connected wallet is not the registry admin"
+    },
+    {
+      "code": 6028,
+      "name": "tierRequestAlreadyPending",
+      "msg": "A pending tier request already exists for this issuer and target tier"
+    },
+    {
+      "code": 6029,
+      "name": "tierRequestNotPending",
+      "msg": "Tier request is no longer pending"
+    },
+    {
+      "code": 6030,
+      "name": "unauthorizedBootstrapAdmin",
+      "msg": "Bootstrap admin pubkey does not match the hardcoded constant"
+    },
+    {
+      "code": 6031,
+      "name": "officerProofEntityMismatch",
+      "msg": "Officer proof entity does not match the entity being claimed"
+    },
+    {
+      "code": 6032,
+      "name": "officerProofWrongKind",
+      "msg": "Officer proof must be of kind HAS_OFFICER"
+    },
+    {
+      "code": 6033,
+      "name": "officerProofTargetMismatch",
+      "msg": "Officer proof target does not match the claimer wallet"
+    },
+    {
+      "code": 6034,
+      "name": "officerProofRevoked",
+      "msg": "Officer proof has been revoked"
+    },
+    {
+      "code": 6035,
+      "name": "officerProofIssuerMismatch",
+      "msg": "Officer proof issuer account does not match issuer recorded on the proof"
+    },
+    {
+      "code": 6036,
+      "name": "officerProofTierTooLow",
+      "msg": "Officer proof issuer tier is below the required claim threshold (T1/T2 only)"
+    },
+    {
+      "code": 6037,
+      "name": "targetAccountRequired",
+      "msg": "This relationship kind requires a target account to be passed in remaining_accounts"
+    },
+    {
+      "code": 6038,
+      "name": "targetRefAccountMismatch",
+      "msg": "Target account pubkey does not match target_ref"
+    },
+    {
+      "code": 6039,
+      "name": "officialResponseAlreadyExists",
+      "msg": "Official response has already been published for this comment"
+    },
+    {
+      "code": 6040,
+      "name": "humanProofMissing",
+      "msg": "HumanProof PDA missing — wallet has not passed the proof-of-personhood gate"
+    },
+    {
+      "code": 6041,
+      "name": "humanProofWalletMismatch",
+      "msg": "HumanProof wallet field does not match signer"
     }
   ],
   "types": [
@@ -1572,6 +1824,68 @@ export type Chaintrust = {
           }
         ]
       }
+    },
+    {
+      "name": "humanProof",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "nullifierHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "verifiedAt",
+            "type": "i64"
+          },
+          {
+            "name": "attestedBy",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "nullifierRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "nullifierHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "verifiedAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
     }
   ],
   "constants": [
@@ -1609,6 +1923,16 @@ export type Chaintrust = {
       "name": "userSeed",
       "type": "bytes",
       "value": "[117, 115, 101, 114]"
+    },
+    {
+      "name": "humanproofSeed",
+      "type": "bytes",
+      "value": "[104, 117, 109, 97, 110, 112, 114, 111, 111, 102]"
+    },
+    {
+      "name": "nullifierSeed",
+      "type": "bytes",
+      "value": "[110, 117, 108, 108, 105, 102, 105, 101, 114]"
     }
   ]
 };

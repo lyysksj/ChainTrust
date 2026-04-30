@@ -20,6 +20,16 @@ pub enum ChainTrustError {
     InvalidIssuerKind,
     #[msg("Invalid issuer tier")]
     InvalidIssuerTier,
+    #[msg("Self-registration is restricted to Tier 3")]
+    SelfRegistrationRequiresTierThree,
+    #[msg("Only Tier 1 or Tier 2 can be requested through review")]
+    InvalidTierReviewTarget,
+    #[msg("The connected wallet is not the registry admin")]
+    UnauthorizedRegistryAdmin,
+    #[msg("A pending tier request already exists for this issuer and target tier")]
+    TierRequestAlreadyPending,
+    #[msg("Tier request is no longer pending")]
+    TierRequestNotPending,
     #[msg("Invalid relationship kind")]
     InvalidRelationshipKind,
     #[msg("Invalid validity window — valid_until must be 0 or greater than valid_from")]
@@ -52,4 +62,28 @@ pub enum ChainTrustError {
     CannotRespondToReply,
     #[msg("Like count underflow / overflow")]
     LikeCountOverflow,
+    #[msg("Bootstrap admin pubkey does not match the hardcoded constant")]
+    UnauthorizedBootstrapAdmin,
+    #[msg("Officer proof entity does not match the entity being claimed")]
+    OfficerProofEntityMismatch,
+    #[msg("Officer proof must be of kind HAS_OFFICER")]
+    OfficerProofWrongKind,
+    #[msg("Officer proof target does not match the claimer wallet")]
+    OfficerProofTargetMismatch,
+    #[msg("Officer proof has been revoked")]
+    OfficerProofRevoked,
+    #[msg("Officer proof issuer account does not match issuer recorded on the proof")]
+    OfficerProofIssuerMismatch,
+    #[msg("Officer proof issuer tier is below the required claim threshold (T1/T2 only)")]
+    OfficerProofTierTooLow,
+    #[msg("This relationship kind requires a target account to be passed in remaining_accounts")]
+    TargetAccountRequired,
+    #[msg("Target account pubkey does not match target_ref")]
+    TargetRefAccountMismatch,
+    #[msg("Official response has already been published for this comment")]
+    OfficialResponseAlreadyExists,
+    #[msg("HumanProof PDA missing — wallet has not passed the proof-of-personhood gate")]
+    HumanProofMissing,
+    #[msg("HumanProof wallet field does not match signer")]
+    HumanProofWalletMismatch,
 }

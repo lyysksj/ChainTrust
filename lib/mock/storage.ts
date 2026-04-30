@@ -43,7 +43,10 @@ export async function putBinary(
   ext: string,
 ): Promise<{ uri: string; hashHex: string }> {
   await ensureDir();
-  const hashHex = sha256Hex(Buffer.from(data).toString("base64"));
+  // Hash the raw bytes — must match what crypto.subtle.digest produces in
+  // the browser so the upload endpoint can bind a client-computed hash to
+  // the stored object.
+  const hashHex = sha256Hex(data);
   const id = hashHex.slice(0, 40);
   const e = safeExt(ext);
   await fs.writeFile(path.join(ROOT, `${id}.${e}`), data);

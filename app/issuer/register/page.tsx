@@ -6,19 +6,24 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useProgram } from "@/lib/anchor/hooks";
 import {
   fetchIssuer,
+  fetchIssuerTierRequestsForIssuer,
   fetchUserProfile,
   registerIssuer,
+  requestIssuerTier,
 } from "@/lib/anchor/client";
+import { issuerPda } from "@/lib/anchor/pdas";
 import { sha256Bytes } from "@/lib/utils/hash";
+import { uploadMetadata } from "@/lib/upload-client";
 import {
   ISSUER_KIND,
   ISSUER_KIND_LABELS,
   ISSUER_TIER_LABELS,
+  ISSUER_TIER_REQUEST_STATUS_LABELS,
 } from "@/types";
-import type { Issuer } from "@/types";
+import type { Issuer, IssuerTierRequest } from "@/types";
 
 export default function IssuerRegisterPage() {
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const program = useProgram();
 
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
@@ -28,10 +33,20 @@ export default function IssuerRegisterPage() {
   const [website, setWebsite] = useState("");
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState<number>(ISSUER_KIND.SELF);
-  const [tier, setTier] = useState<number>(3);
+  // Tier is locked to 3 for self-registration. Higher tiers require an
+  // out-of-band platform review process (not yet implemented).
+  const tier = 3;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [tierRequests, setTierRequests] = useState<
+    { publicKey: string; account: IssuerTierRequest }[]
+  >([]);
+  const [requestTier, setRequestTier] = useState<number>(2);
+  const [requestNote, setRequestNote] = useState("");
+  const [requesting, setRequesting] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requestNotice, setRequestNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!program || !publicKey) return;
@@ -49,6 +64,28 @@ export default function IssuerRegisterPage() {
       alive = false;
     };
   }, [program, publicKey]);
+
+  useEffect(() => {
+    if (!program || !publicKey || !existing) {
+      setTierRequests([]);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      const [issuer] = issuerPda(publicKey);
+      const rows = await fetchIssuerTierRequestsForIssuer(program, issuer);
+      if (!alive) return;
+      setTierRequests(
+        rows.map((r) => ({
+          publicKey: r.publicKey.toBase58(),
+          account: r.account as unknown as IssuerTierRequest,
+        })),
+      );
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [program, publicKey, existing, done, requestNotice]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -68,12 +105,11 @@ export default function IssuerRegisterPage() {
         website: website.trim() || undefined,
         description: description.trim() || undefined,
       };
-      const up = await fetch("/api/mock/upload", {
-        method: "POST",
-        headers: { "content-type": "text/plain" },
-        body: JSON.stringify(metadata),
-      }).then((r) => r.json());
-      if (!up.uri) throw new Error(up.error ?? "Upload failed");
+      const up = await uploadMetadata(
+        publicKey,
+        signMessage,
+        JSON.stringify(metadata),
+      );
 
       await registerIssuer(program, publicKey, {
         kind,
@@ -86,6 +122,46 @@ export default function IssuerRegisterPage() {
       setError((err as Error).message ?? "Failed to register issuer");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function onRequestTier(e: React.FormEvent) {
+    e.preventDefault();
+    setRequestError(null);
+    setRequestNotice(null);
+    if (!program || !publicKey || !existing) {
+      setRequestError("Register as an issuer first.");
+      return;
+    }
+    if (existing.trustTier <= requestTier) {
+      setRequestError("You can only request a higher-trust tier.");
+      return;
+    }
+    if (!requestNote.trim()) {
+      setRequestError("Explain why your issuer should be reviewed.");
+      return;
+    }
+    setRequesting(true);
+    try {
+      const payload = JSON.stringify({
+        requestedTier: requestTier,
+        note: requestNote.trim(),
+      });
+      const up = await uploadMetadata(publicKey, signMessage, payload);
+
+      await requestIssuerTier(program, publicKey, {
+        requestedTier: requestTier,
+        noteHash: sha256Bytes(payload),
+        noteUri: up.uri,
+      });
+      setRequestNote("");
+      setRequestNotice(
+        `Tier review request for T${requestTier} submitted.`,
+      );
+    } catch (err) {
+      setRequestError((err as Error).message ?? "Tier review request failed");
+    } finally {
+      setRequesting(false);
     }
   }
 
@@ -163,6 +239,118 @@ export default function IssuerRegisterPage() {
         </div>
       )}
 
+      {existing && (
+        <div className="doc-card" style={{ marginTop: 24 }}>
+          <div className="doc-card-h">
+            <div className="doc-card-title">Tier review</div>
+            <div
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 10,
+                color: "var(--ink-3)",
+                letterSpacing: "0.1em",
+              }}
+            >
+              REQUEST · ADMIN APPROVAL
+            </div>
+          </div>
+
+          {tierRequests.length > 0 ? (
+            <div className="rel-list" style={{ marginBottom: 16 }}>
+              {tierRequests
+                .sort(
+                  (a, b) =>
+                    Number(b.account.requestedAt) - Number(a.account.requestedAt),
+                )
+                .map((req) => (
+                  <div
+                    key={req.publicKey}
+                    className="rel-row"
+                    style={{ gridTemplateColumns: "110px 1fr 180px" }}
+                  >
+                    <div className="rel-kind">T{req.account.requestedTier}</div>
+                    <div>
+                      <div className="rel-target">
+                        {ISSUER_TIER_REQUEST_STATUS_LABELS[req.account.status] ??
+                          "Unknown"}
+                      </div>
+                      <div className="rel-target-sub">
+                        note URI · {req.account.noteUri || "—"}
+                      </div>
+                    </div>
+                    <div className="rel-validity">
+                      <span>Requested</span>
+                      <span className="v-date">
+                        {new Date(Number(req.account.requestedAt) * 1000)
+                          .toISOString()
+                          .slice(0, 10)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <p className="hint" style={{ marginTop: 0 }}>
+              No tier review requests on record yet.
+            </p>
+          )}
+
+          {existing.trustTier === 3 ? (
+            <form onSubmit={onRequestTier}>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <label className="label">Requested tier</label>
+                  <select
+                    className="select mt-1"
+                    value={requestTier}
+                    onChange={(e) => setRequestTier(Number(e.target.value))}
+                  >
+                    <option value={2}>Tier 2 · Known Third-party</option>
+                    <option value={1}>Tier 1 · Platform / Regulated</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="label">Review note</label>
+                  <textarea
+                    className="textarea mt-1"
+                    value={requestNote}
+                    onChange={(e) => setRequestNote(e.target.value)}
+                    placeholder="Describe your legal entity, license status, website, and why this issuer should be upgraded."
+                    maxLength={1200}
+                  />
+                </div>
+              </div>
+              {requestError && <p className="error">{requestError}</p>}
+              {requestNotice && (
+                <p className="hint" style={{ color: "var(--good)" }}>
+                  {requestNotice}
+                </p>
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  marginTop: 16,
+                  alignItems: "center",
+                }}
+              >
+                <p className="hint" style={{ margin: 0, maxWidth: "48ch" }}>
+                  Requests are reviewed by the registry admin wallet from the issuer admin page.
+                </p>
+                <button className="btn btn-primary" disabled={requesting}>
+                  {requesting ? "Submitting…" : "Request tier review"}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <p className="hint" style={{ margin: 0 }}>
+              This issuer has already been approved above Tier 3. Future changes should go through the admin review console.
+            </p>
+          )}
+        </div>
+      )}
+
       {publicKey && hasProfile && !existing && !done && (
         <form onSubmit={onSubmit} className="doc-card">
           <div className="doc-card-h">
@@ -215,20 +403,23 @@ export default function IssuerRegisterPage() {
             </div>
             <div>
               <label className="label">Trust tier</label>
-              <select
-                className="select mt-1"
-                value={tier}
-                onChange={(e) => setTier(Number(e.target.value))}
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 13,
+                  color: "var(--ink)",
+                  padding: "10px 12px",
+                  background: "var(--paper-2)",
+                  border: "1.5px solid var(--rule-soft)",
+                }}
               >
-                {Object.entries(ISSUER_TIER_LABELS).map(([k, label]) => (
-                  <option key={k} value={k}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+                T3 · Self / Community
+              </div>
               <p className="hint mt-1">
-                For the hackathon MVP, anyone can self-register at any tier.
-                Production would gate Tier 1 / 2 behind platform onboarding.
+                Self-registration always lands at Tier 3. Higher tiers (T1
+                Platform, T2 Known third-party) are granted only after
+                platform review of the issuer&apos;s real-world identity and
+                attestation history.
               </p>
             </div>
             <div className="md:col-span-2">

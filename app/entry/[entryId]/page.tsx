@@ -26,6 +26,8 @@ import { RelRowCompact } from "@/components/rel-row";
 import { IdentityGraph } from "@/components/identity-graph";
 import { ReviewList } from "@/components/review-list";
 import { CommentForm } from "@/components/comment-form";
+import { AddProjectForm } from "@/components/add-project-form";
+import { ClaimCard } from "@/components/claim-card";
 import { COMMENT_RELATION_LABELS, COUNTRIES } from "@/types";
 import type {
   CommentRecord,
@@ -33,6 +35,7 @@ import type {
   EntityMetadata,
   Issuer,
   Project,
+  ProjectMetadata,
   Relationship,
 } from "@/types";
 
@@ -69,6 +72,9 @@ export default function EntityPage({ params }: { params: Params }) {
   const [projects, setProjects] = useState<
     { publicKey: PublicKey; account: Project }[]
   >([]);
+  const [projectMeta, setProjectMeta] = useState<
+    Record<string, ProjectMetadata | null>
+  >({});
   const [rels, setRels] = useState<
     { publicKey: PublicKey; account: Relationship }[]
   >([]);
@@ -145,6 +151,45 @@ export default function EntityPage({ params }: { params: Params }) {
       alive = false;
     };
   }, [entity?.metadataUri]);
+
+  // Load Project off-chain metadata in parallel so the Projects tab can
+  // show real names + domains instead of just hashes.
+  useEffect(() => {
+    if (projects.length === 0) {
+      setProjectMeta({});
+      return;
+    }
+    let alive = true;
+    (async () => {
+      const result: Record<string, ProjectMetadata | null> = {};
+      await Promise.all(
+        projects.map(async (p) => {
+          if (!p.account.metadataUri) {
+            result[p.publicKey.toBase58()] = null;
+            return;
+          }
+          try {
+            const resp = await fetch(
+              `/api/mock/fetch?uri=${encodeURIComponent(p.account.metadataUri)}`,
+            );
+            if (!resp.ok) {
+              result[p.publicKey.toBase58()] = null;
+              return;
+            }
+            result[p.publicKey.toBase58()] = JSON.parse(
+              await resp.text(),
+            ) as ProjectMetadata;
+          } catch {
+            result[p.publicKey.toBase58()] = null;
+          }
+        }),
+      );
+      if (alive) setProjectMeta(result);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [projects]);
 
   if (!idBytes) {
     return <div className="no-result">INVALID ENTITY ID</div>;
@@ -320,6 +365,12 @@ export default function EntityPage({ params }: { params: Params }) {
         </div>
       </div>
 
+      {!entity.isClaimed && (
+        <div style={{ marginTop: 16, marginBottom: 24 }}>
+          <ClaimCard entity={pda} onClaimed={refresh} />
+        </div>
+      )}
+
       <div className="tabs">
         <button
           className={`tab ${tab === "graph" ? "active" : ""}`}
@@ -468,60 +519,121 @@ export default function EntityPage({ params }: { params: Params }) {
       {tab === "projects" && (
         <>
           {projects.length === 0 && (
-            <div className="no-result">
+            <div className="no-result" style={{ marginBottom: 16 }}>
               NO PROJECTS FILED UNDER THIS ENTITY
             </div>
           )}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: 16,
-            }}
-          >
-            {projects.map((p) => (
-              <div key={p.publicKey.toBase58()} className="doc-card">
-                <div className="docnum" style={{ marginBottom: 6 }}>
-                  PROJECT · {bytesHex(p.account.projectId)}
-                </div>
-                <h3
+          {projects.length > 0 && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, 1fr)",
+                gap: 16,
+              }}
+            >
+              {projects.map((p) => {
+                const pm = projectMeta[p.publicKey.toBase58()] ?? null;
+                const fallbackName = `Project ${bytesHex(p.account.projectId).slice(0, 6)}`;
+                return (
+                  <div key={p.publicKey.toBase58()} className="doc-card">
+                    <div className="docnum" style={{ marginBottom: 6 }}>
+                      PROJECT · {bytesHex(p.account.projectId)}
+                    </div>
+                    <h3
+                      style={{
+                        fontFamily: "var(--serif)",
+                        fontSize: 22,
+                        margin: "0 0 6px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {pm?.name ?? fallbackName}
+                    </h3>
+                    {pm?.domain && (
+                      <div
+                        style={{
+                          fontFamily: "var(--mono)",
+                          fontSize: 12,
+                          color: "var(--stamp-deep)",
+                          letterSpacing: "0.04em",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <a
+                          href={
+                            pm.domain.startsWith("http")
+                              ? pm.domain
+                              : `https://${pm.domain}`
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: "inherit", textDecoration: "underline" }}
+                        >
+                          {pm.domain}
+                        </a>
+                      </div>
+                    )}
+                    {pm?.description && (
+                      <p
+                        style={{
+                          fontFamily: "var(--serif)",
+                          fontSize: 14,
+                          color: "var(--ink-2)",
+                          margin: "0 0 12px",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {pm.description}
+                      </p>
+                    )}
+                    <div
+                      className="rule-h-soft"
+                      style={{
+                        paddingTop: 10,
+                        fontFamily: "var(--mono)",
+                        fontSize: 10,
+                        color: "var(--ink-3)",
+                        letterSpacing: "0.04em",
+                      }}
+                    >
+                      domain hash · {shortHash(p.account.domainHash, 8)}
+                      <br />
+                      PDA · {shortKey(p.publicKey, 6)}
+                      <br />
+                      CREATED · {formatTimestamp(p.account.createdAt)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {publicKey && (
+            <div style={{ marginTop: 24 }}>
+              <details>
+                <summary
                   style={{
-                    fontFamily: "var(--serif)",
-                    fontSize: 22,
-                    margin: "0 0 6px",
-                    fontWeight: 600,
-                  }}
-                >
-                  Project {bytesHex(p.account.projectId).slice(0, 6)}
-                </h3>
-                <div
-                  style={{
+                    cursor: "pointer",
                     fontFamily: "var(--mono)",
                     fontSize: 11,
+                    letterSpacing: "0.08em",
                     color: "var(--stamp-deep)",
-                    letterSpacing: "0.06em",
+                    fontWeight: 600,
                     marginBottom: 12,
                   }}
                 >
-                  domain hash · {shortHash(p.account.domainHash, 8)}
-                </div>
-                <div
-                  className="rule-h-soft"
-                  style={{
-                    paddingTop: 10,
-                    fontFamily: "var(--mono)",
-                    fontSize: 10,
-                    color: "var(--ink-3)",
-                    letterSpacing: "0.04em",
-                  }}
-                >
-                  PDA · {shortKey(p.publicKey, 6)}
-                  <br />
-                  CREATED · {formatTimestamp(p.account.createdAt)}
-                </div>
-              </div>
-            ))}
-          </div>
+                  ▸ + REGISTER A NEW PROJECT UNDER THIS ENTITY
+                </summary>
+                <AddProjectForm entity={pda} onCreated={refresh} />
+              </details>
+            </div>
+          )}
+          {!publicKey && projects.length === 0 && (
+            <p className="hint" style={{ marginTop: 16 }}>
+              Connect a wallet and register a profile to file the first
+              project under this entity.
+            </p>
+          )}
         </>
       )}
 

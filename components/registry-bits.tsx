@@ -45,12 +45,33 @@ export function StatusPill({
           : "unverified"
       : status;
   if ((s === "platform_verified" && claimed) || s === "claimed") {
-    return <span className="status status-claimed">◆ Claimed · Verified</span>;
+    return (
+      <span
+        className="status status-claimed"
+        title="This entity has been claimed by a representative whose control was verified by an approved issuer."
+      >
+        ◆ Claimed · Verified
+      </span>
+    );
   }
   if (s === "platform_verified") {
-    return <span className="status status-platform">● Platform-verified</span>;
+    return (
+      <span
+        className="status status-platform"
+        title="At least one approved platform-tier issuer has signed an identity-class relationship for this entity."
+      >
+        ● Platform-verified
+      </span>
+    );
   }
-  return <span className="status status-unverified">○ Unverified</span>;
+  return (
+    <span
+      className="status status-unverified"
+      title="No approved issuer has signed an identity attestation for this entity yet. Treat any self-asserted records with caution."
+    >
+      ○ Unclaimed · pending verification
+    </span>
+  );
 }
 
 // ---------- Issuer badge ----------

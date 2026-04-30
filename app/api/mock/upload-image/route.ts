@@ -1,54 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
-import { putImagePublic } from "@/lib/storage";
+/**
+ * Open image-upload endpoint — DEPRECATED.
+ *
+ * Replaced by the authenticated `/api/upload/image` route. The original
+ * unauthenticated path is permanently disabled to close the anonymous
+ * disk-fill / IPFS-pin abuse surface.
+ */
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
-const ALLOWED = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/gif",
-]);
-
-export async function POST(req: NextRequest) {
-  try {
-    const form = await req.formData();
-    const file = form.get("file");
-    if (!(file instanceof File)) {
-      return NextResponse.json(
-        { error: "multipart form field 'file' required" },
-        { status: 400 },
-      );
-    }
-    if (!ALLOWED.has(file.type)) {
-      return NextResponse.json(
-        { error: `Unsupported image type: ${file.type}` },
-        { status: 400 },
-      );
-    }
-    if (file.size > MAX_BYTES) {
-      return NextResponse.json(
-        { error: `Image exceeds ${MAX_BYTES / 1024 / 1024} MB limit` },
-        { status: 400 },
-      );
-    }
-    const buf = new Uint8Array(await file.arrayBuffer());
-    const ext =
-      file.type === "image/jpeg"
-        ? "jpg"
-        : file.type.split("/")[1] ?? "bin";
-    const result = await putImagePublic(buf, ext);
-    return NextResponse.json({
-      uri: result.uri,
-      hashHex: result.hashHex,
-      contentType: file.type,
-      backend: result.backend,
-    });
-  } catch (err) {
-    return NextResponse.json(
-      { error: String((err as Error).message ?? err) },
-      { status: 500 },
-    );
-  }
+export async function POST() {
+  return NextResponse.json(
+    {
+      error:
+        "Deprecated. Use POST /api/upload/image with x-pubkey / x-signature / x-nonce headers.",
+      replacement: "/api/upload/image",
+    },
+    { status: 410 },
+  );
 }

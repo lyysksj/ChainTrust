@@ -14,9 +14,14 @@ import {
   fetchProjectsForEntity,
 } from "@/lib/anchor/client";
 import { entityIdToCtNumber } from "@/lib/utils/ct-number";
-import { sha256Bytes } from "@/lib/utils/hash";
+import { hexToBytes, sha256Bytes } from "@/lib/utils/hash";
 import { bytesHex, formatTimestamp, shortKey } from "@/lib/utils/format";
 import { Stamp, TierPill } from "@/components/registry-bits";
+import {
+  EvidenceUploader,
+  type EvidenceValue,
+} from "@/components/evidence-uploader";
+import { uploadMetadata } from "@/lib/upload-client";
 import {
   ISSUER_KIND_LABELS,
   REL_KIND,
@@ -69,7 +74,7 @@ function AttestPage() {
   const program = useProgram();
   const router = useRouter();
   const params = useSearchParams();
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const presetCt = params.get("entity") ?? "";
 
   const [step, setStep] = useState(1);
@@ -90,7 +95,7 @@ function AttestPage() {
   const [targetLabel, setTargetLabel] = useState("");
   const [validFrom, setValidFrom] = useState(todayISO());
   const [validUntil, setValidUntil] = useState("");
-  const [evidenceUri, setEvidenceUri] = useState("");
+  const [evidence, setEvidence] = useState<EvidenceValue | null>(null);
   const [evidenceNotes, setEvidenceNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -171,16 +176,22 @@ function AttestPage() {
   const meta = REL_KIND_META[kind];
   const targetType = meta?.targetType ?? "wallet";
 
-  // Computed evidence hash preview
+  // Computed evidence hash preview. When the user uploaded a file we surface
+  // the real sha256 the server pinned. Otherwise we fall back to a cheap
+  // deterministic stub so the form still has something to show before sign.
   const evidenceHashPreview = useMemo(() => {
-    const seed = `${entityCt}|${kind}|${target}|${evidenceUri}|${evidenceNotes}`;
+    if (evidence?.source === "upload" && evidence.hashHex) {
+      const h = evidence.hashHex.toLowerCase();
+      return `0x${h.slice(0, 12)}…${h.slice(-6)}`;
+    }
+    const seed = `${entityCt}|${kind}|${target}|${evidence?.uri ?? ""}|${evidenceNotes}`;
     let h = 0;
     for (let i = 0; i < seed.length; i++) {
       h = ((h << 5) - h + seed.charCodeAt(i)) | 0;
     }
     const hex = (Math.abs(h) >>> 0).toString(16).padStart(8, "0");
     return `0x${hex}…${hex.slice(0, 4)}`;
-  }, [entityCt, kind, target, evidenceUri, evidenceNotes]);
+  }, [entityCt, kind, target, evidence, evidenceNotes]);
 
   const pdaPreview = useMemo(() => {
     if (!selectedEntity || !target) return "— pending fields —";
@@ -249,24 +260,47 @@ function AttestPage() {
 
     setSubmitting(true);
     try {
-      let evUri = evidenceUri.trim();
+      let evUri = evidence?.uri.trim() ?? "";
+      let evidenceHashBytes: number[];
+
+      if (evidence?.source === "upload" && evidence.hashHex) {
+        // Strong binding: hash on chain == sha256(file bytes). The
+        // EvidenceUploader has already cross-checked client and server hashes.
+        if (evidence.hashHex.length !== 64) {
+          throw new Error(
+            "Internal: uploaded evidence hash is malformed. Re-upload the file.",
+          );
+        }
+        evidenceHashBytes = hexToBytes(evidence.hashHex);
+      } else if (evUri || evidenceNotes.trim()) {
+        // URL mode or notes-only mode: we can't bind a file hash, so we
+        // commit to sha256(notes || URL || target) as a weak content marker.
+        evidenceHashBytes = sha256Bytes(
+          evidenceNotes.trim() || evUri || target,
+        );
+      } else {
+        // Nothing supplied at all — pad zeros so the on-chain field is well
+        // formed, but the attestation will read as "no evidence on file".
+        evidenceHashBytes = sha256Bytes(target);
+      }
+
+      // Auto-pin notes if the user provided them and there's no URI yet, so
+      // the attestation still has a human-readable pointer attached.
       if (!evUri && evidenceNotes.trim()) {
-        // Evidence URIs may carry sensitive material (UBO docs, audit
-        // packets, internal compliance evidence). Mark accordingly so phase 3
-        // Lit-encrypted upload can take over without UI changes.
-        const up = await fetch("/api/mock/upload?sensitivity=sensitive", {
-          method: "POST",
-          headers: { "content-type": "text/plain" },
-          body: JSON.stringify({ note: evidenceNotes.trim() }),
-        }).then((r) => r.json());
-        if (!up.uri) throw new Error(up.error ?? "Evidence upload failed");
+        const up = await uploadMetadata(
+          publicKey,
+          signMessage,
+          JSON.stringify({ note: evidenceNotes.trim() }),
+          { sensitivity: "sensitive" },
+        );
         evUri = up.uri;
       }
+
       await attestRelationship(program, publicKey, {
         entity: selectedEntity.publicKey,
         kind,
         targetRef: targetBytes,
-        evidenceHash: sha256Bytes(evidenceNotes || target),
+        evidenceHash: evidenceHashBytes,
         evidenceUri: evUri,
         validFrom: validFromTs,
         validUntil: validUntilTs,
@@ -537,17 +571,20 @@ function AttestPage() {
                 </div>
               </div>
               <div className="form-row">
-                <label className="label">Evidence URI</label>
-                <input
-                  placeholder="ipfs://bafyrei… or https://"
-                  value={evidenceUri}
-                  onChange={(e) => setEvidenceUri(e.target.value)}
+                <label className="label">Evidence document</label>
+                <EvidenceUploader
+                  value={evidence}
+                  onChange={(v) => {
+                    setEvidence(v);
+                    setError(null);
+                  }}
+                  onError={(msg) => setError(msg)}
                 />
               </div>
               <div className="form-row">
                 <label className="label">Evidence notes (off-chain)</label>
                 <textarea
-                  placeholder="Brief description of what the evidence proves. Hashed on-chain; full text stored at the URI above."
+                  placeholder="Brief description of what the evidence proves. Stored alongside the file URI; the on-chain commitment is the file hash above."
                   value={evidenceNotes}
                   onChange={(e) => setEvidenceNotes(e.target.value)}
                 />
@@ -823,7 +860,22 @@ function AttestPage() {
             <div>VALID_FROM · {validFrom || "—"}</div>
             <div>VALID_UNTIL · {validUntil || "OPEN-ENDED"}</div>
             <div>EVIDENCE_HASH · {evidenceHashPreview}</div>
-            <div>EVIDENCE_URI · {evidenceUri || "—"}</div>
+            <div>
+              EVIDENCE_URI ·{" "}
+              {evidence?.uri
+                ? evidence.uri.length > 36
+                  ? evidence.uri.slice(0, 32) + "…"
+                  : evidence.uri
+                : "—"}
+            </div>
+            <div>
+              EVIDENCE_SRC ·{" "}
+              {evidence?.source === "upload"
+                ? `FILE · ${evidence.contentType ?? "—"}`
+                : evidence?.source === "url"
+                  ? "EXTERNAL URL"
+                  : "—"}
+            </div>
           </div>
 
           <div

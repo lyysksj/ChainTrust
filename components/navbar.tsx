@@ -45,7 +45,7 @@ export function Navbar() {
             <span className="brand-mark">C</span>
             <span className="brand-name">ChainTrust</span>
             <span className="brand-tag">
-              Public Identity Registry · v0.4 MVP
+              Public Identity Registry · Solana
             </span>
           </a>
           <nav className="nav">

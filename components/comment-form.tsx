@@ -10,6 +10,7 @@ import {
   submitReply,
 } from "@/lib/anchor/client";
 import { sha256Bytes } from "@/lib/utils/hash";
+import { uploadImage, uploadMetadata } from "@/lib/upload-client";
 import { COMMENT_RELATION_LABELS } from "@/types";
 
 type Props = {
@@ -29,7 +30,7 @@ export function CommentForm({
   onCancel,
   autoFocus,
 }: Props) {
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const program = useProgram();
   const isReply = !!parentComment;
 
@@ -48,6 +49,10 @@ export function CommentForm({
       setError(`Up to ${MAX_IMAGES} images per signal.`);
       return;
     }
+    if (!publicKey) {
+      setError("Connect a wallet first.");
+      return;
+    }
     setUploading(true);
     setError(null);
     try {
@@ -55,17 +60,8 @@ export function CommentForm({
       const list = Array.from(files).slice(0, remaining);
       const uploaded: string[] = [];
       for (const file of list) {
-        const form = new FormData();
-        form.set("file", file);
-        const resp = await fetch("/api/mock/upload-image", {
-          method: "POST",
-          body: form,
-        });
-        const json = await resp.json();
-        if (!resp.ok || !json.uri) {
-          throw new Error(json.error ?? "Image upload failed");
-        }
-        uploaded.push(json.uri);
+        const result = await uploadImage(publicKey, signMessage, file);
+        uploaded.push(result.uri);
       }
       setImages((prev) => [...prev, ...uploaded]);
     } catch (err) {
@@ -102,35 +98,55 @@ export function CommentForm({
         payload.relationType = relationType;
       }
       const content = JSON.stringify(payload);
-      const up = await fetch("/api/mock/upload", {
-        method: "POST",
-        headers: { "content-type": "text/plain" },
-        body: content,
-      }).then((r) => r.json());
-      if (!up.uri) throw new Error(up.error ?? "Upload failed");
+      const up = await uploadMetadata(publicKey, signMessage, content);
 
-      const ent = await fetchEntityByPda(program, entity);
-      if (!ent) throw new Error("Entity not found");
-      const commentIndex = ent.commentCount;
+      // Comment-index race fix: re-read entity right before submit, and on
+      // CommentEntityMismatch retry once with the freshest count. Multiple
+      // users hitting the same entity simultaneously would otherwise all see
+      // the same stale `commentCount` and only one tx would land.
+      const fetchIndex = async (): Promise<number> => {
+        const ent = await fetchEntityByPda(program, entity);
+        if (!ent) throw new Error("Entity not found");
+        return ent.commentCount;
+      };
+      const submitOnce = async (commentIndex: number): Promise<void> => {
+        if (isReply && parentComment) {
+          await submitReply(program, publicKey, {
+            entity,
+            parentComment,
+            commentIndex,
+            contentHash: sha256Bytes(content),
+            evidenceHash: sha256Bytes(null),
+            contentUri: up.uri,
+          });
+        } else {
+          await submitComment(program, publicKey, {
+            entity,
+            commentIndex,
+            relationType,
+            contentHash: sha256Bytes(content),
+            evidenceHash: sha256Bytes(null),
+            contentUri: up.uri,
+          });
+        }
+      };
 
-      if (isReply && parentComment) {
-        await submitReply(program, publicKey, {
-          entity,
-          parentComment,
-          commentIndex,
-          contentHash: sha256Bytes(content),
-          evidenceHash: sha256Bytes(null),
-          contentUri: up.uri,
-        });
-      } else {
-        await submitComment(program, publicKey, {
-          entity,
-          commentIndex,
-          relationType,
-          contentHash: sha256Bytes(content),
-          evidenceHash: sha256Bytes(null),
-          contentUri: up.uri,
-        });
+      let commentIndex = await fetchIndex();
+      try {
+        await submitOnce(commentIndex);
+      } catch (err) {
+        const msg = String((err as Error)?.message ?? err);
+        if (
+          msg.includes("CommentEntityMismatch") ||
+          msg.includes("0x1c61") || // 6017 in hex
+          msg.includes("comment_count") ||
+          msg.includes("already in use")
+        ) {
+          commentIndex = await fetchIndex();
+          await submitOnce(commentIndex);
+        } else {
+          throw err;
+        }
       }
 
       setHeadline("");

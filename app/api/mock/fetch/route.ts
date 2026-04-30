@@ -13,6 +13,7 @@ const EXT_CONTENT_TYPE: Record<string, string> = {
   jpeg: "image/jpeg",
   webp: "image/webp",
   gif: "image/gif",
+  pdf: "application/pdf",
 };
 
 export async function GET(req: NextRequest) {

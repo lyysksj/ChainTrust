@@ -106,6 +106,9 @@ export default function IssuersListPage() {
         <Link href="/issuer/register" className="btn btn-stamp">
           + Register as issuer
         </Link>
+        <Link href="/issuer/admin" className="btn btn-ghost">
+          Tier review admin →
+        </Link>
         <Link href="/attest" className="btn btn-ghost">
           File an attestation →
         </Link>
@@ -219,8 +222,8 @@ export default function IssuersListPage() {
             <h3 className="principle-title">Known professional.</h3>
             <p className="principle-body">
               KYB providers, audit firms, chain-analytics vendors, and
-              regulators. Tier is self-claimed at registration and visible to
-              all consumers.
+              regulators. Tier 2 is granted by registry admin review after the
+              issuer submits a tier request and supporting note.
             </p>
           </div>
           <div className="principle">
@@ -230,9 +233,9 @@ export default function IssuersListPage() {
             </div>
             <h3 className="principle-title">Open self-registration.</h3>
             <p className="principle-body">
-              Any verified user. Self-asserted facts are recorded but not
-              blessed. Useful for entities to publish their own graph before a
-              higher tier arrives.
+              Any verified user. Self-registration always lands at Tier 3.
+              Useful for entities to publish their own graph before a higher
+              tier review is approved.
             </p>
           </div>
         </div>

@@ -19,6 +19,15 @@ pub struct RegisterUser<'info> {
         bump
     )]
     pub user_profile: Account<'info, UserProfile>,
+    /// Proof-of-personhood gate. Must be created by the registry admin via
+    /// `attest_human_proof` before this user can register, and must be bound
+    /// to this exact wallet.
+    #[account(
+        seeds = [HUMANPROOF_SEED, signer.key().as_ref()],
+        bump = human_proof.bump,
+        constraint = human_proof.wallet == signer.key() @ ChainTrustError::HumanProofWalletMismatch,
+    )]
+    pub human_proof: Account<'info, HumanProof>,
     #[account(mut)]
     pub signer: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -54,6 +63,72 @@ pub fn register_user(
 }
 
 // ---------------------------------------------------------------------------
+// attest_human_proof  (admin-only — anti-sybil gate)
+// ---------------------------------------------------------------------------
+//
+// Issued by the server after it (a) verifies a World ID nullifier upstream and
+// (b) verifies a wallet ed25519 signature over the nullifier hash. This binds
+// `wallet` and `nullifier_hash` 1:1 on chain, so:
+//   - register_user requires HumanProof[wallet] to exist;
+//   - attempting to attest another wallet to the same nullifier fails because
+//     `init` on NullifierRecord[nullifier_hash] would conflict.
+
+#[derive(Accounts)]
+#[instruction(nullifier_hash: [u8; 32])]
+pub struct AttestHumanProof<'info> {
+    #[account(
+        seeds = [CONFIG_SEED],
+        bump = registry_config.bump,
+        constraint = admin.key() == registry_config.admin_authority
+            @ ChainTrustError::UnauthorizedRegistryAdmin,
+    )]
+    pub registry_config: Account<'info, RegistryConfig>,
+    #[account(
+        init,
+        payer = admin,
+        space = 8 + HumanProof::INIT_SPACE,
+        seeds = [HUMANPROOF_SEED, wallet.key().as_ref()],
+        bump
+    )]
+    pub human_proof: Account<'info, HumanProof>,
+    #[account(
+        init,
+        payer = admin,
+        space = 8 + NullifierRecord::INIT_SPACE,
+        seeds = [NULLIFIER_SEED, &nullifier_hash],
+        bump
+    )]
+    pub nullifier_record: Account<'info, NullifierRecord>,
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    /// CHECK: only the pubkey is consumed (as a seed for the HumanProof PDA);
+    /// the account itself is never deserialized.
+    pub wallet: AccountInfo<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn attest_human_proof(
+    ctx: Context<AttestHumanProof>,
+    nullifier_hash: [u8; 32],
+) -> Result<()> {
+    let now = Clock::get()?.unix_timestamp;
+
+    let proof = &mut ctx.accounts.human_proof;
+    proof.wallet = ctx.accounts.wallet.key();
+    proof.nullifier_hash = nullifier_hash;
+    proof.verified_at = now;
+    proof.attested_by = ctx.accounts.admin.key();
+    proof.bump = ctx.bumps.human_proof;
+
+    let nul = &mut ctx.accounts.nullifier_record;
+    nul.wallet = ctx.accounts.wallet.key();
+    nul.nullifier_hash = nullifier_hash;
+    nul.verified_at = now;
+    nul.bump = ctx.bumps.nullifier_record;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // update_user_metadata_uri
 // ---------------------------------------------------------------------------
 
@@ -79,6 +154,73 @@ pub fn update_user_metadata_uri(
     );
     let profile = &mut ctx.accounts.user_profile;
     profile.metadata_uri = metadata_uri;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// registry_config
+// ---------------------------------------------------------------------------
+
+#[derive(Accounts)]
+#[instruction(admin_authority: Pubkey)]
+pub struct InitializeRegistryConfig<'info> {
+    #[account(
+        init,
+        payer = signer,
+        space = 8 + RegistryConfig::INIT_SPACE,
+        seeds = [CONFIG_SEED],
+        bump
+    )]
+    pub registry_config: Account<'info, RegistryConfig>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn initialize_registry_config(
+    ctx: Context<InitializeRegistryConfig>,
+    admin_authority: Pubkey,
+) -> Result<()> {
+    // Bootstrap race fix: only the hardcoded REGISTRY_BOOTSTRAP_ADMIN can
+    // perform the singleton init. The first non-bootstrap caller (an attacker)
+    // who tries to grab admin rights post-deploy hits this require!.
+    require!(
+        ctx.accounts.signer.key() == REGISTRY_BOOTSTRAP_ADMIN,
+        ChainTrustError::UnauthorizedBootstrapAdmin
+    );
+    require!(
+        ctx.accounts.signer.key() == admin_authority,
+        ChainTrustError::UnauthorizedRegistryAdmin
+    );
+
+    let config = &mut ctx.accounts.registry_config;
+    config.admin_authority = admin_authority;
+    config.initialized_at = Clock::get()?.unix_timestamp;
+    config.bump = ctx.bumps.registry_config;
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct UpdateRegistryAdmin<'info> {
+    #[account(
+        mut,
+        seeds = [CONFIG_SEED],
+        bump = registry_config.bump,
+    )]
+    pub registry_config: Account<'info, RegistryConfig>,
+    pub signer: Signer<'info>,
+}
+
+pub fn update_registry_admin(
+    ctx: Context<UpdateRegistryAdmin>,
+    new_admin_authority: Pubkey,
+) -> Result<()> {
+    require!(
+        ctx.accounts.signer.key() == ctx.accounts.registry_config.admin_authority,
+        ChainTrustError::UnauthorizedRegistryAdmin
+    );
+
+    ctx.accounts.registry_config.admin_authority = new_admin_authority;
     Ok(())
 }
 
@@ -124,6 +266,10 @@ pub fn register_issuer(
         ChainTrustError::InvalidIssuerTier
     );
     require!(
+        trust_tier == ISSUER_TIER_DEFAULT,
+        ChainTrustError::SelfRegistrationRequiresTierThree
+    );
+    require!(
         metadata_uri.len() <= MAX_METADATA_URI_LEN,
         ChainTrustError::InvalidMetadataUri
     );
@@ -136,6 +282,144 @@ pub fn register_issuer(
     issuer.metadata_uri = metadata_uri;
     issuer.registered_at = Clock::get()?.unix_timestamp;
     issuer.bump = ctx.bumps.issuer;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// request_issuer_tier
+// ---------------------------------------------------------------------------
+
+#[derive(Accounts)]
+#[instruction(requested_tier: u8, note_hash: [u8; 32], note_uri: String)]
+pub struct RequestIssuerTier<'info> {
+    #[account(
+        mut,
+        seeds = [ISSUER_SEED, signer.key().as_ref()],
+        bump = issuer.bump,
+        constraint = issuer.authority == signer.key() @ ChainTrustError::IssuerAuthorityMismatch,
+    )]
+    pub issuer: Account<'info, Issuer>,
+    #[account(
+        init_if_needed,
+        payer = signer,
+        space = 8 + IssuerTierRequest::INIT_SPACE,
+        seeds = [
+            ISSUER_TIER_REQUEST_SEED,
+            issuer.key().as_ref(),
+            &[requested_tier],
+        ],
+        bump
+    )]
+    pub tier_request: Account<'info, IssuerTierRequest>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn request_issuer_tier(
+    ctx: Context<RequestIssuerTier>,
+    requested_tier: u8,
+    note_hash: [u8; 32],
+    note_uri: String,
+) -> Result<()> {
+    require!(
+        requested_tier == ISSUER_TIER_PLATFORM
+            || requested_tier == ISSUER_TIER_KNOWN_THIRD_PARTY,
+        ChainTrustError::InvalidTierReviewTarget
+    );
+    require!(
+        requested_tier < ctx.accounts.issuer.trust_tier,
+        ChainTrustError::InvalidTierReviewTarget
+    );
+    require!(
+        note_uri.len() <= MAX_REVIEW_NOTE_URI_LEN,
+        ChainTrustError::InvalidMetadataUri
+    );
+
+    let tier_request = &mut ctx.accounts.tier_request;
+    // Distinguish a freshly init'd account (requested_at == 0) from an existing
+    // pending one. Only block when there is already a real pending request on
+    // record. Previously this require! short-circuited every first-time call
+    // because the freshly-allocated account's status is 0 == PENDING.
+    require!(
+        tier_request.requested_at == 0 || tier_request.status != TIER_REQUEST_PENDING,
+        ChainTrustError::TierRequestAlreadyPending
+    );
+
+    tier_request.issuer = ctx.accounts.issuer.key();
+    tier_request.requester = ctx.accounts.signer.key();
+    tier_request.requested_tier = requested_tier;
+    tier_request.status = TIER_REQUEST_PENDING;
+    tier_request.note_hash = note_hash;
+    tier_request.note_uri = note_uri;
+    tier_request.requested_at = Clock::get()?.unix_timestamp;
+    tier_request.resolved_at = 0;
+    tier_request.reviewed_by = Pubkey::default();
+    tier_request.bump = ctx.bumps.tier_request;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// review_issuer_tier
+// ---------------------------------------------------------------------------
+
+#[derive(Accounts)]
+#[instruction(requested_tier: u8)]
+pub struct ReviewIssuerTier<'info> {
+    #[account(
+        mut,
+        seeds = [CONFIG_SEED],
+        bump = registry_config.bump,
+    )]
+    pub registry_config: Account<'info, RegistryConfig>,
+    #[account(mut)]
+    pub issuer: Account<'info, Issuer>,
+    #[account(
+        mut,
+        seeds = [
+            ISSUER_TIER_REQUEST_SEED,
+            issuer.key().as_ref(),
+            &[requested_tier],
+        ],
+        bump = tier_request.bump,
+        constraint = tier_request.issuer == issuer.key(),
+    )]
+    pub tier_request: Account<'info, IssuerTierRequest>,
+    pub signer: Signer<'info>,
+}
+
+pub fn review_issuer_tier(
+    ctx: Context<ReviewIssuerTier>,
+    requested_tier: u8,
+    approve: bool,
+) -> Result<()> {
+    require!(
+        ctx.accounts.signer.key() == ctx.accounts.registry_config.admin_authority,
+        ChainTrustError::UnauthorizedRegistryAdmin
+    );
+    require!(
+        requested_tier == ISSUER_TIER_PLATFORM
+            || requested_tier == ISSUER_TIER_KNOWN_THIRD_PARTY,
+        ChainTrustError::InvalidTierReviewTarget
+    );
+
+    let tier_request = &mut ctx.accounts.tier_request;
+    require!(
+        tier_request.status == TIER_REQUEST_PENDING,
+        ChainTrustError::TierRequestNotPending
+    );
+
+    tier_request.status = if approve {
+        TIER_REQUEST_APPROVED
+    } else {
+        TIER_REQUEST_REJECTED
+    };
+    tier_request.resolved_at = Clock::get()?.unix_timestamp;
+    tier_request.reviewed_by = ctx.accounts.signer.key();
+
+    if approve {
+        ctx.accounts.issuer.trust_tier = requested_tier;
+    }
     Ok(())
 }
 
@@ -316,8 +600,8 @@ pub struct AttestRelationship<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn attest_relationship(
-    ctx: Context<AttestRelationship>,
+pub fn attest_relationship<'info>(
+    ctx: Context<'_, '_, '_, 'info, AttestRelationship<'info>>,
     kind: u8,
     target_ref: [u8; 32],
     evidence_hash: [u8; 32],
@@ -338,6 +622,62 @@ pub fn attest_relationship(
         valid_until == 0 || valid_until > valid_from,
         ChainTrustError::InvalidValidityWindow
     );
+
+    // Cross-account validation by kind. For relationship kinds whose
+    // target_ref is a Pubkey to another on-chain account owned by this
+    // program, require the caller to pass that account in remaining_accounts
+    // so we can verify it's the right type and (where applicable) that it
+    // belongs to the subject entity. This blocks attestations like
+    // "Entity A operates Entity B's project" or "Entity A audited by some
+    // random PDA".
+    let entity_key = ctx.accounts.entity.key();
+    match kind {
+        REL_OPERATES_PROJECT => {
+            let target = ctx
+                .remaining_accounts
+                .first()
+                .ok_or(ChainTrustError::TargetAccountRequired)?;
+            require!(
+                target.key().to_bytes() == target_ref,
+                ChainTrustError::TargetRefAccountMismatch
+            );
+            let project = Account::<Project>::try_from(target)?;
+            require!(
+                project.entity == entity_key,
+                ChainTrustError::ProjectEntityMismatch
+            );
+        }
+        REL_AUDITED_BY => {
+            let target = ctx
+                .remaining_accounts
+                .first()
+                .ok_or(ChainTrustError::TargetAccountRequired)?;
+            require!(
+                target.key().to_bytes() == target_ref,
+                ChainTrustError::TargetRefAccountMismatch
+            );
+            // Just deserialising as Issuer is enough — Anchor checks owner +
+            // discriminator. We don't tie its tier to anything here; the
+            // attesting issuer's tier is what's published on the edge.
+            let _issuer = Account::<Issuer>::try_from(target)?;
+        }
+        REL_SUBSIDIARY_OF | REL_PARENT_OF => {
+            let target = ctx
+                .remaining_accounts
+                .first()
+                .ok_or(ChainTrustError::TargetAccountRequired)?;
+            require!(
+                target.key().to_bytes() == target_ref,
+                ChainTrustError::TargetRefAccountMismatch
+            );
+            let _other = Account::<Entity>::try_from(target)?;
+        }
+        // wallet kinds (DEPLOYS_WALLET, CONTROLS_WALLET) and pure-hash kinds
+        // (HAS_DOMAIN, HAS_UBO, HAS_OFFICER) do not refer to a program-owned
+        // PDA, so there's nothing extra to check on-chain. The off-chain
+        // evidence hash is the binding for those.
+        _ => {}
+    }
 
     let entity = &mut ctx.accounts.entity;
     entity.relationship_count = entity
@@ -411,6 +751,28 @@ pub struct ClaimEntity<'info> {
         constraint = claimer_profile.wallet == signer.key(),
     )]
     pub claimer_profile: Account<'info, UserProfile>,
+    /// Proof: a non-revoked Relationship of kind HAS_OFFICER pointing this
+    /// signer at this entity, signed by an issuer with tier T1 or T2.
+    /// Fix for the first-come-first-claim attack: the chain itself now
+    /// witnesses that someone outside the claimer trusted them as an officer.
+    #[account(
+        constraint = officer_proof.entity == entity.key()
+            @ ChainTrustError::OfficerProofEntityMismatch,
+        constraint = officer_proof.kind == REL_HAS_OFFICER
+            @ ChainTrustError::OfficerProofWrongKind,
+        constraint = officer_proof.target_ref == signer.key().to_bytes()
+            @ ChainTrustError::OfficerProofTargetMismatch,
+        constraint = officer_proof.revoked_at == 0
+            @ ChainTrustError::OfficerProofRevoked,
+    )]
+    pub officer_proof: Account<'info, Relationship>,
+    #[account(
+        constraint = officer_issuer.key() == officer_proof.issuer
+            @ ChainTrustError::OfficerProofIssuerMismatch,
+        constraint = officer_issuer.trust_tier <= ISSUER_TIER_KNOWN_THIRD_PARTY
+            @ ChainTrustError::OfficerProofTierTooLow,
+    )]
+    pub officer_issuer: Account<'info, Issuer>,
     #[account(mut)]
     pub signer: Signer<'info>,
 }
@@ -706,6 +1068,13 @@ pub fn add_official_response(
     require!(
         comment.parent_comment.is_none(),
         ChainTrustError::CannotRespondToReply
+    );
+    // One-shot: prevent silent overwrites. The first response is the response
+    // of record. To "amend", the official wallet must post a new top-level
+    // signal (or reply) — both of which leave a hash trail.
+    require!(
+        comment.official_response_uri.is_empty(),
+        ChainTrustError::OfficialResponseAlreadyExists
     );
 
     let comment = &mut ctx.accounts.comment;
