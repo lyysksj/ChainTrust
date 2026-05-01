@@ -65,10 +65,12 @@ export default function IssuerAdminPage() {
         if (!alive) return;
         setConfig((cfg as RegistryConfig | null) ?? null);
         setRequests(
-          rawRequests.map((r) => ({
-            publicKey: r.publicKey,
-            account: r.account as unknown as IssuerTierRequest,
-          })),
+          (rawRequests as { publicKey: PublicKey; account: unknown }[]).map(
+            (r) => ({
+              publicKey: r.publicKey,
+              account: r.account as IssuerTierRequest,
+            }),
+          ),
         );
         const issuerMap = new Map<string, Issuer>();
         for (const row of rawIssuers) {

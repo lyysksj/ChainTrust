@@ -116,18 +116,18 @@ export async function fetchAllIssuers(program: Program<Chaintrust>) {
 
 export async function fetchRegistryConfig(program: Program<Chaintrust>) {
   const [pda] = registryConfigPda();
-  return (program as Program<any>).account.registryConfig.fetchNullable(pda);
+  return (program.account as any).registryConfig.fetchNullable(pda);
 }
 
 export async function fetchAllIssuerTierRequests(program: Program<Chaintrust>) {
-  return (program as Program<any>).account.issuerTierRequest.all();
+  return (program.account as any).issuerTierRequest.all();
 }
 
 export async function fetchIssuerTierRequestsForIssuer(
   program: Program<Chaintrust>,
   issuer: PublicKey,
 ) {
-  return (program as Program<any>).account.issuerTierRequest.all([
+  return (program.account as any).issuerTierRequest.all([
     { memcmp: { offset: 8, bytes: issuer.toBase58() } },
   ]);
 }
@@ -345,7 +345,7 @@ export async function attestHumanProof(
   const [registryConfig] = registryConfigPda();
   const [humanProof] = humanProofPda(wallet);
   const [nullifierRecord] = nullifierRecordPda(nullifierHash);
-  return (program as Program<any>).methods
+  return (program.methods as any)
     .attestHumanProof(nullifierHash)
     .accountsPartial({
       registryConfig,
@@ -379,7 +379,7 @@ export async function initializeRegistryConfig(
   adminAuthority: PublicKey,
 ): Promise<string> {
   const [registryConfig] = registryConfigPda();
-  return (program as Program<any>).methods
+  return (program.methods as any)
     .initializeRegistryConfig(adminAuthority)
     .accountsPartial({
       registryConfig,
@@ -395,7 +395,7 @@ export async function updateRegistryAdmin(
   newAdminAuthority: PublicKey,
 ): Promise<string> {
   const [registryConfig] = registryConfigPda();
-  return (program as Program<any>).methods
+  return (program.methods as any)
     .updateRegistryAdmin(newAdminAuthority)
     .accountsPartial({
       registryConfig,
@@ -443,7 +443,7 @@ export async function requestIssuerTier(
 ): Promise<string> {
   const [issuer] = issuerPda(signer);
   const [tierRequest] = issuerTierRequestPda(issuer, params.requestedTier);
-  return (program as Program<any>).methods
+  return (program.methods as any)
     .requestIssuerTier(
       params.requestedTier,
       params.noteHash,
@@ -472,7 +472,7 @@ export async function reviewIssuerTier(
     params.issuer,
     params.requestedTier,
   );
-  return (program as Program<any>).methods
+  return (program.methods as any)
     .reviewIssuerTier(params.requestedTier, params.approve)
     .accountsPartial({
       registryConfig,

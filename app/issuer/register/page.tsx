@@ -76,10 +76,12 @@ export default function IssuerRegisterPage() {
       const rows = await fetchIssuerTierRequestsForIssuer(program, issuer);
       if (!alive) return;
       setTierRequests(
-        rows.map((r) => ({
-          publicKey: r.publicKey.toBase58(),
-          account: r.account as unknown as IssuerTierRequest,
-        })),
+        (rows as { publicKey: { toBase58(): string }; account: unknown }[]).map(
+          (r) => ({
+            publicKey: r.publicKey.toBase58(),
+            account: r.account as IssuerTierRequest,
+          }),
+        ),
       );
     })();
     return () => {

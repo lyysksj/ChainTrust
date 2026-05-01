@@ -24,7 +24,17 @@ const WalletModalProvider = _WalletModalProvider as unknown as React.FC<{
   children: ReactNode;
 }>;
 
+// Resolution order:
+//   1. NEXT_PUBLIC_HELIUS_RPC_URL — fully-formed Helius URL (preferred when set)
+//   2. NEXT_PUBLIC_SOLANA_RPC / NEXT_PUBLIC_RPC_URL — explicit override
+//   3. fallback to public devnet
+//
+// The Helius URL embeds the API key in the query string. That key is
+// browser-visible by design — restrict it on the Helius dashboard with
+// referer + IP allowlists. Don't share the same key with the server-side
+// HELIUS_API_KEY (which has webhook-mgmt permissions).
 const RPC =
+  process.env.NEXT_PUBLIC_HELIUS_RPC_URL ||
   process.env.NEXT_PUBLIC_SOLANA_RPC ||
   process.env.NEXT_PUBLIC_RPC_URL ||
   "devnet";

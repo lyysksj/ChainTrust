@@ -14,6 +14,7 @@ import {
 } from "@solana/web3.js";
 import idlJson from "@/lib/anchor/idl/chaintrust.json";
 import type { Chaintrust } from "@/lib/anchor/idl/chaintrust";
+import { heliusRpcUrl } from "@/lib/helius/client";
 
 function buildAdminWallet(kp: Keypair): Wallet {
   return {
@@ -59,9 +60,13 @@ export function buildAdminProgram(
 }
 
 export function defaultRpcUrl(): string {
+  // Prefer Helius when configured — its rate limits and reliability are
+  // strictly better than the public devnet endpoint, and the URL already
+  // carries the auth.
   return (
     process.env.SOLANA_RPC_URL ||
     process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
+    heliusRpcUrl() ||
     "http://127.0.0.1:8899"
   );
 }

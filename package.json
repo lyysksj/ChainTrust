@@ -11,7 +11,10 @@
     "anchor:deploy:local": "cd anchor && anchor deploy --provider.cluster localnet",
     "anchor:deploy:devnet": "cd anchor && anchor deploy --provider.cluster devnet",
     "validator": "solana-test-validator --reset",
-    "sas:bootstrap": "ts-node --project tsconfig.scripts.json -r tsconfig-paths/register scripts/sas-bootstrap.ts"
+    "sas:bootstrap": "ts-node --project tsconfig.scripts.json -r tsconfig-paths/register scripts/sas-bootstrap.ts",
+    "helius:list": "ts-node --project tsconfig.scripts.json -r tsconfig-paths/register scripts/helius-setup-webhook.ts list",
+    "helius:create": "ts-node --project tsconfig.scripts.json -r tsconfig-paths/register scripts/helius-setup-webhook.ts create",
+    "helius:delete": "ts-node --project tsconfig.scripts.json -r tsconfig-paths/register scripts/helius-setup-webhook.ts delete"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.30.1",
