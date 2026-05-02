@@ -119,7 +119,7 @@ export default function HomePage() {
       {/* Hero */}
       <section className="hero">
         <div className="hero-eyebrow">
-          PUBLIC IDENTITY REGISTRY · SOLANA · NO. 0000-0001
+          PUBLIC IDENTITY REGISTRY · SOLANA
         </div>
         <div className="hero-row">
           <div className="hero-left">
@@ -256,8 +256,8 @@ export default function HomePage() {
           <div className="principle-num">STEP 01 / USER</div>
           <h3 className="principle-title">Register profile →</h3>
           <p className="principle-body">
-            Connect a Solana wallet and claim a username (with optional
-            World&nbsp;ID anti-sybil). Required for everything below.
+            Connect a Solana wallet and claim a username (with World&nbsp;ID
+            anti-sybil).
           </p>
         </Link>
         <Link
@@ -268,8 +268,8 @@ export default function HomePage() {
           <div className="principle-num">STEP 02 / ENTITY</div>
           <h3 className="principle-title">File a new Entity →</h3>
           <p className="principle-body">
-            Open a public legal-entity record. Get a stable CT-Number short
-            code that anyone can cite or resolve.
+            File a public legal-entity record. Get a stable CT-Number that
+            anyone can cite or resolve.
           </p>
         </Link>
         <Link
@@ -280,8 +280,8 @@ export default function HomePage() {
           <div className="principle-num">STEP 03 / ISSUER</div>
           <h3 className="principle-title">Become an Issuer →</h3>
           <p className="principle-body">
-            Register an authority key with a public trust tier so you can
-            sign Relationship attestations on Entities.
+            Register with a public trust tier so you can sign Relationship
+            attestations on Entities.
           </p>
         </Link>
       </div>

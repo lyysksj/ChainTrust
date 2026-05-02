@@ -31,7 +31,7 @@ export function Navbar() {
     <>
       <div className="topbar-meta">
         <div className="topbar-meta-inner">
-          <span>CT REGISTRY · PUBLIC GOOD · NO. 0000-0001</span>
+          <span>CT REGISTRY · PUBLIC GOOD</span>
           <span>SOLANA · {todayLabel()}</span>
         </div>
       </div>
