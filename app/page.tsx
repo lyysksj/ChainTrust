@@ -9,10 +9,12 @@ import {
   fetchAllEntities,
   fetchAllIssuers,
   fetchAllRelationships,
+  fetchAllUsers,
 } from "@/lib/anchor/client";
 import { entityIdToCtNumber } from "@/lib/utils/ct-number";
 import { bytesHex, formatTimestamp } from "@/lib/utils/format";
-import { Stamp, StatusPill } from "@/components/registry-bits";
+import { StatusPill } from "@/components/registry-bits";
+import { AttestationSample } from "@/components/attestation-sample";
 import { COUNTRIES } from "@/types";
 import type { Entity, EntityMetadata, Issuer, Relationship } from "@/types";
 
@@ -33,7 +35,7 @@ export default function HomePage() {
     entities: 0,
     rels: 0,
     issuers: 0,
-    revoked: 0,
+    users: 0,
   });
   const [resolveQuery, setResolveQuery] = useState("");
 
@@ -41,10 +43,11 @@ export default function HomePage() {
     if (!program) return;
     let alive = true;
     (async () => {
-      const [rawEntities, rawRels, rawIssuers] = await Promise.all([
+      const [rawEntities, rawRels, rawIssuers, rawUsers] = await Promise.all([
         fetchAllEntities(program),
         fetchAllRelationships(program),
         fetchAllIssuers(program),
+        fetchAllUsers(program),
       ]);
       if (!alive) return;
 
@@ -55,7 +58,7 @@ export default function HomePage() {
         entities: rawEntities.length,
         rels: rawRels.length,
         issuers: rawIssuers.length,
-        revoked: rels.filter((r) => Number(r.revokedAt) > 0).length,
+        users: rawUsers.length,
       });
 
       const rows = await Promise.all(
@@ -119,21 +122,30 @@ export default function HomePage() {
           PUBLIC IDENTITY REGISTRY · SOLANA · NO. 0000-0001
         </div>
         <div className="hero-row">
-          <div>
+          <div className="hero-left">
             <h1 className="hero-title">
-              The signed<br />
-              <em>identity registry</em><br />
-              for Web3.
+              The signed <em>identity graph</em> for Web3
             </h1>
-            <p className="hero-sub">
-              A public ledger that links real-world legal entities to the
-              wallets, contracts, projects and domains they operate on Solana.
-              Every edge is signed by a named issuer, time-bounded, and
-              revocable.{" "}
-              <strong>
-                Cited evidence, no consensus games, no delete key.
-              </strong>
-            </p>
+            <div className="hero-sub">
+              <p>
+                A public ledger that{" "}
+                <strong>
+                  bridges off-chain legal entities with their on-chain
+                  presence.
+                </strong>
+              </p>
+              <p>
+                ChainTrust organize corporate entities, wallets, projects, and
+                domains into a public, traceable identity graph. Every
+                relationship is an attestation, cryptographically signed by a
+                verified issuer.
+              </p>
+              <p>
+                <strong>
+                  Fully traceable. Append-only. Cited evidence.
+                </strong>
+              </p>
+            </div>
             <div className="hero-cta">
               <button
                 type="button"
@@ -159,7 +171,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="hero-stamp-wrap">
-            <Stamp text="Append-only" sub="NO DELETE KEY" />
+            <AttestationSample />
             <div
               style={{
                 fontFamily: "var(--mono)",
@@ -170,7 +182,7 @@ export default function HomePage() {
                 textTransform: "uppercase",
               }}
             >
-              Filed {new Date().toISOString().slice(0, 10)}
+              Sample dossier · for illustration
               <br />Solana · v0.4
             </div>
           </div>
@@ -225,8 +237,8 @@ export default function HomePage() {
           <div className="stat-l">Registered issuers</div>
         </div>
         <div className="stat-cell">
-          <div className="stat-v">{counts.revoked}</div>
-          <div className="stat-l">Revoked (still on record)</div>
+          <div className="stat-v">{counts.users}</div>
+          <div className="stat-l">Registered users</div>
         </div>
       </div>
 
@@ -272,40 +284,6 @@ export default function HomePage() {
             sign Relationship attestations on Entities.
           </p>
         </Link>
-      </div>
-
-      {/* Principles */}
-      <div className="section-h">
-        <h2 className="section-title">The graph belongs to the facts.</h2>
-        <span className="section-meta">§ MANIFESTO · I.</span>
-      </div>
-      <div className="principles" style={{ marginBottom: 48 }}>
-        <div className="principle">
-          <div className="principle-num">01 / SUBJECT</div>
-          <h3 className="principle-title">Entity is the anchor.</h3>
-          <p className="principle-body">
-            Every wallet, contract, domain, and officer hangs off a legal
-            Entity with a stable CT-Number. The Entity is public, citable, and
-            immutable.
-          </p>
-        </div>
-        <div className="principle">
-          <div className="principle-num">02 / SIGNATURE</div>
-          <h3 className="principle-title">Every edge is signed.</h3>
-          <p className="principle-body">
-            Relationships are signed by named issuers with public trust tiers
-            — platform, third-party, or self-asserted. Consumers decide which
-            tiers to trust.
-          </p>
-        </div>
-        <div className="principle">
-          <div className="principle-num">03 / RECORD</div>
-          <h3 className="principle-title">Nothing is erased.</h3>
-          <p className="principle-body">
-            Revocation is itself a signed event. Records are struck through,
-            never removed. Claim gives voice — never control.
-          </p>
-        </div>
       </div>
 
       {/* Recently verified registry */}
@@ -379,25 +357,6 @@ export default function HomePage() {
           })}
         </>
       )}
-
-      {/* Manifesto strip */}
-      <section className="manifesto">
-        <div className="manifesto-row">
-          <div className="label">PHILOSOPHY</div>
-          <div>
-            <p className="manifesto-quote">
-              &ldquo;Claim gives voice, not control.&rdquo;
-            </p>
-            <div className="manifesto-attr">— § PHILOSOPHY · ARTICLE II.</div>
-            <p className="manifesto-quote">
-              &ldquo;Every edge is signed. Every signature has a tier.
-              <br />
-              Every fact has an expiry.&rdquo;
-            </p>
-            <div className="manifesto-attr">— § PHILOSOPHY · ARTICLE III.</div>
-          </div>
-        </div>
-      </section>
 
       {/* CTA strip */}
       <div className="cta-strip">

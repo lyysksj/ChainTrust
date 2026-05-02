@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { WalletButton } from "./wallet-button";
 
 const LINKS = [
-  { href: "/", label: "Registry", match: (p: string) => p === "/" },
+  { href: "/", label: "Home", match: (p: string) => p === "/" },
   { href: "/resolve", label: "Resolve", match: (p: string) => p.startsWith("/resolve") },
   { href: "/attest", label: "Attest", match: (p: string) => p.startsWith("/attest") },
   { href: "/issuers", label: "Issuers", match: (p: string) => p.startsWith("/issuers") || p.startsWith("/issuer") },

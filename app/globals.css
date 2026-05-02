@@ -465,31 +465,45 @@ button { font-family: inherit; cursor: pointer; }
 .hero-title {
   font-family: var(--serif);
   font-weight: 500;
-  font-size: 64px;
+  font-size: clamp(40px, 4.4vw, 56px);
   line-height: 1.04;
   letter-spacing: -0.02em;
   margin: 0 0 28px;
-  max-width: 18ch;
-  text-wrap: balance;
+  white-space: nowrap;
 }
 .hero-title em {
   font-style: italic;
   color: var(--stamp-deep);
   font-weight: 500;
+  white-space: nowrap;
 }
 .hero-sub {
   font-family: var(--serif);
   font-size: 19px;
   line-height: 1.5;
   color: var(--ink-2);
-  max-width: 62ch;
   margin: 0 0 32px;
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: auto;
+}
+.hero-sub p {
+  margin: 0 0 16px;
+}
+.hero-sub p:last-child {
+  margin-bottom: 0;
 }
 .hero-row {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 60px;
-  align-items: end;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 56px;
+  align-items: stretch;
+}
+.hero-left {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 32px;
 }
 .hero-stamp-wrap {
   display: flex;
@@ -497,6 +511,132 @@ button { font-family: inherit; cursor: pointer; }
   align-items: flex-end;
   gap: 16px;
 }
+
+/* ---------- Attestation sample dossier ---------- */
+.att-sample {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  padding: 18px 20px 16px;
+  transform: rotate(1.2deg);
+  box-shadow:
+    0 1px 0 var(--ink),
+    6px 8px 0 -2px var(--paper-3),
+    8px 10px 0 -2px var(--rule-soft);
+  color: var(--ink);
+}
+.att-sample-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--stamp-deep);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 12px;
+}
+.att-sample-name {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  margin: 0 0 4px;
+}
+.att-sample-name em {
+  font-style: italic;
+  color: var(--stamp-deep);
+  font-weight: 500;
+}
+.att-sample-meta {
+  font-family: var(--serif);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  margin-bottom: 4px;
+}
+.att-sample-mono {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+}
+.att-sample-mono.dim { color: var(--ink-4); }
+.att-sample-status {
+  margin: 12px 0 4px;
+}
+.att-sample-block {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--rule-soft);
+}
+.att-sample-edge {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--stamp-deep);
+  margin-bottom: 3px;
+}
+.att-sample-arrow {
+  flex: 1;
+  border-bottom: 1px solid var(--stamp);
+  height: 0;
+  position: relative;
+  top: -4px;
+}
+.att-sample-arrow::after {
+  content: '→';
+  position: absolute;
+  right: -2px;
+  top: -10px;
+  background: var(--paper);
+  padding-left: 4px;
+}
+.att-sample-cap {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 2px;
+}
+.att-sample-issuer {
+  font-family: var(--serif);
+  font-size: 12.5px;
+  color: var(--ink);
+  margin-bottom: 2px;
+}
+.att-sample-foot {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+.att-sample-stamp {
+  position: absolute;
+  right: 14px;
+  bottom: 30px;
+  pointer-events: none;
+  opacity: 0.95;
+}
+.att-sample-stamp .stamp-seal {
+  width: 78px;
+  height: 78px;
+  font-size: 9px;
+  transform: rotate(-12deg);
+}
+.att-sample-stamp .stamp-seal-inner { font-size: 8px; }
 .hero-cta { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 
 /* ---------- Resolve bar ---------- */
@@ -1197,6 +1337,8 @@ button { font-family: inherit; cursor: pointer; }
 /* ---------- Responsive ---------- */
 @media (max-width: 1100px) {
   .hero-row, .entity-head { grid-template-columns: 1fr; gap: 32px; }
+  .hero-stamp-wrap { align-items: flex-start; }
+  .att-sample { transform: none; max-width: 100%; }
   .entity-head-side { border-left: none; padding-left: 0; border-top: 1px solid var(--rule-soft); padding-top: 24px; }
   .principles, .stat-strip, .entity-meta-grid { grid-template-columns: repeat(2, 1fr); }
   .entity-row { grid-template-columns: 110px 1fr 100px 90px 24px; }

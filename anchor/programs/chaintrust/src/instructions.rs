@@ -601,7 +601,7 @@ pub struct AttestRelationship<'info> {
 }
 
 pub fn attest_relationship<'info>(
-    ctx: Context<'_, '_, '_, 'info, AttestRelationship<'info>>,
+    ctx: Context<'_, '_, 'info, 'info, AttestRelationship<'info>>,
     kind: u8,
     target_ref: [u8; 32],
     evidence_hash: [u8; 32],

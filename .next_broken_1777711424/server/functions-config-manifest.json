@@ -1,0 +1,1 @@
+{"version":1,"functions":{"/api/helius/webhook":{},"/api/mock/fetch":{},"/api/mock/upload-image":{},"/api/mock/upload":{},"/api/mock/verify":{},"/api/upload/challenge":{},"/api/upload/image":{},"/api/upload/metadata":{},"/api/upload":{},"/api/worldid/challenge":{},"/api/worldid/check":{},"/api/worldid/verify":{},"/api/worldid/rp-signature":{}}}

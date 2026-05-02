@@ -32,7 +32,7 @@ pub const NULLIFIER_SEED: &[u8] = b"nullifier";
 // a valid signer — leaving it unchanged will brick `initialize_registry_config`
 // on purpose so a real deployment is forced to set it.
 pub const REGISTRY_BOOTSTRAP_ADMIN: Pubkey =
-    pubkey!("11111111111111111111111111111111");
+    pubkey!("6wgpSVEvxDyJBghMwWNrBkFVKehPqvQkMsezwrSUjfPT");
 
 pub const MAX_USERNAME_LEN: usize = 32;
 pub const MAX_METADATA_URI_LEN: usize = 200;

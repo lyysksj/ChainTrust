@@ -32,6 +32,29 @@ const WORLDID_ENV: "production" | "staging" =
     : "staging";
 const worldidEnabled =
   WORLDID_APP_ID.startsWith("app_") && WORLDID_RP_ID.length > 0;
+const PUBLIC_RPC =
+  process.env.NEXT_PUBLIC_SOLANA_RPC ||
+  process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
+  process.env.NEXT_PUBLIC_RPC_URL ||
+  "devnet";
+const mockHumanProofEnabled =
+  process.env.NODE_ENV !== "production" &&
+  /(?:127\.0\.0\.1|localhost)/.test(PUBLIC_RPC);
+
+function explainWorldIdError(message: string): string {
+  if (
+    message.includes(
+      "This identity has already registered a ChainTrust profile from a different wallet.",
+    ) ||
+    message.includes("nullifier_reused")
+  ) {
+    return "This World ID simulator identity is already bound to another wallet. For local testing, use the local mock proof button below or reset your local World ID state.";
+  }
+  if (message.includes("bufferUtil.mask is not a function")) {
+    return "Your runtime hit a websocket issue while waiting for signature confirmation. We now use an HTTP polling path on the server, so retry verification and use local mock proof if this persists.";
+  }
+  return message;
+}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -645,6 +668,7 @@ function WorldIdGate({
   const [widgetOpen, setWidgetOpen] = useState(false);
   const [rpContext, setRpContext] = useState<RpContext | null>(null);
   const [fetchingSig, setFetchingSig] = useState(false);
+  const [mockingProof, setMockingProof] = useState(false);
   const [gateError, setGateError] = useState<string | null>(null);
 
   if (!worldidEnabled) {
@@ -749,44 +773,86 @@ function WorldIdGate({
   }
 
   async function handleVerify(result: IDKitResult) {
-    if (!signMessage) {
-      throw new Error(
-        "Connected wallet does not support message signing. Use a wallet that exposes signMessage (e.g. Phantom, Backpack).",
+    setGateError(null);
+    try {
+      if (!signMessage) {
+        throw new Error(
+          "Connected wallet does not support message signing. Use a wallet that exposes signMessage (e.g. Phantom, Backpack).",
+        );
+      }
+      // Step A — server-issued, wallet-bound challenge.
+      const chResp = await fetch(
+        `/api/worldid/challenge?wallet=${encodeURIComponent(wallet)}`,
       );
-    }
-    // Step A — server-issued, wallet-bound challenge.
-    const chResp = await fetch(
-      `/api/worldid/challenge?wallet=${encodeURIComponent(wallet)}`,
-    );
-    if (!chResp.ok) {
-      throw new Error("Could not fetch World ID challenge");
-    }
-    const ch = (await chResp.json()) as {
-      nonce: string;
-      message: string;
-      expiresAt: number;
-    };
-    if (!ch?.nonce || !ch?.message) {
-      throw new Error("Bad challenge payload");
-    }
-    // Step B — wallet signs the challenge so the server can prove the wallet
-    // owner is the one binding the nullifier.
-    const sig = await signMessage(new TextEncoder().encode(ch.message));
-    const signature = bs58.encode(sig);
+      if (!chResp.ok) {
+        throw new Error("Could not fetch World ID challenge");
+      }
+      const ch = (await chResp.json()) as {
+        nonce: string;
+        message: string;
+        expiresAt: number;
+      };
+      if (!ch?.nonce || !ch?.message) {
+        throw new Error("Bad challenge payload");
+      }
+      // Step B — wallet signs the challenge so the server can prove the wallet
+      // owner is the one binding the nullifier.
+      const sig = await signMessage(new TextEncoder().encode(ch.message));
+      const signature = bs58.encode(sig);
 
-    const resp = await fetch("/api/worldid/verify", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        result,
-        wallet,
-        nonce: ch.nonce,
-        signature,
-      }),
-    });
-    const json = await resp.json();
-    if (!resp.ok || !json.ok) {
-      throw new Error(json.error ?? "World ID verification failed");
+      const resp = await fetch("/api/worldid/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          result,
+          wallet,
+          nonce: ch.nonce,
+          signature,
+        }),
+      });
+      const json = await resp.json();
+      if (!resp.ok || !json.ok) {
+        throw new Error(
+          explainWorldIdError(json.error ?? "World ID verification failed"),
+        );
+      }
+    } catch (err) {
+      const message = explainWorldIdError(
+        (err as Error).message ?? "World ID verification failed",
+      );
+      setWidgetOpen(false);
+      setRpContext(null);
+      setGateError(message);
+      throw new Error(message);
+    }
+  }
+
+  async function issueMockProof() {
+    setGateError(null);
+    setMockingProof(true);
+    try {
+      const resp = await fetch("/api/dev/humanproof", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ wallet }),
+      });
+      const json = await resp.json();
+      if (!resp.ok || !json.ok) {
+        throw new Error(
+          explainWorldIdError(json.error ?? "Failed to issue local mock proof"),
+        );
+      }
+      setWidgetOpen(false);
+      setRpContext(null);
+      onSuccess();
+    } catch (err) {
+      setGateError(
+        explainWorldIdError(
+          (err as Error).message ?? "Failed to issue local mock proof",
+        ),
+      );
+    } finally {
+      setMockingProof(false);
     }
   }
 
@@ -833,6 +899,25 @@ function WorldIdGate({
       >
         {fetchingSig ? "PREPARING…" : "◆ Verify with World ID"}
       </button>
+      {mockHumanProofEnabled && (
+        <>
+          <div
+            className="hint"
+            style={{ marginTop: 12, marginBottom: 8, maxWidth: "60ch" }}
+          >
+            Localnet shortcut: issue a mock HumanProof for this wallet without
+            consuming a World ID simulator identity.
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={issueMockProof}
+            disabled={mockingProof}
+          >
+            {mockingProof ? "ISSUING MOCK PROOF…" : "Use local mock proof"}
+          </button>
+        </>
+      )}
       {gateError && (
         <p className="error" style={{ marginTop: 12 }}>
           {gateError}
@@ -850,8 +935,21 @@ function WorldIdGate({
           allow_legacy_proofs={true}
           preset={orbLegacy({ signal: wallet })}
           handleVerify={handleVerify}
+          onError={(errorCode) => {
+            if (errorCode === "failed_by_host_app") return;
+            if (errorCode === "verification_rejected") {
+              setGateError(
+                "World ID verification was cancelled or rejected before ChainTrust could bind your wallet.",
+              );
+              return;
+            }
+            setGateError(
+              `World ID verification did not complete (${errorCode}).`,
+            );
+          }}
           onSuccess={() => {
             setWidgetOpen(false);
+            setGateError(null);
             onSuccess();
           }}
         />

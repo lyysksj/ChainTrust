@@ -1,5 +1,3 @@
-"use client";
-
 import { AnchorProvider, Program, BN } from "@coral-xyz/anchor";
 import type { Wallet } from "@coral-xyz/anchor";
 import type { AnchorWallet } from "@solana/wallet-adapter-react";

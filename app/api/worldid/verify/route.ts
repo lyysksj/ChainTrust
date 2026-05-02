@@ -37,7 +37,11 @@ import {
   buildAdminProgram,
   defaultRpcUrl,
 } from "@/lib/server/anchor-server";
-import { attestHumanProof, fetchHumanProof } from "@/lib/anchor/client";
+import { fetchHumanProof } from "@/lib/anchor/client";
+import {
+  attestHumanProofNoWs,
+  ensureRegistryConfigInitialized,
+} from "@/lib/server/tx-confirm";
 
 export const runtime = "nodejs";
 
@@ -205,7 +209,7 @@ export async function POST(req: NextRequest) {
         { status: 500 },
       );
     }
-    const { program } = buildAdminProgram(admin, defaultRpcUrl());
+    const { program, provider } = buildAdminProgram(admin, defaultRpcUrl());
     const walletPk = (() => {
       try {
         return new PublicKey(wallet);
@@ -226,9 +230,11 @@ export async function POST(req: NextRequest) {
     let txSig: string | null = null;
     if (!existingProof) {
       try {
-        txSig = await attestHumanProof(
+        await ensureRegistryConfigInitialized(program, provider, admin);
+        txSig = await attestHumanProofNoWs(
           program,
-          admin.publicKey,
+          provider,
+          admin,
           walletPk,
           nullifierBytes,
         );
