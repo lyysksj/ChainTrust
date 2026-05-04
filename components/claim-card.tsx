@@ -28,9 +28,10 @@ import {
   fetchAllIssuers,
   fetchRelationshipsForEntity,
 } from "@/lib/anchor/client";
-import { ISSUER_KIND_LABELS, REL_KIND } from "@/types";
+import { REL_KIND } from "@/types";
 import type { Issuer, Relationship } from "@/types";
 import { formatTimestamp, shortKey } from "@/lib/utils/format";
+import { useT } from "@/lib/i18n";
 
 type Props = {
   entity: PublicKey;
@@ -47,6 +48,7 @@ type Candidate = {
 export function ClaimCard({ entity, onClaimed }: Props) {
   const { publicKey } = useWallet();
   const program = useProgram();
+  const t = useT();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,7 +127,7 @@ export function ClaimCard({ entity, onClaimed }: Props) {
       setDone(true);
       onClaimed?.();
     } catch (err) {
-      setError((err as Error).message ?? "Claim failed");
+      setError((err as Error).message ?? t("claim.errors.failed"));
     } finally {
       setSubmitting(false);
     }
@@ -135,10 +137,10 @@ export function ClaimCard({ entity, onClaimed }: Props) {
     return (
       <div className="doc-card" style={{ borderStyle: "dashed" }}>
         <div className="docnum" style={{ marginBottom: 6 }}>
-          ◇ CLAIM ENTITY
+          {t("claim.connect.title")}
         </div>
         <p className="hint" style={{ margin: 0 }}>
-          Connect a wallet to see whether you qualify to claim this entity.
+          {t("claim.connect.body")}
         </p>
       </div>
     );
@@ -147,7 +149,7 @@ export function ClaimCard({ entity, onClaimed }: Props) {
   if (loading) {
     return (
       <div className="doc-card" style={{ borderStyle: "dashed" }}>
-        <div className="docnum">◇ CLAIM ENTITY · CHECKING OFFICER PROOFS…</div>
+        <div className="docnum">{t("claim.checking")}</div>
       </div>
     );
   }
@@ -159,11 +161,10 @@ export function ClaimCard({ entity, onClaimed }: Props) {
         style={{ borderColor: "var(--good)", background: "rgba(158, 184, 156, 0.10)" }}
       >
         <div className="docnum" style={{ color: "#4a6648" }}>
-          ✓ ENTITY CLAIMED
+          {t("claim.done.title")}
         </div>
         <p className="hint" style={{ margin: 0 }}>
-          You can now publish official responses on community signals. The
-          existing record is unchanged — claim adds voice, not control.
+          {t("claim.done.body")}
         </p>
       </div>
     );
@@ -173,7 +174,7 @@ export function ClaimCard({ entity, onClaimed }: Props) {
     return (
       <div className="doc-card" style={{ borderStyle: "dashed" }}>
         <div className="docnum" style={{ marginBottom: 6 }}>
-          ◇ CLAIM ENTITY · NOT YET ELIGIBLE
+          {t("claim.notEligible.title")}
         </div>
         <p
           style={{
@@ -184,14 +185,12 @@ export function ClaimCard({ entity, onClaimed }: Props) {
             margin: "0 0 8px",
           }}
         >
-          To claim this entity you must first appear as a non-revoked{" "}
-          <strong>HAS_OFFICER</strong> target in a relationship signed by a
-          Tier 1 or Tier 2 issuer. That guarantees a third party with real-
-          world standing has put their reputation behind your control claim
-          — claim cannot be raced.
+          {t("claim.notEligible.body.lead")}
+          <strong>{t("claim.notEligible.body.bold")}</strong>
+          {t("claim.notEligible.body.tail")}
         </p>
         <p className="hint" style={{ margin: 0 }}>
-          Ask a qualified issuer to file the attestation, then return here.
+          {t("claim.notEligible.body.note")}
         </p>
       </div>
     );
@@ -203,7 +202,7 @@ export function ClaimCard({ entity, onClaimed }: Props) {
       style={{ borderStyle: "dashed", borderColor: "var(--stamp-deep)" }}
     >
       <div className="docnum" style={{ marginBottom: 6, color: "var(--stamp-deep)" }}>
-        ◆ CLAIM ENTITY · OFFICER PROOFS FOUND
+        {t("claim.found.title")}
       </div>
       <p
         style={{
@@ -214,8 +213,7 @@ export function ClaimCard({ entity, onClaimed }: Props) {
           margin: "0 0 12px",
         }}
       >
-        The following non-revoked HAS_OFFICER edges name your wallet on this
-        entity. Pick one — the on-chain claim references it permanently.
+        {t("claim.found.body")}
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
         {candidates.map((c) => {
@@ -251,7 +249,10 @@ export function ClaimCard({ entity, onClaimed }: Props) {
                     letterSpacing: "0.04em",
                   }}
                 >
-                  T{c.issuer.trustTier} · {ISSUER_KIND_LABELS[c.issuer.kind] ?? "Issuer"}{" "}
+                  T{c.issuer.trustTier} ·{" "}
+                  {c.issuer.kind > 0
+                    ? t(`issuerKind.${c.issuer.kind}`)
+                    : t("issuerKind.fallback")}{" "}
                   · {shortKey(c.issuerPda, 6)}
                 </div>
                 <div
@@ -263,7 +264,8 @@ export function ClaimCard({ entity, onClaimed }: Props) {
                     marginTop: 2,
                   }}
                 >
-                  rel pda · {shortKey(c.pda, 6)} · filed{" "}
+                  {t("claim.found.relPda")} {shortKey(c.pda, 6)} ·{" "}
+                  {t("claim.found.filed")}{" "}
                   {formatTimestamp(c.rel.createdAt)}
                 </div>
               </div>
@@ -278,11 +280,10 @@ export function ClaimCard({ entity, onClaimed }: Props) {
         onClick={onClaim}
         disabled={submitting || !chosen}
       >
-        {submitting ? "SIGNING…" : "◆ Sign claim with this proof"}
+        {submitting ? t("claim.btn.submitting") : t("claim.btn.submit")}
       </button>
       <p className="hint" style={{ marginTop: 10, marginBottom: 0 }}>
-        Claim sets `official_wallet` and lets you post official responses. It
-        cannot revoke or alter any record on this entity.
+        {t("claim.btn.foot")}
       </p>
     </div>
   );

@@ -17,6 +17,7 @@ import { StatusPill } from "@/components/registry-bits";
 import { AttestationSample } from "@/components/attestation-sample";
 import { COUNTRIES } from "@/types";
 import type { Entity, EntityMetadata, Issuer, Relationship } from "@/types";
+import { useT } from "@/lib/i18n";
 
 type EntityRow = {
   pda: PublicKey;
@@ -29,6 +30,7 @@ type EntityRow = {
 export default function HomePage() {
   const program = useProgram();
   const router = useRouter();
+  const t = useT();
 
   const [entities, setEntities] = useState<EntityRow[]>([]);
   const [counts, setCounts] = useState({
@@ -107,9 +109,9 @@ export default function HomePage() {
   }
 
   const samples = [
-    { label: "First entity", value: entities[0]?.ctNumber ?? "" },
-    { label: "Domain", value: "example.com" },
-    { label: "CT-Number", value: "CT-XXXX-XXXX" },
+    { label: t("home.sample.firstEntity"), value: entities[0]?.ctNumber ?? "" },
+    { label: t("home.sample.domain"), value: "example.com" },
+    { label: t("home.sample.ctNumber"), value: "CT-XXXX-XXXX" },
   ].filter((s) => s.value);
 
   const recent = useMemo(() => entities.slice(0, 12), [entities]);
@@ -118,32 +120,21 @@ export default function HomePage() {
     <div data-screen="01 Registry Home">
       {/* Hero */}
       <section className="hero">
-        <div className="hero-eyebrow">
-          PUBLIC IDENTITY REGISTRY · SOLANA
-        </div>
+        <div className="hero-eyebrow">{t("home.eyebrow")}</div>
         <div className="hero-row">
           <div className="hero-left">
             <h1 className="hero-title">
-              The signed <em>identity graph</em> for Web3
+              {t("home.title.lead")} <em>{t("home.title.em")}</em>{" "}
+              {t("home.title.tail")}
             </h1>
             <div className="hero-sub">
               <p>
-                A public ledger that{" "}
-                <strong>
-                  bridges off-chain legal entities with their on-chain
-                  presence.
-                </strong>
+                {t("home.sub.p1.lead")}
+                <strong>{t("home.sub.p1.bold")}</strong>
               </p>
+              <p>{t("home.sub.p2")}</p>
               <p>
-                ChainTrust organize corporate entities, wallets, projects, and
-                domains into a public, traceable identity graph. Every
-                relationship is an attestation, cryptographically signed by a
-                verified issuer.
-              </p>
-              <p>
-                <strong>
-                  Fully traceable. Append-only. Cited evidence.
-                </strong>
+                <strong>{t("home.sub.p3.bold")}</strong>
               </p>
             </div>
             <div className="hero-cta">
@@ -152,21 +143,21 @@ export default function HomePage() {
                 className="btn btn-primary"
                 onClick={() => router.push("/resolve")}
               >
-                Resolve a wallet →
+                {t("home.cta.resolve")}
               </button>
               <button
                 type="button"
                 className="btn btn-ghost"
                 onClick={() => router.push("/create")}
               >
-                + File an Entity
+                {t("home.cta.fileEntity")}
               </button>
               <button
                 type="button"
                 className="btn btn-ghost"
                 onClick={() => router.push("/attest")}
               >
-                File an attestation
+                {t("home.cta.fileAttestation")}
               </button>
             </div>
           </div>
@@ -194,18 +185,18 @@ export default function HomePage() {
         <div className="resolve-bar">
           <span className="resolve-bar-icon">›_</span>
           <input
-            placeholder="Paste a wallet pubkey, domain, or CT-Number…"
+            placeholder={t("home.resolveBar.placeholder")}
             value={resolveQuery}
             onChange={(e) => setResolveQuery(e.target.value)}
             autoComplete="off"
           />
           <button type="submit" className="btn btn-stamp">
-            Resolve
+            {t("home.resolveBar.submit")}
           </button>
         </div>
         {samples.length > 0 && (
           <div className="resolve-suggest">
-            <span>TRY:</span>
+            <span>{t("home.resolveBar.try")}</span>
             {samples.map((s) => (
               <button
                 key={s.value}
@@ -226,26 +217,26 @@ export default function HomePage() {
       <div className="stat-strip">
         <div className="stat-cell">
           <div className="stat-v">{counts.entities}</div>
-          <div className="stat-l">Entities recorded</div>
+          <div className="stat-l">{t("home.stats.entities")}</div>
         </div>
         <div className="stat-cell">
           <div className="stat-v">{counts.rels}</div>
-          <div className="stat-l">Signed relationships</div>
+          <div className="stat-l">{t("home.stats.rels")}</div>
         </div>
         <div className="stat-cell">
           <div className="stat-v">{counts.issuers}</div>
-          <div className="stat-l">Registered issuers</div>
+          <div className="stat-l">{t("home.stats.issuers")}</div>
         </div>
         <div className="stat-cell">
           <div className="stat-v">{counts.users}</div>
-          <div className="stat-l">Registered users</div>
+          <div className="stat-l">{t("home.stats.users")}</div>
         </div>
       </div>
 
       {/* Filer onboarding strip */}
       <div className="section-h">
-        <h2 className="section-title">New here? File in three steps.</h2>
-        <span className="section-meta">§ ONBOARDING · ART. 5</span>
+        <h2 className="section-title">{t("home.onboarding.title")}</h2>
+        <span className="section-meta">{t("home.onboarding.meta")}</span>
       </div>
       <div className="principles" style={{ marginBottom: 48 }}>
         <Link
@@ -253,59 +244,49 @@ export default function HomePage() {
           className="principle"
           style={{ textDecoration: "none", color: "inherit" }}
         >
-          <div className="principle-num">STEP 01 / USER</div>
-          <h3 className="principle-title">Register profile →</h3>
-          <p className="principle-body">
-            Connect a Solana wallet and claim a username (with World&nbsp;ID
-            anti-sybil).
-          </p>
+          <div className="principle-num">{t("home.onboarding.s1.num")}</div>
+          <h3 className="principle-title">{t("home.onboarding.s1.title")}</h3>
+          <p className="principle-body">{t("home.onboarding.s1.body")}</p>
         </Link>
         <Link
           href="/create"
           className="principle"
           style={{ textDecoration: "none", color: "inherit" }}
         >
-          <div className="principle-num">STEP 02 / ENTITY</div>
-          <h3 className="principle-title">File a new Entity →</h3>
-          <p className="principle-body">
-            File a public legal-entity record. Get a stable CT-Number that
-            anyone can cite or resolve.
-          </p>
+          <div className="principle-num">{t("home.onboarding.s2.num")}</div>
+          <h3 className="principle-title">{t("home.onboarding.s2.title")}</h3>
+          <p className="principle-body">{t("home.onboarding.s2.body")}</p>
         </Link>
         <Link
           href="/issuer/register"
           className="principle"
           style={{ textDecoration: "none", color: "inherit" }}
         >
-          <div className="principle-num">STEP 03 / ISSUER</div>
-          <h3 className="principle-title">Become an Issuer →</h3>
-          <p className="principle-body">
-            Register with a public trust tier so you can sign Relationship
-            attestations on Entities.
-          </p>
+          <div className="principle-num">{t("home.onboarding.s3.num")}</div>
+          <h3 className="principle-title">{t("home.onboarding.s3.title")}</h3>
+          <p className="principle-body">{t("home.onboarding.s3.body")}</p>
         </Link>
       </div>
 
       {/* Recently verified registry */}
       <div className="section-h">
-        <h2 className="section-title">Recently filed entities</h2>
+        <h2 className="section-title">{t("home.recent.title")}</h2>
         <span className="section-meta">
-          ON-CHAIN · {recent.length} {recent.length === 1 ? "ENTRY" : "ENTRIES"}
+          {t("home.recent.metaPrefix")} {recent.length}{" "}
+          {recent.length === 1 ? t("common.entry") : t("common.entries")}
         </span>
       </div>
 
       {recent.length === 0 ? (
-        <div className="no-result">
-          NO ENTITIES ON-CHAIN YET — BE THE FIRST TO FILE.
-        </div>
+        <div className="no-result">{t("home.recent.empty")}</div>
       ) : (
         <>
           <div className="entity-row head">
-            <span className="label">CT-Number</span>
-            <span className="label">Legal entity</span>
-            <span className="label">Jurisdiction</span>
-            <span className="label">Status</span>
-            <span className="label">Filed</span>
+            <span className="label">{t("home.recent.col.ctNumber")}</span>
+            <span className="label">{t("home.recent.col.entity")}</span>
+            <span className="label">{t("home.recent.col.jurisdiction")}</span>
+            <span className="label">{t("home.recent.col.status")}</span>
+            <span className="label">{t("home.recent.col.filed")}</span>
             <span></span>
           </div>
           {recent.map((row) => {
@@ -321,7 +302,7 @@ export default function HomePage() {
                 <span className="ct-num">{row.ctNumber}</span>
                 <div>
                   <div className="ent-name">
-                    {row.meta?.legalName ?? "(metadata pending)"}
+                    {row.meta?.legalName ?? t("home.recent.metaPending")}
                   </div>
                   <div className="ent-sub">
                     {row.meta?.registryIdHashHex
@@ -361,12 +342,14 @@ export default function HomePage() {
       {/* CTA strip */}
       <div className="cta-strip">
         <h3>
-          Resolve any wallet or domain
+          {t("home.cta.bottom.l1")}
           <br />
-          to the <em>operating entity</em> behind it.
+          {t("home.cta.bottom.l2.lead")}{" "}
+          <em>{t("home.cta.bottom.l2.em")}</em>{" "}
+          {t("home.cta.bottom.l2.tail")}
         </h3>
         <Link href="/resolve" className="btn">
-          Open Resolve →
+          {t("home.cta.bottom.btn")}
         </Link>
       </div>
     </div>

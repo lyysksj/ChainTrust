@@ -21,6 +21,7 @@ import {
 import { Stamp } from "@/components/registry-bits";
 import { shortKey } from "@/lib/utils/format";
 import type { UserMetadata } from "@/types";
+import { useT } from "@/lib/i18n";
 
 const WORLDID_APP_ID = process.env.NEXT_PUBLIC_WORLDID_APP_ID ?? "";
 const WORLDID_RP_ID = process.env.NEXT_PUBLIC_WORLDID_RP_ID ?? "";
@@ -60,6 +61,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const { publicKey, signMessage } = useWallet();
   const program = useProgram();
+  const t = useT();
 
   const [checking, setChecking] = useState(false);
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
@@ -121,11 +123,11 @@ export default function RegisterPage() {
     setError(null);
 
     if (!program || !publicKey) {
-      setError("Connect a wallet first.");
+      setError(t("register.errors.connect"));
       return;
     }
     if (worldidEnabled && !humanVerified) {
-      setError("Verify with World ID before filing your profile.");
+      setError(t("register.errors.worldId"));
       return;
     }
     const uerr = validateUsername(username);
@@ -173,7 +175,7 @@ export default function RegisterPage() {
       router.push(`/profile/${publicKey.toBase58()}`);
     } catch (err) {
       console.error(err);
-      setError((err as Error).message ?? "Registration failed");
+      setError((err as Error).message ?? t("register.errors.failed"));
     } finally {
       setSubmitting(false);
     }
@@ -185,7 +187,7 @@ export default function RegisterPage() {
     return (
       <div data-screen="register">
         <PageHeader />
-        <div className="no-result">CONNECT A SOLANA WALLET TO CONTINUE.</div>
+        <div className="no-result">{t("register.connect")}</div>
       </div>
     );
   }
@@ -194,7 +196,7 @@ export default function RegisterPage() {
     return (
       <div data-screen="register">
         <PageHeader />
-        <div className="no-result">CHECKING ON-CHAIN PROFILE…</div>
+        <div className="no-result">{t("register.checking")}</div>
       </div>
     );
   }
@@ -208,7 +210,7 @@ export default function RegisterPage() {
             className="docnum"
             style={{ marginBottom: 8, color: "var(--stamp-deep)" }}
           >
-            ◆ ALREADY ON RECORD
+            {t("register.already.title")}
           </div>
           <p
             style={{
@@ -218,23 +220,24 @@ export default function RegisterPage() {
               margin: "0 0 16px",
             }}
           >
-            This wallet already has an on-chain profile{" "}
+            {t("register.already.body.lead")}{" "}
             {existingUsername && (
               <>
                 (
                 <span className="mono" style={{ color: "var(--stamp-deep)" }}>
                   @{existingUsername}
                 </span>
-                ).
+                )
               </>
             )}
+            {t("register.already.body.tail")}
           </p>
           <button
             type="button"
             className="btn btn-primary"
             onClick={() => router.push(`/profile/${publicKey.toBase58()}`)}
           >
-            Open profile →
+            {t("register.openProfile")}
           </button>
         </div>
       </div>
@@ -279,7 +282,7 @@ export default function RegisterPage() {
                 className="docnum"
                 style={{ marginBottom: 6, color: "var(--stamp-deep)" }}
               >
-                ◆ § 2 · DISCLOSURE NOTICE
+                {t("register.disclosure.title")}
               </div>
               <p
                 style={{
@@ -290,10 +293,7 @@ export default function RegisterPage() {
                   lineHeight: 1.55,
                 }}
               >
-                <strong>
-                  Everything below is publicly readable, append-only, and
-                  cannot be deleted.
-                </strong>
+                <strong>{t("register.disclosure.bold")}</strong>
               </p>
               <p
                 style={{
@@ -304,12 +304,11 @@ export default function RegisterPage() {
                   lineHeight: 1.55,
                 }}
               >
-                Your username and a pointer to off-chain metadata are written
-                to Solana under PDA <span className="mono">
+                {t("register.disclosure.body.lead")}
+                <span className="mono">
                   [&quot;user&quot;, {shortKey(publicKey, 4)}]
                 </span>
-                . Do not enter information you would not want a stranger to
-                read in five years.
+                {t("register.disclosure.body.tail")}
               </p>
             </div>
           )}
@@ -322,7 +321,7 @@ export default function RegisterPage() {
               style={{ marginTop: 24 }}
             >
               <div className="doc-card-h">
-                <div className="doc-card-title">§ 3 · User record</div>
+                <div className="doc-card-title">{t("register.form.title")}</div>
                 <div
                   style={{
                     fontFamily: "var(--mono)",
@@ -331,12 +330,12 @@ export default function RegisterPage() {
                     letterSpacing: "0.1em",
                   }}
                 >
-                  3 FIELDS · CORE
+                  {t("register.form.meta")}
                 </div>
               </div>
 
               <div className="form-row">
-                <label className="label">Handle (on-chain)</label>
+                <label className="label">{t("register.form.handle.label")}</label>
                 <div
                   style={{
                     display: "grid",
@@ -364,36 +363,30 @@ export default function RegisterPage() {
                           .replace(/[^a-z0-9_-]/g, ""),
                       )
                     }
-                    placeholder="acme_compliance"
+                    placeholder={t("register.form.handle.placeholder")}
                     maxLength={32}
                   />
                 </div>
-                <div className="hint">
-                  Letters, digits, underscore, dash. Used in your profile URL
-                  and across the registry.
-                </div>
+                <div className="hint">{t("register.form.handle.hint")}</div>
               </div>
 
               <div className="form-row">
-                <label className="label">Display name / role line</label>
+                <label className="label">{t("register.form.headline.label")}</label>
                 <input
                   value={headline}
                   onChange={(e) => setHeadline(e.target.value)}
-                  placeholder="Compliance lead at Acme · KYB analyst"
+                  placeholder={t("register.form.headline.placeholder")}
                   maxLength={120}
                 />
-                <div className="hint">
-                  One line, shown next to your handle. This is what consumers
-                  see when judging your role on the registry.
-                </div>
+                <div className="hint">{t("register.form.headline.hint")}</div>
               </div>
 
               <div className="form-row">
-                <label className="label">About (optional · one line)</label>
+                <label className="label">{t("register.form.about.label")}</label>
                 <input
                   value={about}
                   onChange={(e) => setAbout(e.target.value)}
-                  placeholder="What kinds of attestations you sign or rely on."
+                  placeholder={t("register.form.about.placeholder")}
                   maxLength={200}
                 />
               </div>
@@ -416,11 +409,11 @@ export default function RegisterPage() {
                     marginBottom: 12,
                   }}
                 >
-                  ▸ EXTERNAL LINKS (optional · X · GitHub · LinkedIn · Site)
+                  {t("register.form.links.summary")}
                 </summary>
                 <div className="form-grid-2">
                   <div className="form-row">
-                    <label className="label">X / Twitter</label>
+                    <label className="label">{t("register.form.links.x")}</label>
                     <input
                       value={linkX}
                       onChange={(e) => setLinkX(e.target.value)}
@@ -429,7 +422,7 @@ export default function RegisterPage() {
                     />
                   </div>
                   <div className="form-row">
-                    <label className="label">GitHub</label>
+                    <label className="label">{t("register.form.links.github")}</label>
                     <input
                       value={linkGithub}
                       onChange={(e) => setLinkGithub(e.target.value)}
@@ -438,7 +431,7 @@ export default function RegisterPage() {
                     />
                   </div>
                   <div className="form-row">
-                    <label className="label">LinkedIn</label>
+                    <label className="label">{t("register.form.links.linkedin")}</label>
                     <input
                       value={linkLinkedin}
                       onChange={(e) => setLinkLinkedin(e.target.value)}
@@ -447,7 +440,7 @@ export default function RegisterPage() {
                     />
                   </div>
                   <div className="form-row">
-                    <label className="label">Personal website</label>
+                    <label className="label">{t("register.form.links.site")}</label>
                     <input
                       value={linkSite}
                       onChange={(e) => setLinkSite(e.target.value)}
@@ -478,7 +471,7 @@ export default function RegisterPage() {
                   className="btn btn-ghost"
                   onClick={() => router.push("/")}
                 >
-                  ← Cancel
+                  {t("register.form.btn.cancel")}
                 </button>
                 <button
                   type="submit"
@@ -487,7 +480,9 @@ export default function RegisterPage() {
                     submitting || (worldidEnabled && !humanVerified)
                   }
                 >
-                  {submitting ? "FILING…" : "◆ Sign & file user record"}
+                  {submitting
+                    ? t("register.form.btn.submitting")
+                    : t("register.form.btn.submit")}
                 </button>
               </div>
             </form>
@@ -621,18 +616,17 @@ export default function RegisterPage() {
 }
 
 function PageHeader() {
+  const t = useT();
   return (
     <>
       <div className="docnum" style={{ marginBottom: 8 }}>
-        FORM CT-USR · 2026 EDITION · ART. 5.1
+        {t("register.docnum")}
       </div>
       <div className="section-h" style={{ borderTop: "none", paddingTop: 0 }}>
         <h2 className="section-title" style={{ fontSize: 36 }}>
-          Register a verified user.
+          {t("register.title")}
         </h2>
-        <span className="section-meta">
-          PDA seeds: [&quot;user&quot;, wallet]
-        </span>
+        <span className="section-meta">{t("register.meta")}</span>
       </div>
       <p
         style={{
@@ -644,10 +638,7 @@ function PageHeader() {
           marginBottom: 32,
         }}
       >
-        One human, one wallet, one profile. Verified users can file entities,
-        sign as issuers, and add community signals on-chain. Authority on
-        the registry comes from <em>signed attestations</em>, not from
-        biographical detail — so this form is intentionally short.
+        {t("register.intro")}
       </p>
     </>
   );
@@ -665,6 +656,7 @@ function WorldIdGate({
   wallet: string;
 }) {
   const { signMessage } = useWallet();
+  const t = useT();
   const [widgetOpen, setWidgetOpen] = useState(false);
   const [rpContext, setRpContext] = useState<RpContext | null>(null);
   const [fetchingSig, setFetchingSig] = useState(false);
@@ -695,10 +687,7 @@ function WorldIdGate({
             lineHeight: 1.55,
           }}
         >
-          Set <code className="mono">NEXT_PUBLIC_WORLDID_APP_ID</code> and{" "}
-          <code className="mono">NEXT_PUBLIC_WORLDID_RP_ID</code> in{" "}
-          <code className="mono">.env.local</code> to enforce
-          proof-of-personhood. Without them, anti-sybil is bypassed.
+          {t("register.gate.notConfigured.body")}
         </p>
       </div>
     );
@@ -710,7 +699,7 @@ function WorldIdGate({
         <div className="docnum" style={{ marginBottom: 6 }}>
           § 1 · CHECKING WORLD ID…
         </div>
-        <p className="hint">CHECKING PREVIOUS PROOF-OF-PERSONHOOD…</p>
+        <p className="hint">{t("register.gate.checking")}</p>
       </div>
     );
   }
@@ -739,8 +728,7 @@ function WorldIdGate({
             lineHeight: 1.55,
           }}
         >
-          This wallet has passed proof-of-personhood. Continue below to file
-          your record.
+          {t("register.gate.verified.body")}
         </p>
       </div>
     );
@@ -865,7 +853,7 @@ function WorldIdGate({
       }}
     >
       <div className="doc-card-h">
-        <div className="doc-card-title">§ 1 · Proof-of-personhood</div>
+        <div className="doc-card-title">{t("register.gate.title")}</div>
         <div
           style={{
             fontFamily: "var(--mono)",
@@ -886,10 +874,9 @@ function WorldIdGate({
           lineHeight: 1.55,
         }}
       >
-        ChainTrust uses <strong>World ID</strong> so that one real human can
-        register only one profile per wallet. Your World ID does not reveal
-        your identity — it only confirms you are a unique human within this
-        app&apos;s namespace.
+        {t("register.gate.intro.lead")}
+        <strong>{t("register.gate.intro.bold")}</strong>
+        {t("register.gate.intro.tail")}
       </p>
       <button
         type="button"
@@ -897,7 +884,9 @@ function WorldIdGate({
         onClick={startVerify}
         disabled={fetchingSig}
       >
-        {fetchingSig ? "PREPARING…" : "◆ Verify with World ID"}
+        {fetchingSig
+          ? t("register.gate.btn.preparing")
+          : t("register.gate.btn.verify")}
       </button>
       {mockHumanProofEnabled && (
         <>
@@ -905,8 +894,7 @@ function WorldIdGate({
             className="hint"
             style={{ marginTop: 12, marginBottom: 8, maxWidth: "60ch" }}
           >
-            Localnet shortcut: issue a mock HumanProof for this wallet without
-            consuming a World ID simulator identity.
+            {t("register.gate.mock.hint")}
           </div>
           <button
             type="button"
@@ -914,7 +902,9 @@ function WorldIdGate({
             onClick={issueMockProof}
             disabled={mockingProof}
           >
-            {mockingProof ? "ISSUING MOCK PROOF…" : "Use local mock proof"}
+            {mockingProof
+              ? t("register.gate.mock.btn.busy")
+              : t("register.gate.mock.btn")}
           </button>
         </>
       )}

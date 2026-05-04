@@ -10,8 +10,8 @@ import {
 } from "@/lib/anchor/client";
 import { formatTimestamp, shortKey } from "@/lib/utils/format";
 import { TierPill } from "@/components/registry-bits";
-import { ISSUER_KIND_LABELS } from "@/types";
 import type { Issuer, Relationship } from "@/types";
+import { useT } from "@/lib/i18n";
 
 type Row = {
   pda: PublicKey;
@@ -25,6 +25,7 @@ export default function IssuersListPage() {
   const program = useProgram();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const t = useT();
 
   useEffect(() => {
     if (!program) return;
@@ -73,15 +74,16 @@ export default function IssuersListPage() {
   return (
     <div data-screen="05 Issuers">
       <div className="docnum" style={{ marginBottom: 8 }}>
-        REGISTER OF ATTESTORS · 2026
+        {t("issuers.docnum")}
       </div>
       <div className="section-h" style={{ borderTop: "none", paddingTop: 0 }}>
         <h2 className="section-title" style={{ fontSize: 36 }}>
-          Registered issuers.
+          {t("issuers.title")}
         </h2>
         <span className="section-meta">
-          {rows.length} {rows.length === 1 ? "ENTRY" : "ENTRIES"} · 3 TRUST
-          TIERS
+          {rows.length}{" "}
+          {rows.length === 1 ? t("common.entry") : t("common.entries")} ·{" "}
+          {t("issuers.metaTiers")}
         </span>
       </div>
       <p
@@ -94,32 +96,29 @@ export default function IssuersListPage() {
           marginBottom: 32,
         }}
       >
-        Every signed edge in the registry traces back to one of these authority
-        keys. Tiers are <strong>public</strong>: the platform does not bless an
-        issuer&apos;s tier as truth — it only publishes who claimed which tier
-        and when. Consumers decide what to trust.
+        {t("issuers.intro.lead")}
+        <strong>{t("issuers.intro.bold")}</strong>
+        {t("issuers.intro.tail")}
       </p>
 
       <div
         style={{ marginBottom: 32, display: "flex", gap: 12, flexWrap: "wrap" }}
       >
         <Link href="/issuer/register" className="btn btn-stamp">
-          + Register as issuer
+          {t("issuers.btn.register")}
         </Link>
         <Link href="/issuer/admin" className="btn btn-ghost">
-          Tier review admin →
+          {t("issuers.btn.admin")}
         </Link>
         <Link href="/attest" className="btn btn-ghost">
-          File an attestation →
+          {t("issuers.btn.attest")}
         </Link>
       </div>
 
       {loading ? (
-        <div className="no-result">LOADING ISSUERS…</div>
+        <div className="no-result">{t("issuers.loading")}</div>
       ) : rows.length === 0 ? (
-        <div className="no-result">
-          NO ISSUERS REGISTERED YET — BE THE FIRST TO STAKE A TIER.
-        </div>
+        <div className="no-result">{t("issuers.empty")}</div>
       ) : (
         <>
           <div
@@ -128,12 +127,12 @@ export default function IssuersListPage() {
               gridTemplateColumns: "60px 1fr 200px 120px 90px 90px",
             }}
           >
-            <span className="label">Tier</span>
-            <span className="label">Issuer</span>
-            <span className="label">Authority key</span>
-            <span className="label">Registered</span>
-            <span className="label">Active</span>
-            <span className="label">Revoked</span>
+            <span className="label">{t("issuers.col.tier")}</span>
+            <span className="label">{t("issuers.col.issuer")}</span>
+            <span className="label">{t("issuers.col.authority")}</span>
+            <span className="label">{t("issuers.col.registered")}</span>
+            <span className="label">{t("issuers.col.active")}</span>
+            <span className="label">{t("issuers.col.revoked")}</span>
           </div>
           {rows.map((r) => (
             <div
@@ -147,7 +146,9 @@ export default function IssuersListPage() {
               <TierPill tier={r.account.trustTier} />
               <div>
                 <div className="ent-name">
-                  {ISSUER_KIND_LABELS[r.account.kind] ?? "Issuer"}
+                  {r.account.kind > 0
+                    ? t(`issuerKind.${r.account.kind}`)
+                    : t("issuerKind.fallback")}
                 </div>
                 <div className="ent-sub">
                   PDA · {shortKey(r.pda, 6)}
@@ -198,45 +199,33 @@ export default function IssuersListPage() {
       {/* Tier definitions */}
       <div style={{ marginTop: 48 }}>
         <div className="section-h">
-          <h2 className="section-title">Tier definitions</h2>
-          <span className="section-meta">§ 4 · CORE CONCEPTS</span>
+          <h2 className="section-title">{t("issuers.tierDef.title")}</h2>
+          <span className="section-meta">{t("issuers.tierDef.meta")}</span>
         </div>
         <div className="principles">
           <div className="principle">
             <div className="principle-num">
               <TierPill tier={1} />
-              &nbsp;PLATFORM
+              &nbsp;{t("issuers.tierDef.t1.label")}
             </div>
-            <h3 className="principle-title">Bootstrapped at deploy.</h3>
-            <p className="principle-body">
-              ChainTrust&apos;s own platform issuer. Used for foundational
-              identity-class attestations until regulated third parties take
-              over.
-            </p>
+            <h3 className="principle-title">{t("issuers.tierDef.t1.title")}</h3>
+            <p className="principle-body">{t("issuers.tierDef.t1.body")}</p>
           </div>
           <div className="principle">
             <div className="principle-num">
               <TierPill tier={2} />
-              &nbsp;THIRD-PARTY
+              &nbsp;{t("issuers.tierDef.t2.label")}
             </div>
-            <h3 className="principle-title">Known professional.</h3>
-            <p className="principle-body">
-              KYB providers, audit firms, chain-analytics vendors, and
-              regulators. Tier 2 is granted by registry admin review after the
-              issuer submits a tier request and supporting note.
-            </p>
+            <h3 className="principle-title">{t("issuers.tierDef.t2.title")}</h3>
+            <p className="principle-body">{t("issuers.tierDef.t2.body")}</p>
           </div>
           <div className="principle">
             <div className="principle-num">
               <TierPill tier={3} />
-              &nbsp;SELF / COMMUNITY
+              &nbsp;{t("issuers.tierDef.t3.label")}
             </div>
-            <h3 className="principle-title">Open self-registration.</h3>
-            <p className="principle-body">
-              Any verified user. Self-registration always lands at Tier 3.
-              Useful for entities to publish their own graph before a higher
-              tier review is approved.
-            </p>
+            <h3 className="principle-title">{t("issuers.tierDef.t3.title")}</h3>
+            <p className="principle-body">{t("issuers.tierDef.t3.body")}</p>
           </div>
         </div>
       </div>

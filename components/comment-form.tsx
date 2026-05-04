@@ -12,6 +12,7 @@ import {
 import { sha256Bytes } from "@/lib/utils/hash";
 import { uploadImage, uploadMetadata } from "@/lib/upload-client";
 import { COMMENT_RELATION_LABELS } from "@/types";
+import { useT } from "@/lib/i18n";
 
 type Props = {
   entity: PublicKey;
@@ -32,6 +33,7 @@ export function CommentForm({
 }: Props) {
   const { publicKey, signMessage } = useWallet();
   const program = useProgram();
+  const t = useT();
   const isReply = !!parentComment;
 
   const [relationType, setRelationType] = useState(2); // default Addendum
@@ -46,11 +48,11 @@ export function CommentForm({
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     if (images.length >= MAX_IMAGES) {
-      setError(`Up to ${MAX_IMAGES} images per signal.`);
+      setError(t("comment.errors.maxImages", { n: MAX_IMAGES }));
       return;
     }
     if (!publicKey) {
-      setError("Connect a wallet first.");
+      setError(t("comment.errors.connect"));
       return;
     }
     setUploading(true);
@@ -65,7 +67,7 @@ export function CommentForm({
       }
       setImages((prev) => [...prev, ...uploaded]);
     } catch (err) {
-      setError((err as Error).message ?? "Image upload failed");
+      setError((err as Error).message ?? t("comment.errors.imageUpload"));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -80,11 +82,13 @@ export function CommentForm({
     e.preventDefault();
     setError(null);
     if (!program || !publicKey) {
-      setError("Connect a wallet first.");
+      setError(t("comment.errors.connect"));
       return;
     }
     if (!body.trim()) {
-      setError(isReply ? "Reply cannot be empty." : "Signal body is required.");
+      setError(
+        isReply ? t("comment.errors.replyEmpty") : t("comment.errors.bodyEmpty"),
+      );
       return;
     }
     setSubmitting(true);
@@ -94,7 +98,7 @@ export function CommentForm({
         images,
       };
       if (!isReply) {
-        payload.headline = headline.trim() || "(untitled)";
+        payload.headline = headline.trim() || t("comment.untitled");
         payload.relationType = relationType;
       }
       const content = JSON.stringify(payload);
@@ -106,7 +110,7 @@ export function CommentForm({
       // the same stale `commentCount` and only one tx would land.
       const fetchIndex = async (): Promise<number> => {
         const ent = await fetchEntityByPda(program, entity);
-        if (!ent) throw new Error("Entity not found");
+        if (!ent) throw new Error(t("comment.errors.entityNotFound"));
         return ent.commentCount;
       };
       const submitOnce = async (commentIndex: number): Promise<void> => {
@@ -155,7 +159,7 @@ export function CommentForm({
       onSubmitted?.();
     } catch (err) {
       console.error(err);
-      setError((err as Error).message ?? "Failed to submit");
+      setError((err as Error).message ?? t("comment.errors.failed"));
     } finally {
       setSubmitting(false);
     }
@@ -169,20 +173,16 @@ export function CommentForm({
       {!isReply && (
         <div>
           <h3 className="serif text-base font-semibold text-ink-800">
-            Add a community signal
+            {t("comment.title")}
           </h3>
-          <p className="hint">
-            Append-only. Use this for nuanced facts (disputes, addenda, incidents)
-            that don't fit the structured relationship schema. Hash, timestamp,
-            and your wallet are anchored on-chain.
-          </p>
+          <p className="hint">{t("comment.intro")}</p>
         </div>
       )}
 
       {!isReply && (
         <>
           <div>
-            <label className="label">Signal kind</label>
+            <label className="label">{t("comment.fields.kind")}</label>
             <select
               className="select mt-1"
               value={relationType}
@@ -190,20 +190,20 @@ export function CommentForm({
             >
               {Object.entries(COMMENT_RELATION_LABELS)
                 .filter(([k]) => Number(k) >= 1)
-                .map(([k, label]) => (
+                .map(([k]) => (
                   <option key={k} value={k}>
-                    {label}
+                    {t(`commentKind.${k}`)}
                   </option>
                 ))}
             </select>
           </div>
           <div>
-            <label className="label">Headline (optional)</label>
+            <label className="label">{t("comment.fields.headline")}</label>
             <input
               className="input mt-1"
               value={headline}
               onChange={(e) => setHeadline(e.target.value)}
-              placeholder="One-line summary"
+              placeholder={t("comment.fields.headlinePlaceholder")}
               maxLength={140}
             />
           </div>
@@ -211,15 +211,17 @@ export function CommentForm({
       )}
 
       <div>
-        <label className="label">{isReply ? "Reply" : "Body"}</label>
+        <label className="label">
+          {isReply ? t("comment.fields.reply") : t("comment.fields.body")}
+        </label>
         <textarea
           className="textarea mt-1"
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder={
             isReply
-              ? "Add context, ask a question, or share your take."
-              : "Stick to facts. Provide evidence when possible."
+              ? t("comment.fields.replyPlaceholder")
+              : t("comment.fields.bodyPlaceholder")
           }
           maxLength={4000}
           autoFocus={autoFocus}
@@ -227,21 +229,21 @@ export function CommentForm({
       </div>
 
       <div>
-        <label className="label">Images (optional)</label>
+        <label className="label">{t("comment.fields.images")}</label>
         <div className="mt-1 flex flex-wrap gap-2">
           {images.map((uri) => (
             <div key={uri} className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={`/api/mock/fetch?uri=${encodeURIComponent(uri)}`}
-                alt="signal attachment"
+                alt={t("comment.imageAlt")}
                 className="h-20 w-20 border border-ink-200 object-cover"
               />
               <button
                 type="button"
                 onClick={() => removeImage(uri)}
                 className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-ink-800 text-xs text-white"
-                aria-label="remove image"
+                aria-label={t("comment.imageRemove")}
               >
                 ×
               </button>
@@ -249,7 +251,7 @@ export function CommentForm({
           ))}
           {images.length < MAX_IMAGES && (
             <label className="flex h-20 w-20 cursor-pointer items-center justify-center border border-dashed border-ink-300 text-xs text-ink-500 hover:bg-ink-50">
-              {uploading ? "…" : "+ image"}
+              {uploading ? "…" : t("comment.fields.imagesAdd")}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -263,8 +265,8 @@ export function CommentForm({
           )}
         </div>
         <p className="hint mt-1">
-          Up to {MAX_IMAGES} images. Images are pinned off-chain; only the body
-          hash goes on-chain.
+          {t("comment.fields.imagesNote.lead")} {MAX_IMAGES}{" "}
+          {t("comment.fields.imagesNote.tail")}
         </p>
       </div>
 
@@ -272,9 +274,7 @@ export function CommentForm({
 
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-ink-500">
-          {isReply
-            ? "Replies are immutable once submitted."
-            : "Claim gives voice, not control."}
+          {isReply ? t("comment.foot.reply") : t("comment.foot.signal")}
         </p>
         <div className="flex gap-2">
           {isReply && onCancel && (
@@ -284,7 +284,7 @@ export function CommentForm({
               onClick={onCancel}
               disabled={submitting}
             >
-              Cancel
+              {t("comment.btn.cancel")}
             </button>
           )}
           <button
@@ -292,10 +292,10 @@ export function CommentForm({
             disabled={submitting || uploading || !publicKey}
           >
             {submitting
-              ? "Publishing…"
+              ? t("comment.btn.submitting")
               : isReply
-              ? "Post reply"
-              : "Submit on-chain"}
+              ? t("comment.btn.submitReply")
+              : t("comment.btn.submit")}
           </button>
         </div>
       </div>

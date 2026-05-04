@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { useT } from "@/lib/i18n";
 
 // ---------- Stamp seal ----------
 export function Stamp({
@@ -36,6 +37,7 @@ export function StatusPill({
   status: StatusInput;
   claimed?: boolean;
 }) {
+  const t = useT();
   const s =
     typeof status === "number"
       ? status === 2
@@ -48,9 +50,9 @@ export function StatusPill({
     return (
       <span
         className="status status-claimed"
-        title="This entity has been claimed by a representative whose control was verified by an approved issuer."
+        title={t("status.claimed.title")}
       >
-        ◆ Claimed · Verified
+        {t("status.claimed.text")}
       </span>
     );
   }
@@ -58,18 +60,18 @@ export function StatusPill({
     return (
       <span
         className="status status-platform"
-        title="At least one approved platform-tier issuer has signed an identity-class relationship for this entity."
+        title={t("status.platform.title")}
       >
-        ● Platform-verified
+        {t("status.platform.text")}
       </span>
     );
   }
   return (
     <span
       className="status status-unverified"
-      title="No approved issuer has signed an identity attestation for this entity yet. Treat any self-asserted records with caution."
+      title={t("status.unverified.title")}
     >
-      ○ Unclaimed · pending verification
+      {t("status.unverified.text")}
     </span>
   );
 }
@@ -86,14 +88,17 @@ export function IssuerBadge({
   kind?: string | null;
   authorityShort?: string | null;
 }) {
+  const t = useT();
   return (
     <div className="rel-issuer">
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <TierPill tier={tier} />
-        <span className="rel-issuer-name">{name ?? "Unknown issuer"}</span>
+        <span className="rel-issuer-name">
+          {name ?? t("issuerBadge.unknown")}
+        </span>
       </div>
       <div className="docnum mono" style={{ fontSize: 9 }}>
-        {(kind ?? "ISSUER")}
+        {(kind ?? t("issuerBadge.fallbackKind"))}
         {authorityShort ? ` · ${authorityShort}` : ""}
       </div>
     </div>
@@ -110,10 +115,11 @@ export function Toast({
   onClose: () => void;
   durationMs?: number;
 }) {
+  const t = useT();
   useEffect(() => {
     if (!message) return;
-    const t = setTimeout(onClose, durationMs);
-    return () => clearTimeout(t);
+    const id = setTimeout(onClose, durationMs);
+    return () => clearTimeout(id);
   }, [message, onClose, durationMs]);
   if (!message) return null;
   return (
@@ -123,7 +129,7 @@ export function Toast({
       <button
         type="button"
         onClick={onClose}
-        aria-label="dismiss"
+        aria-label={t("toast.dismiss")}
         style={{
           marginLeft: 12,
           background: "transparent",

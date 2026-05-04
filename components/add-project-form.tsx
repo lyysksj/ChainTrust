@@ -7,6 +7,7 @@ import { useProgram } from "@/lib/anchor/hooks";
 import { createProject } from "@/lib/anchor/client";
 import { randomProjectId, sha256Bytes } from "@/lib/utils/hash";
 import { uploadMetadata } from "@/lib/upload-client";
+import { useT } from "@/lib/i18n";
 
 type Props = {
   entity: PublicKey;
@@ -24,6 +25,7 @@ function domainFromUrl(url: string): string {
 export function AddProjectForm({ entity, onCreated }: Props) {
   const { publicKey, signMessage } = useWallet();
   const program = useProgram();
+  const t = useT();
 
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
@@ -35,11 +37,11 @@ export function AddProjectForm({ entity, onCreated }: Props) {
     e.preventDefault();
     setError(null);
     if (!program || !publicKey) {
-      setError("Connect a wallet first.");
+      setError(t("addProject.errors.connect"));
       return;
     }
     if (!name.trim()) {
-      setError("Project name is required.");
+      setError(t("addProject.errors.name"));
       return;
     }
     setSubmitting(true);
@@ -70,7 +72,7 @@ export function AddProjectForm({ entity, onCreated }: Props) {
       onCreated?.();
     } catch (err) {
       console.error(err);
-      setError((err as Error).message ?? "Failed to create project");
+      setError((err as Error).message ?? t("addProject.errors.failed"));
     } finally {
       setSubmitting(false);
     }
@@ -83,27 +85,29 @@ export function AddProjectForm({ entity, onCreated }: Props) {
     >
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div>
-          <label className="label">Project name</label>
+          <label className="label">{t("addProject.fields.name")}</label>
           <input
             className="input mt-1"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Acme Lend"
+            placeholder={t("addProject.fields.namePlaceholder")}
             maxLength={200}
           />
         </div>
         <div>
-          <label className="label">Primary domain (optional)</label>
+          <label className="label">{t("addProject.fields.domain")}</label>
           <input
             className="input mt-1"
             value={domain}
             onChange={(e) => setDomain(e.target.value)}
-            placeholder="https://lend.acme.xyz"
+            placeholder={t("addProject.fields.domainPlaceholder")}
             maxLength={200}
           />
         </div>
         <div className="md:col-span-2">
-          <label className="label">Description (optional)</label>
+          <label className="label">
+            {t("addProject.fields.description")}
+          </label>
           <textarea
             className="textarea mt-1"
             value={description}
@@ -114,7 +118,9 @@ export function AddProjectForm({ entity, onCreated }: Props) {
       </div>
       {error && <p className="error">{error}</p>}
       <button className="btn" disabled={submitting || !publicKey}>
-        {submitting ? "Publishing…" : "Publish Project on-chain"}
+        {submitting
+          ? t("addProject.btn.submitting")
+          : t("addProject.btn.submit")}
       </button>
     </form>
   );

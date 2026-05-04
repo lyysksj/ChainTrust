@@ -22,7 +22,7 @@ Program ID: `HBxcCBx4ZPVnhGazehwZjF72J3neJsz5HyvGoPMTzUPt`
 - Wallets: Solana Wallet Adapter, Phantom, Solflare
 - On-chain: Anchor 0.30.1 program in `anchor/`
 - Storage: local `mock://` storage by default, optional Pinata-backed `ipfs://`
-- Human verification: optional World ID gate for profile registration
+- Human verification: World ID gate for profile registration
 - Interop: optional SAS dual-write for relationship attestations
 
 ## Repository Layout
@@ -48,15 +48,15 @@ Program ID: `HBxcCBx4ZPVnhGazehwZjF72J3neJsz5HyvGoPMTzUPt`
 
 ### Accounts
 
-| Account | Purpose | PDA seeds |
-| --- | --- | --- |
-| `UserProfile` | User identity and metadata URI | `["user", wallet]` |
-| `Issuer` | Attestor authority, kind, trust tier | `["issuer", authority]` |
-| `Entity` | Legal entity anchor for the registry | `["entity", entity_id]` |
-| `Project` | Project filed under an entity | `["project", entity, project_id]` |
-| `Relationship` | Signed edge from entity to wallet/domain/project/entity/person | `["rel", entity, kind, target_ref, issuer]` |
-| `CommentRecord` | Community signal or reply | `["comment", entity, commenter, comment_index]` |
-| `LikeRecord` | Like state for a comment | `["like", comment, liker]` |
+| Account         | Purpose                                                        | PDA seeds                                       |
+| --------------- | -------------------------------------------------------------- | ----------------------------------------------- |
+| `UserProfile`   | User identity and metadata URI                                 | `["user", wallet]`                              |
+| `Issuer`        | Attestor authority, kind, trust tier                           | `["issuer", authority]`                         |
+| `Entity`        | Legal entity anchor for the registry                           | `["entity", entity_id]`                         |
+| `Project`       | Project filed under an entity                                  | `["project", entity, project_id]`               |
+| `Relationship`  | Signed edge from entity to wallet/domain/project/entity/person | `["rel", entity, kind, target_ref, issuer]`     |
+| `CommentRecord` | Community signal or reply                                      | `["comment", entity, commenter, comment_index]` |
+| `LikeRecord`    | Like state for a comment                                       | `["like", comment, liker]`                      |
 
 ### Instructions
 
@@ -77,7 +77,7 @@ Program ID: `HBxcCBx4ZPVnhGazehwZjF72J3neJsz5HyvGoPMTzUPt`
 - `/attest`: guided attestation flow
 - `/issuers`: issuer registry and trust tier list
 - `/issuer/register`: issuer self-registration
-- `/register`: user registration with optional World ID verification
+- `/register`: user registration with World ID verification
 
 ## Local Development
 
@@ -157,20 +157,20 @@ Open `http://localhost:3000`.
 
 Put local overrides in `.env.local`.
 
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `NEXT_PUBLIC_SOLANA_RPC` | Recommended | RPC endpoint for the frontend. If omitted, the app falls back to `NEXT_PUBLIC_RPC_URL`, then `devnet`. |
-| `NEXT_PUBLIC_RPC_URL` | Optional | Legacy RPC fallback alias. |
-| `NEXT_PUBLIC_WORLDID_APP_ID` | Optional | Enables the World ID registration gate when paired with RP ID. |
-| `NEXT_PUBLIC_WORLDID_RP_ID` | Optional | World ID relying party ID. |
-| `NEXT_PUBLIC_WORLDID_ACTION` | Optional | World ID action name. Defaults to `register-chaintrust-user`. |
-| `NEXT_PUBLIC_WORLDID_ENV` | Optional | `staging` or `production`. |
-| `WORLDID_RP_SIGNING_KEY` | Optional | Server-side key for `/api/worldid/rp-signature`. |
-| `PINATA_JWT` | Optional | Server-side Pinata JWT. If absent, uploads use local mock storage. |
-| `NEXT_PUBLIC_PINATA_GATEWAY` | Optional | Public Pinata gateway host for reading pinned content. |
-| `PINATA_GATEWAY` | Optional | Server-side fallback gateway host. |
-| `NEXT_PUBLIC_SAS_DUAL_WRITE` | Optional | Enables SAS dual-write on relationship attestations. |
-| `NEXT_PUBLIC_SAS_CREDENTIAL_AUTHORITY` | Optional | Authority used to derive the shared SAS credential PDA. |
+| Variable                               | Required    | Purpose                                                                                                |
+| -------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------ |
+| `NEXT_PUBLIC_SOLANA_RPC`               | Recommended | RPC endpoint for the frontend. If omitted, the app falls back to `NEXT_PUBLIC_RPC_URL`, then `devnet`. |
+| `NEXT_PUBLIC_RPC_URL`                  | Optional    | Legacy RPC fallback alias.                                                                             |
+| `NEXT_PUBLIC_WORLDID_APP_ID`           | Optional    | Enables the World ID registration gate when paired with RP ID.                                         |
+| `NEXT_PUBLIC_WORLDID_RP_ID`            | Optional    | World ID relying party ID.                                                                             |
+| `NEXT_PUBLIC_WORLDID_ACTION`           | Optional    | World ID action name. Defaults to `register-chaintrust-user`.                                          |
+| `NEXT_PUBLIC_WORLDID_ENV`              | Optional    | `staging` or `production`.                                                                             |
+| `WORLDID_RP_SIGNING_KEY`               | Optional    | Server-side key for `/api/worldid/rp-signature`.                                                       |
+| `PINATA_JWT`                           | Optional    | Server-side Pinata JWT. If absent, uploads use local mock storage.                                     |
+| `NEXT_PUBLIC_PINATA_GATEWAY`           | Optional    | Public Pinata gateway host for reading pinned content.                                                 |
+| `PINATA_GATEWAY`                       | Optional    | Server-side fallback gateway host.                                                                     |
+| `NEXT_PUBLIC_SAS_DUAL_WRITE`           | Optional    | Enables SAS dual-write on relationship attestations.                                                   |
+| `NEXT_PUBLIC_SAS_CREDENTIAL_AUTHORITY` | Optional    | Authority used to derive the shared SAS credential PDA.                                                |
 
 ## Storage Modes
 

@@ -13,8 +13,8 @@ import {
 import { CommentForm } from "@/components/comment-form";
 import { formatTimestamp, shortHash, shortKey } from "@/lib/utils/format";
 import { uploadMetadata } from "@/lib/upload-client";
-import { COMMENT_RELATION_LABELS } from "@/types";
 import type { CommentBody, CommentRecord } from "@/types";
+import { useT } from "@/lib/i18n";
 
 type Item = {
   publicKey: PublicKey;
@@ -93,6 +93,7 @@ export function ReviewList({
 }: Props) {
   const { publicKey } = useWallet();
   const program = useProgram();
+  const t = useT();
   const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -120,12 +121,7 @@ export function ReviewList({
   const tree = useMemo(() => buildTree(items), [items]);
 
   if (!items.length) {
-    return (
-      <p className="hint">
-        No community signals yet. Use signals to record disputes, addenda,
-        incidents, or other facts that don't fit a structured attestation.
-      </p>
-    );
+    return <p className="hint">{t("review.empty")}</p>;
   }
 
   return (
@@ -170,6 +166,7 @@ function CommentNode({
   const { account: comment, publicKey: commentPda } = item;
   const { publicKey, signMessage } = useWallet();
   const program = useProgram();
+  const t = useT();
   const [body, setBody] = useState<CommentBody | null>(null);
   const [responseBody, setResponseBody] = useState<string | null>(null);
   const [showResponseForm, setShowResponseForm] = useState(false);
@@ -278,7 +275,7 @@ function CommentNode({
   async function submitResponse() {
     if (!program || !publicKey) return;
     if (!responseDraft.trim()) {
-      setResponseError("Response cannot be empty.");
+      setResponseError(t("review.errors.empty"));
       return;
     }
     setSubmittingResponse(true);
@@ -297,7 +294,7 @@ function CommentNode({
       setResponseDraft("");
       onResponded?.();
     } catch (err) {
-      setResponseError((err as Error).message ?? "Failed to publish response");
+      setResponseError((err as Error).message ?? t("review.errors.failed"));
     } finally {
       setSubmittingResponse(false);
     }
@@ -322,27 +319,35 @@ function CommentNode({
               if (role === "official") {
                 return (
                   <span className="chip chip-official">
-                    {isReply ? "Official reply" : "Official response"}
+                    {isReply
+                      ? t("review.role.officialReply")
+                      : t("review.role.officialResponse")}
                   </span>
                 );
               }
               if (role === "creator") {
                 return (
                   <span className="chip chip-creator">
-                    {isReply ? "Creator reply" : "Creator signal"}
+                    {isReply
+                      ? t("review.role.creatorReply")
+                      : t("review.role.creatorSignal")}
                   </span>
                 );
               }
               return (
                 <span className="chip chip-community">
-                  {isReply ? "Reply" : "Community signal"}
+                  {isReply
+                    ? t("review.role.communityReply")
+                    : t("review.role.communitySignal")}
                 </span>
               );
             })()}
             {!isReply && (
-              <span>{COMMENT_RELATION_LABELS[comment.relationType] ?? "Other"}</span>
+              <span>{t(`commentKind.${comment.relationType}`)}</span>
             )}
-            <span className="mono">by {shortKey(comment.commenter)}</span>
+            <span className="mono">
+              {t("review.by")} {shortKey(comment.commenter)}
+            </span>
           </div>
           <span>{formatTimestamp(comment.submittedAt)}</span>
         </div>
@@ -353,7 +358,9 @@ function CommentNode({
           </h4>
         )}
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-700">
-          {body?.body ?? <span className="hint">Loading content…</span>}
+          {body?.body ?? (
+            <span className="hint">{t("review.bodyLoading")}</span>
+          )}
         </p>
 
         {body?.images && body.images.length > 0 && (
@@ -368,7 +375,7 @@ function CommentNode({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={`/api/mock/fetch?uri=${encodeURIComponent(uri)}`}
-                  alt="signal attachment"
+                  alt={t("review.imageAlt")}
                   className="h-24 w-24 border border-ink-200 object-cover hover:opacity-80"
                 />
               </a>
@@ -397,18 +404,23 @@ function CommentNode({
               onClick={() => setShowReplyForm((v) => !v)}
               className="rounded-sm px-2 py-1 text-xs text-ink-600 hover:bg-ink-100"
             >
-              {showReplyForm ? "Cancel reply" : "Reply"}
+              {showReplyForm ? t("review.cancelReply") : t("review.replyBtn")}
             </button>
           )}
           {children.length > 0 && (
             <span>
-              {children.length} {children.length === 1 ? "reply" : "replies"}
+              {children.length}{" "}
+              {children.length === 1
+                ? t("review.replyOne")
+                : t("review.replyMany")}
             </span>
           )}
           <span className="mono ml-auto">
-            hash {shortHash(comment.contentHash)}
+            {t("review.hash")} {shortHash(comment.contentHash)}
           </span>
-          <span className="mono">pda {shortKey(commentPda)}</span>
+          <span className="mono">
+            {t("review.pda")} {shortKey(commentPda)}
+          </span>
         </div>
 
         {showReplyForm && (
@@ -431,16 +443,17 @@ function CommentNode({
       {!isReply && comment.officialResponseUri ? (
         <div className="border-t-2 border-claimed bg-claimed/5 p-4">
           <div className="flex items-center justify-between gap-2 text-xs text-claimed">
-            <span className="chip chip-official">Official response</span>
+            <span className="chip chip-official">
+              {t("review.role.officialResponse")}
+            </span>
             <span>{formatTimestamp(comment.officialResponseAt)}</span>
           </div>
           <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink-700">
-            {responseBody ?? <span className="hint">Loading response…</span>}
+            {responseBody ?? (
+              <span className="hint">{t("review.responseLoading")}</span>
+            )}
           </p>
-          <p className="hint mt-2">
-            Official response is a separate record. It does not alter the
-            original signal hash above.
-          </p>
+          <p className="hint mt-2">{t("review.responseFoot")}</p>
         </div>
       ) : !isReply && canRespond ? (
         <div className="border-t border-ink-100 bg-ink-50 p-4">
@@ -450,16 +463,16 @@ function CommentNode({
               className="btn-outline"
               onClick={() => setShowResponseForm(true)}
             >
-              Publish official response
+              {t("review.publishResponseBtn")}
             </button>
           ) : (
             <div className="space-y-2">
-              <label className="label">Official response</label>
+              <label className="label">{t("review.responseLabel")}</label>
               <textarea
                 className="textarea"
                 value={responseDraft}
                 onChange={(e) => setResponseDraft(e.target.value)}
-                placeholder="Respond on-chain. You can add context, correct facts, or share resolution steps."
+                placeholder={t("review.responsePlaceholder")}
                 maxLength={4000}
               />
               {responseError && <p className="error">{responseError}</p>}
@@ -470,7 +483,9 @@ function CommentNode({
                   onClick={submitResponse}
                   disabled={submittingResponse}
                 >
-                  {submittingResponse ? "Publishing…" : "Publish response"}
+                  {submittingResponse
+                    ? t("review.responseSubmitting")
+                    : t("review.responseSubmit")}
                 </button>
                 <button
                   type="button"
@@ -480,7 +495,7 @@ function CommentNode({
                     setResponseError(null);
                   }}
                 >
-                  Cancel
+                  {t("review.responseCancel")}
                 </button>
               </div>
             </div>

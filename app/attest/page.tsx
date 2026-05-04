@@ -28,13 +28,19 @@ import {
   REL_KIND_META,
 } from "@/types";
 import type { Entity, Issuer, Project } from "@/types";
+import { useT } from "@/lib/i18n";
 
 export default function AttestRoute() {
   return (
-    <Suspense fallback={<p className="hint">LOADING ATTEST FORM…</p>}>
+    <Suspense fallback={<AttestFallback />}>
       <AttestPage />
     </Suspense>
   );
+}
+
+function AttestFallback() {
+  const t = useT();
+  return <p className="hint">{t("attest.suspenseFallback")}</p>;
 }
 
 const KIND_OPTIONS: { value: number; label: string; verb: string }[] = Object.entries(
@@ -76,6 +82,7 @@ function AttestPage() {
   const params = useSearchParams();
   const { publicKey, signMessage } = useWallet();
   const presetCt = params.get("entity") ?? "";
+  const t = useT();
 
   const [step, setStep] = useState(1);
   const [entities, setEntities] = useState<
@@ -194,7 +201,7 @@ function AttestPage() {
   }, [entityCt, kind, target, evidence, evidenceNotes]);
 
   const pdaPreview = useMemo(() => {
-    if (!selectedEntity || !target) return "— pending fields —";
+    if (!selectedEntity || !target) return t("attest.step4.pdaPending");
     const seed = `rel|${entityCt}|${kind}|${target}|${publicKey?.toBase58() ?? ""}`;
     let h1 = 0,
       h2 = 0;
@@ -215,7 +222,7 @@ function AttestPage() {
   }
 
   function targetRefBytes(): number[] | { error: string } {
-    if (!target.trim()) return { error: "Target is required." };
+    if (!target.trim()) return { error: t("attest.errors.target") };
     if (
       targetType === "wallet" ||
       targetType === "project" ||
@@ -226,7 +233,7 @@ function AttestPage() {
         const pk = new PublicKey(target.trim());
         return Array.from(pk.toBytes());
       } catch {
-        return { error: "Invalid base58 pubkey." };
+        return { error: t("attest.errors.targetBase58") };
       }
     }
     return sha256Bytes(target.trim().toLowerCase());
@@ -235,15 +242,15 @@ function AttestPage() {
   async function submit() {
     setError(null);
     if (!program || !publicKey) {
-      setError("Connect a wallet first.");
+      setError(t("attest.errors.connect"));
       return;
     }
     if (!myIssuer) {
-      setError("You must register as an Issuer before signing attestations.");
+      setError(t("attest.errors.notIssuer"));
       return;
     }
     if (!selectedEntity) {
-      setError("Select a subject Entity.");
+      setError(t("attest.errors.subject"));
       return;
     }
     const targetBytes = targetRefBytes();
@@ -306,39 +313,31 @@ function AttestPage() {
         validUntil: validUntilTs,
       });
       setSuccessMsg(
-        `Attestation filed for ${selectedEntity.ctNumber}. Redirecting…`,
+        t("attest.success", { ct: selectedEntity.ctNumber }),
       );
       setTimeout(
         () => router.push(`/entry/${selectedEntity.entityIdHex}`),
         900,
       );
     } catch (err) {
-      setError((err as Error).message ?? "Attestation failed");
+      setError((err as Error).message ?? t("attest.errors.failed"));
     } finally {
       setSubmitting(false);
     }
   }
 
-  const stepTitle =
-    [
-      "Subject & verb",
-      "Target & validity",
-      "Issuer & evidence",
-      "Review & sign",
-    ][step - 1] ?? "";
+  const stepTitle = t(`attest.step.title.${step}`);
 
   return (
     <div data-screen="04 Attest">
       <div className="docnum" style={{ marginBottom: 8 }}>
-        FORM CT-ATT · 2026 EDITION · ART. 5.5
+        {t("attest.docnum")}
       </div>
       <div className="section-h" style={{ borderTop: "none", paddingTop: 0 }}>
         <h2 className="section-title" style={{ fontSize: 36 }}>
-          File an attestation.
+          {t("attest.title")}
         </h2>
-        <span className="section-meta">
-          PDA seeds: [&quot;rel&quot;, entity, kind, target, issuer]
-        </span>
+        <span className="section-meta">{t("attest.meta")}</span>
       </div>
       <p
         style={{
@@ -350,10 +349,7 @@ function AttestPage() {
           marginBottom: 32,
         }}
       >
-        A signed, time-bounded edge between a subject Entity and a target —
-        wallet, domain, project, person hash, or another Entity. Multiple
-        issuers may attest the same fact independently; this form creates one
-        relationship PDA on your behalf.
+        {t("attest.intro")}
       </p>
 
       <div
@@ -367,7 +363,7 @@ function AttestPage() {
         <div className="doc-card">
           <div className="doc-card-h">
             <div className="doc-card-title">
-              Step {step} of 4 · {stepTitle}
+              {t("attest.step.label", { n: step })} {stepTitle}
             </div>
             <div
               style={{
@@ -384,26 +380,26 @@ function AttestPage() {
           {step === 1 && (
             <>
               <div className="form-row">
-                <label className="label">Subject entity (CT-Number)</label>
+                <label className="label">{t("attest.step1.entity.label")}</label>
                 <select
                   value={entityCt}
                   onChange={(e) => setEntityCt(e.target.value)}
                 >
-                  <option value="">— select an entity —</option>
+                  <option value="">{t("attest.step1.entity.placeholder")}</option>
                   {entities.map((e) => (
                     <option key={e.ctNumber} value={e.ctNumber}>
                       {e.ctNumber}
                       {" · "}
-                      {e.account.metadataUri ? "" : "(metadata pending)"}
+                      {e.account.metadataUri
+                        ? ""
+                        : t("attest.step1.entity.metaPending")}
                     </option>
                   ))}
                 </select>
-                <div className="hint">
-                  Every relationship is anchored to one Entity.
-                </div>
+                <div className="hint">{t("attest.step1.entity.hint")}</div>
               </div>
               <div className="form-row">
-                <label className="label">Relationship kind (verb)</label>
+                <label className="label">{t("attest.step1.kind.label")}</label>
                 <select
                   value={kind}
                   onChange={(e) => setKind(Number(e.target.value))}
@@ -415,7 +411,7 @@ function AttestPage() {
                   ))}
                 </select>
                 <div className="hint">
-                  Target type will switch to:{" "}
+                  {t("attest.step1.kind.hint")}{" "}
                   <strong>{targetType.toUpperCase()}</strong>
                 </div>
               </div>
@@ -426,7 +422,7 @@ function AttestPage() {
             <>
               <div className="form-row">
                 <label className="label">
-                  Target reference ({targetType})
+                  {t("attest.step2.target.label")} ({targetType})
                 </label>
                 {kind === REL_KIND.OPERATES_PROJECT &&
                 projects.length > 0 ? (
@@ -445,7 +441,7 @@ function AttestPage() {
                     }}
                   >
                     <option value="">
-                      — select a project under this entity —
+                      {t("attest.step2.target.projectPlaceholder")}
                     </option>
                     {projects.map((p) => (
                       <option
@@ -461,34 +457,32 @@ function AttestPage() {
                   <input
                     placeholder={
                       targetType === "wallet"
-                        ? "44-char Solana pubkey"
+                        ? t("attest.step2.target.placeholder.wallet")
                         : targetType === "domain"
-                          ? "example.com"
+                          ? t("attest.step2.target.placeholder.domain")
                           : targetType === "entity"
-                            ? "Other entity PDA (base58)"
+                            ? t("attest.step2.target.placeholder.entity")
                             : targetType === "person"
-                              ? "Person identifier (will be hashed)"
-                              : "target_ref"
+                              ? t("attest.step2.target.placeholder.person")
+                              : t("attest.step2.target.placeholder.default")
                     }
                     value={target}
                     onChange={(e) => setTarget(e.target.value)}
                   />
                 )}
-                <div className="hint">
-                  Stored on-chain as 32 bytes — pubkey or hash.
-                </div>
+                <div className="hint">{t("attest.step2.target.hint")}</div>
               </div>
               <div className="form-row">
-                <label className="label">Display label (off-chain)</label>
+                <label className="label">{t("attest.step2.label.label")}</label>
                 <input
-                  placeholder="e.g. Treasury wallet, Deployer key, Director Tan"
+                  placeholder={t("attest.step2.label.placeholder")}
                   value={targetLabel}
                   onChange={(e) => setTargetLabel(e.target.value)}
                 />
               </div>
               <div className="form-grid-2">
                 <div className="form-row">
-                  <label className="label">Valid from</label>
+                  <label className="label">{t("attest.step2.validFrom")}</label>
                   <input
                     type="date"
                     value={validFrom}
@@ -496,14 +490,14 @@ function AttestPage() {
                   />
                 </div>
                 <div className="form-row">
-                  <label className="label">Valid until</label>
+                  <label className="label">{t("attest.step2.validUntil")}</label>
                   <input
                     type="date"
                     value={validUntil}
                     onChange={(e) => setValidUntil(e.target.value)}
-                    placeholder="Open-ended"
+                    placeholder={t("attest.step2.validUntil.placeholder")}
                   />
-                  <div className="hint">Leave empty for no expiry.</div>
+                  <div className="hint">{t("attest.step2.validUntil.hint")}</div>
                 </div>
               </div>
             </>
@@ -512,7 +506,7 @@ function AttestPage() {
           {step === 3 && (
             <>
               <div className="form-row">
-                <label className="label">Sign as issuer (your wallet)</label>
+                <label className="label">{t("attest.step3.issuer.label")}</label>
                 {myIssuer ? (
                   <div
                     style={{
@@ -532,7 +526,9 @@ function AttestPage() {
                         fontWeight: 500,
                       }}
                     >
-                      {ISSUER_KIND_LABELS[myIssuer.kind] ?? "Issuer"}
+                      {myIssuer.kind > 0
+                        ? t(`issuerKind.${myIssuer.kind}`)
+                        : t("issuerKind.fallback")}
                     </span>
                     <span
                       style={{
@@ -542,7 +538,7 @@ function AttestPage() {
                         marginLeft: "auto",
                       }}
                     >
-                      authority{" "}
+                      {t("attest.step3.issuer.authority")}{" "}
                       {publicKey ? shortKey(publicKey, 6) : "—"}
                     </span>
                   </div>
@@ -557,21 +553,19 @@ function AttestPage() {
                       color: "var(--ink-2)",
                     }}
                   >
-                    YOUR WALLET IS NOT REGISTERED AS AN ISSUER ·{" "}
+                    {t("attest.step3.issuer.notRegistered.lead")}{" "}
                     <Link
                       href="/issuer/register"
                       style={{ color: "var(--stamp-deep)" }}
                     >
-                      Register here →
+                      {t("attest.step3.issuer.notRegistered.link")}
                     </Link>
                   </div>
                 )}
-                <div className="hint">
-                  Tier is public. Consumers decide what to trust.
-                </div>
+                <div className="hint">{t("attest.step3.issuer.hint")}</div>
               </div>
               <div className="form-row">
-                <label className="label">Evidence document</label>
+                <label className="label">{t("attest.step3.evidence.label")}</label>
                 <EvidenceUploader
                   value={evidence}
                   onChange={(v) => {
@@ -582,15 +576,15 @@ function AttestPage() {
                 />
               </div>
               <div className="form-row">
-                <label className="label">Evidence notes (off-chain)</label>
+                <label className="label">{t("attest.step3.notes.label")}</label>
                 <textarea
-                  placeholder="Brief description of what the evidence proves. Stored alongside the file URI; the on-chain commitment is the file hash above."
+                  placeholder={t("attest.step3.notes.placeholder")}
                   value={evidenceNotes}
                   onChange={(e) => setEvidenceNotes(e.target.value)}
                 />
               </div>
               <div className="form-row">
-                <label className="label">Computed evidence hash</label>
+                <label className="label">{t("attest.step3.hash.label")}</label>
                 <div
                   style={{
                     fontFamily: "var(--mono)",
@@ -610,7 +604,7 @@ function AttestPage() {
           {step === 4 && (
             <>
               <div className="form-row">
-                <label className="label">Relationship PDA (preview)</label>
+                <label className="label">{t("attest.step4.pda.label")}</label>
                 <div
                   style={{
                     fontFamily: "var(--mono)",
@@ -660,9 +654,7 @@ function AttestPage() {
                   marginBottom: 8,
                 }}
               >
-                By signing, the issuer authority key creates an append-only
-                relationship account. The PDA cannot be deleted. Revocation is
-                itself a signed event recorded against this same account.
+                {t("attest.step4.note")}
               </div>
             </>
           )}
@@ -700,7 +692,7 @@ function AttestPage() {
               className="btn btn-ghost"
               onClick={() => (step === 1 ? router.push("/") : setStep(step - 1))}
             >
-              ← {step === 1 ? "Cancel" : "Back"}
+              {step === 1 ? t("attest.btn.cancel") : t("attest.btn.back")}
             </button>
             {step < 4 ? (
               <button
@@ -709,13 +701,7 @@ function AttestPage() {
                 disabled={!canAdvance()}
                 onClick={() => setStep(step + 1)}
               >
-                Next:{" "}
-                {[
-                  "Target",
-                  "Issuer & evidence",
-                  "Review & sign",
-                ][step - 1]}{" "}
-                →
+                {t("attest.btn.next")} {t(`attest.step.next.${step}`)} →
               </button>
             ) : (
               <button
@@ -724,7 +710,9 @@ function AttestPage() {
                 onClick={submit}
                 disabled={submitting || !myIssuer}
               >
-                {submitting ? "SIGNING…" : "◆ Sign & file attestation"}
+                {submitting
+                  ? t("attest.btn.submitting")
+                  : t("attest.btn.submit")}
               </button>
             )}
           </div>

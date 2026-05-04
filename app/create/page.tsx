@@ -6,10 +6,12 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useProgram } from "@/lib/anchor/hooks";
 import { fetchUserProfile } from "@/lib/anchor/client";
 import { EntryForm } from "@/components/entry-form";
+import { useT } from "@/lib/i18n";
 
 export default function CreateEntityPage() {
   const { publicKey } = useWallet();
   const program = useProgram();
+  const t = useT();
   const [state, setState] = useState<
     "connect" | "checking" | "register" | "ready"
   >("connect");
@@ -33,15 +35,13 @@ export default function CreateEntityPage() {
   return (
     <div data-screen="create entity">
       <div className="docnum" style={{ marginBottom: 8 }}>
-        FORM CT-NEW · 2026 EDITION · ART. 5.3
+        {t("create.docnum")}
       </div>
       <div className="section-h" style={{ borderTop: "none", paddingTop: 0 }}>
         <h2 className="section-title" style={{ fontSize: 36 }}>
-          File a new Entity.
+          {t("create.title")}
         </h2>
-        <span className="section-meta">
-          PDA seeds: [&quot;entity&quot;, entity_id]
-        </span>
+        <span className="section-meta">{t("create.meta")}</span>
       </div>
       <p
         style={{
@@ -53,17 +53,14 @@ export default function CreateEntityPage() {
           marginBottom: 32,
         }}
       >
-        The Entity is the off-chain legal anchor of the on-chain identity
-        graph. Once filed, you receive a stable CT-Number and can register
-        Projects, attest relationships, or be claimed by an authorized
-        representative.
+        {t("create.intro")}
       </p>
 
       {state === "connect" && (
-        <div className="no-result">CONNECT A SOLANA WALLET TO CONTINUE.</div>
+        <div className="no-result">{t("common.connectWallet")}</div>
       )}
       {state === "checking" && (
-        <div className="no-result">CHECKING PROFILE…</div>
+        <div className="no-result">{t("common.checkingProfile")}</div>
       )}
       {state === "register" && (
         <div className="doc-card">
@@ -75,10 +72,10 @@ export default function CreateEntityPage() {
               margin: "0 0 16px",
             }}
           >
-            You need a verified user profile before filing an Entity.
+            {t("create.needProfile")}
           </p>
           <Link href="/register" className="btn btn-primary">
-            Register profile first →
+            {t("create.registerFirst")}
           </Link>
         </div>
       )}

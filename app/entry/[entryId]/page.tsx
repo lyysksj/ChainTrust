@@ -29,6 +29,7 @@ import { CommentForm } from "@/components/comment-form";
 import { AddProjectForm } from "@/components/add-project-form";
 import { ClaimCard } from "@/components/claim-card";
 import { COMMENT_RELATION_LABELS, COUNTRIES } from "@/types";
+import { useT } from "@/lib/i18n";
 import type {
   CommentRecord,
   Entity,
@@ -57,6 +58,7 @@ export default function EntityPage({ params }: { params: Params }) {
   const program = useProgram();
   const router = useRouter();
   const { publicKey } = useWallet();
+  const t = useT();
   const [tab, setTab] = useState<Tab>("graph");
   const [toast, setToast] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -192,20 +194,20 @@ export default function EntityPage({ params }: { params: Params }) {
   }, [projects]);
 
   if (!idBytes) {
-    return <div className="no-result">INVALID ENTITY ID</div>;
+    return <div className="no-result">{t("entry.invalidId")}</div>;
   }
   if (loading) {
-    return <p className="hint">LOADING ENTITY…</p>;
+    return <p className="hint">{t("entry.loading")}</p>;
   }
   if (notFound || !entity || !pda || !ctNumber) {
     return (
       <div data-screen="entity not found">
         <div className="no-result">
-          ENTITY NOT FOUND · <span className="mono">{params.entryId}</span>
+          {t("entry.notFound.lead")} <span className="mono">{params.entryId}</span>
         </div>
         <div style={{ marginTop: 16 }}>
           <Link href="/create" className="btn">
-            File a new entity
+            {t("entry.notFound.cta")}
           </Link>
         </div>
       </div>
@@ -236,7 +238,7 @@ export default function EntityPage({ params }: { params: Params }) {
           onClick={() => router.push("/")}
           style={{ cursor: "pointer" }}
         >
-          REGISTRY
+          {t("entry.crumb.registry")}
         </a>
         <span>›</span>
         <span style={{ color: "var(--ink)" }}>{ctNumber}</span>
@@ -244,15 +246,15 @@ export default function EntityPage({ params }: { params: Params }) {
 
       <div className="entity-head">
         <div>
-          <div className="ct-num-big">CT-NUMBER · {ctNumber}</div>
-          <h1>{meta?.legalName ?? "(metadata pending)"}</h1>
+          <div className="ct-num-big">{t("entry.head.ct")} {ctNumber}</div>
+          <h1>{meta?.legalName ?? t("entry.head.metaPending")}</h1>
           <p className="summary">
             {meta?.description ??
-              `Filed ${formatTimestamp(entity.createdAt)} · Identity graph still being populated.`}
+              `${t("entry.head.summary.filed")} ${formatTimestamp(entity.createdAt)} ${t("entry.head.summary.tail")}`}
           </p>
           <div className="entity-meta-grid">
             <div className="entity-meta-cell">
-              <div className="label">REGISTRY ID</div>
+              <div className="label">{t("entry.head.label.registryId")}</div>
               <div className="v">
                 {meta?.registryIdHashHex
                   ? `0x${meta.registryIdHashHex.slice(0, 12)}…`
@@ -260,17 +262,17 @@ export default function EntityPage({ params }: { params: Params }) {
               </div>
             </div>
             <div className="entity-meta-cell">
-              <div className="label">JURISDICTION</div>
+              <div className="label">{t("entry.head.label.jurisdiction")}</div>
               <div className="v serif">
                 {country?.label ?? entity.jurisdiction}
               </div>
             </div>
             <div className="entity-meta-cell">
-              <div className="label">FILED</div>
+              <div className="label">{t("entry.head.label.filed")}</div>
               <div className="v">{formatTimestamp(entity.createdAt)}</div>
             </div>
             <div className="entity-meta-cell">
-              <div className="label">PRIMARY DOMAIN</div>
+              <div className="label">{t("entry.head.label.primaryDomain")}</div>
               <div className="v">
                 {meta?.websites?.[0]
                   ? new URL(meta.websites[0]).hostname
@@ -278,15 +280,15 @@ export default function EntityPage({ params }: { params: Params }) {
               </div>
             </div>
             <div className="entity-meta-cell">
-              <div className="label">OFFICIAL WALLET</div>
+              <div className="label">{t("entry.head.label.officialWallet")}</div>
               <div className="v">
                 {entity.isClaimed
                   ? shortKey(entity.officialWallet, 6)
-                  : "— UNCLAIMED —"}
+                  : t("entry.head.label.unclaimed")}
               </div>
             </div>
             <div className="entity-meta-cell">
-              <div className="label">CLAIMED</div>
+              <div className="label">{t("entry.head.label.claimed")}</div>
               <div className="v">
                 {entity.isClaimed
                   ? formatTimestamp(entity.claimedAt)
@@ -294,15 +296,15 @@ export default function EntityPage({ params }: { params: Params }) {
               </div>
             </div>
             <div className="entity-meta-cell">
-              <div className="label">CREATED BY</div>
+              <div className="label">{t("entry.head.label.createdBy")}</div>
               <div className="v">{shortKey(entity.createdBy, 6)}</div>
             </div>
             <div className="entity-meta-cell">
-              <div className="label">SIGNED EDGES</div>
+              <div className="label">{t("entry.head.label.signedEdges")}</div>
               <div className="v">
                 {entity.relationshipCount} ·{" "}
                 {rels.filter((r) => Number(r.account.revokedAt) > 0).length}{" "}
-                revoked
+                {t("entry.head.revoked")}
               </div>
             </div>
           </div>
@@ -311,10 +313,10 @@ export default function EntityPage({ params }: { params: Params }) {
           <Stamp
             text={
               entity.isClaimed
-                ? "Claimed"
+                ? t("entry.stamp.claimed")
                 : entity.status === 1
-                  ? "Verified"
-                  : "Unverified"
+                  ? t("entry.stamp.verified")
+                  : t("entry.stamp.unverified")
             }
             sub={`CT · ${ctNumber.slice(3, 10)}`}
           />
@@ -325,7 +327,8 @@ export default function EntityPage({ params }: { params: Params }) {
             />
             {entity.isClaimed && (
               <span className="status status-platform">
-                CLAIM · {formatTimestamp(entity.claimedAt)}
+                {t("entry.statusPill.claimPrefix")}{" "}
+                {formatTimestamp(entity.claimedAt)}
               </span>
             )}
           </div>
@@ -334,7 +337,7 @@ export default function EntityPage({ params }: { params: Params }) {
               href={`/attest?entity=${ctNumber}`}
               className="btn btn-stamp"
             >
-              + File attestation
+              {t("entry.btn.fileAttestation")}
             </Link>
             <button
               type="button"
@@ -342,11 +345,11 @@ export default function EntityPage({ params }: { params: Params }) {
               onClick={() => {
                 navigator.clipboard
                   ?.writeText(window.location.href)
-                  .then(() => setToast("Citable URL copied"))
-                  .catch(() => setToast("Copy failed — copy from address bar"));
+                  .then(() => setToast(t("entry.toast.copied")))
+                  .catch(() => setToast(t("entry.toast.copyFailed")));
               }}
             >
-              ⎘ Copy citable URL
+              {t("entry.btn.copyUrl")}
             </button>
             {isOfficial && (
               <div
@@ -358,7 +361,7 @@ export default function EntityPage({ params }: { params: Params }) {
                   fontWeight: 700,
                 }}
               >
-                ◆ OFFICIAL WALLET CONNECTED
+                {t("entry.btn.officialBadge")}
               </div>
             )}
           </div>
@@ -376,32 +379,33 @@ export default function EntityPage({ params }: { params: Params }) {
           className={`tab ${tab === "graph" ? "active" : ""}`}
           onClick={() => setTab("graph")}
         >
-          Identity graph
+          {t("entry.tab.graph")}
         </button>
         <button
           className={`tab ${tab === "rels" ? "active" : ""}`}
           onClick={() => setTab("rels")}
         >
-          Relationships <span className="count">{rels.length}</span>
+          {t("entry.tab.rels")} <span className="count">{rels.length}</span>
         </button>
         <button
           className={`tab ${tab === "projects" ? "active" : ""}`}
           onClick={() => setTab("projects")}
         >
-          Projects <span className="count">{projects.length}</span>
+          {t("entry.tab.projects")}{" "}
+          <span className="count">{projects.length}</span>
         </button>
         <button
           className={`tab ${tab === "signals" ? "active" : ""}`}
           onClick={() => setTab("signals")}
         >
-          Community signals{" "}
+          {t("entry.tab.signals")}{" "}
           <span className="count">{comments.length}</span>
         </button>
         <button
           className={`tab ${tab === "raw" ? "active" : ""}`}
           onClick={() => setTab("raw")}
         >
-          On-chain raw
+          {t("entry.tab.raw")}
         </button>
       </div>
 
@@ -409,7 +413,7 @@ export default function EntityPage({ params }: { params: Params }) {
         <>
           <div className="graph-card">
             <div className="graph-card-h">
-              <h3>Identity graph</h3>
+              <h3>{t("entry.graph.title")}</h3>
               <div
                 style={{
                   display: "flex",
@@ -434,7 +438,7 @@ export default function EntityPage({ params }: { params: Params }) {
                   <Dot color="#ca986d" />
                   T3
                 </span>
-                <span style={{ color: "var(--revoked)" }}>·· REVOKED</span>
+                <span style={{ color: "var(--revoked)" }}>{t("entry.graph.legend.revoked")}</span>
               </div>
             </div>
             <div className="graph-svg-wrap">
@@ -448,7 +452,7 @@ export default function EntityPage({ params }: { params: Params }) {
           <div className="rel-list">
             {rels.length === 0 ? (
               <div className="no-result" style={{ border: "none" }}>
-                NO RELATIONSHIPS YET — FILE THE FIRST ATTESTATION
+                {t("entry.graph.empty")}
               </div>
             ) : (
               rels
@@ -471,7 +475,7 @@ export default function EntityPage({ params }: { params: Params }) {
               style={{ marginTop: 16 }}
               onClick={() => setTab("rels")}
             >
-              View all {rels.length} relationships →
+              {t("entry.graph.viewAll", { n: rels.length })}
             </button>
           )}
         </>
@@ -488,13 +492,12 @@ export default function EntityPage({ params }: { params: Params }) {
               letterSpacing: "0.04em",
             }}
           >
-            APPEND-ONLY · ORDERED BY CREATED_AT DESC · REVOKED ROWS REMAIN
-            VISIBLE
+            {t("entry.rels.note")}
           </div>
           <div className="rel-list">
             {rels.length === 0 ? (
               <div className="no-result" style={{ border: "none" }}>
-                NO RELATIONSHIPS FILED YET
+                {t("entry.rels.empty")}
               </div>
             ) : (
               [...rels]
@@ -520,7 +523,7 @@ export default function EntityPage({ params }: { params: Params }) {
         <>
           {projects.length === 0 && (
             <div className="no-result" style={{ marginBottom: 16 }}>
-              NO PROJECTS FILED UNDER THIS ENTITY
+              {t("entry.projects.empty")}
             </div>
           )}
           {projects.length > 0 && (
@@ -533,11 +536,11 @@ export default function EntityPage({ params }: { params: Params }) {
             >
               {projects.map((p) => {
                 const pm = projectMeta[p.publicKey.toBase58()] ?? null;
-                const fallbackName = `Project ${bytesHex(p.account.projectId).slice(0, 6)}`;
+                const fallbackName = `${t("entry.projects.fallback")} ${bytesHex(p.account.projectId).slice(0, 6)}`;
                 return (
                   <div key={p.publicKey.toBase58()} className="doc-card">
                     <div className="docnum" style={{ marginBottom: 6 }}>
-                      PROJECT · {bytesHex(p.account.projectId)}
+                      {t("entry.projects.cardLabel")} {bytesHex(p.account.projectId)}
                     </div>
                     <h3
                       style={{
@@ -596,11 +599,13 @@ export default function EntityPage({ params }: { params: Params }) {
                         letterSpacing: "0.04em",
                       }}
                     >
-                      domain hash · {shortHash(p.account.domainHash, 8)}
+                      {t("entry.projects.domainHash")}{" "}
+                      {shortHash(p.account.domainHash, 8)}
                       <br />
                       PDA · {shortKey(p.publicKey, 6)}
                       <br />
-                      CREATED · {formatTimestamp(p.account.createdAt)}
+                      {t("entry.projects.created")}{" "}
+                      {formatTimestamp(p.account.createdAt)}
                     </div>
                   </div>
                 );
@@ -622,7 +627,7 @@ export default function EntityPage({ params }: { params: Params }) {
                     marginBottom: 12,
                   }}
                 >
-                  ▸ + REGISTER A NEW PROJECT UNDER THIS ENTITY
+                  {t("entry.projects.add")}
                 </summary>
                 <AddProjectForm entity={pda} onCreated={refresh} />
               </details>
@@ -630,8 +635,7 @@ export default function EntityPage({ params }: { params: Params }) {
           )}
           {!publicKey && projects.length === 0 && (
             <p className="hint" style={{ marginTop: 16 }}>
-              Connect a wallet and register a profile to file the first
-              project under this entity.
+              {t("entry.projects.connectFirst")}
             </p>
           )}
         </>
@@ -648,16 +652,11 @@ export default function EntityPage({ params }: { params: Params }) {
               maxWidth: "70ch",
             }}
           >
-            <em>
-              Community signals are append-only annotations on the entity
-              record — disputes, addenda, praise, supplemental evidence.
-            </em>{" "}
-            They are not reviews; they cannot replace signed relationships,
-            and the entity cannot delete them. Only the official wallet may
-            attach a response.
+            <em>{t("entry.signals.intro.em")}</em>
+            {t("entry.signals.intro.tail")}
           </div>
           {comments.length === 0 ? (
-            <div className="no-result">NO COMMUNITY SIGNALS FILED</div>
+            <div className="no-result">{t("entry.signals.empty")}</div>
           ) : (
             <ReviewList
               entity={pda}
@@ -677,8 +676,7 @@ export default function EntityPage({ params }: { params: Params }) {
           )}
           {!publicKey && (
             <p className="hint" style={{ marginTop: 16 }}>
-              Connect a wallet and register a profile to file a community
-              signal.
+              {t("entry.signals.connectFirst")}
             </p>
           )}
         </>
@@ -687,7 +685,7 @@ export default function EntityPage({ params }: { params: Params }) {
       {tab === "raw" && (
         <div className="doc-card">
           <div className="docnum" style={{ marginBottom: 12 }}>
-            ON-CHAIN ACCOUNT · ENTITY PDA
+            {t("entry.raw.title")}
           </div>
           <pre
             style={{

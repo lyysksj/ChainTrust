@@ -8,6 +8,7 @@ import {
 import { WalletModalProvider as _WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adapter-wallets";
 import { clusterApiUrl } from "@solana/web3.js";
+import { LanguageProvider } from "@/lib/i18n";
 
 // Wallet-adapter's FC<Props> collides with React 18's stricter ReactNode in
 // recent @types/react. Cast to any-typed components to restore JSX usage.
@@ -52,10 +53,12 @@ export function Providers({ children }: { children: ReactNode }) {
   );
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <LanguageProvider>
+      <ConnectionProvider endpoint={endpoint}>
+        <WalletProvider wallets={wallets} autoConnect>
+          <WalletModalProvider>{children}</WalletModalProvider>
+        </WalletProvider>
+      </ConnectionProvider>
+    </LanguageProvider>
   );
 }

@@ -20,6 +20,7 @@
 import { useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import bs58 from "bs58";
+import { useT } from "@/lib/i18n";
 
 export type EvidenceValue = {
   uri: string;
@@ -62,6 +63,7 @@ export function EvidenceUploader({
   onError?: (msg: string) => void;
 }) {
   const { publicKey, signMessage } = useWallet();
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [mode, setMode] = useState<"upload" | "url">(
@@ -81,42 +83,44 @@ export function EvidenceUploader({
 
   async function handleFile(file: File) {
     if (file.size > MAX_BYTES) {
-      emitError(`File exceeds ${MAX_BYTES / 1024 / 1024} MB limit.`);
+      emitError(t("evidence.errors.tooLarge", { n: MAX_BYTES / 1024 / 1024 }));
       return;
     }
     if (!ACCEPTED_MIME.includes(file.type)) {
       emitError(
-        `Unsupported file type: ${file.type || "unknown"}. Use PDF, PNG, JPEG, or WebP.`,
+        t("evidence.errors.unsupported", {
+          kind: file.type || t("evidence.errors.unknown"),
+        }),
       );
       return;
     }
     if (!publicKey || !signMessage) {
-      emitError("Connect a wallet that supports message signing first.");
+      emitError(t("evidence.errors.connect"));
       return;
     }
 
     setBusy(true);
     try {
-      setProgress("Hashing file…");
+      setProgress(t("evidence.progress.hashing"));
       const buf = await file.arrayBuffer();
       const digest = await crypto.subtle.digest("SHA-256", buf);
       const clientHash = bufToHex(digest);
 
-      setProgress("Requesting challenge…");
+      setProgress(t("evidence.progress.challenge"));
       const chResp = await fetch("/api/upload/challenge");
-      if (!chResp.ok) throw new Error("Could not get upload challenge");
+      if (!chResp.ok) throw new Error(t("evidence.errors.challenge"));
       const ch = (await chResp.json()) as {
         nonce: string;
         message: string;
         expiresAt: number;
       };
-      if (!ch?.nonce || !ch?.message) throw new Error("Bad challenge payload");
+      if (!ch?.nonce || !ch?.message) throw new Error(t("evidence.errors.badPayload"));
 
-      setProgress("Awaiting wallet signature…");
+      setProgress(t("evidence.progress.signing"));
       const sig = await signMessage(new TextEncoder().encode(ch.message));
       const sigBase58 = bs58.encode(sig);
 
-      setProgress("Pinning to IPFS…");
+      setProgress(t("evidence.progress.pinning"));
       const form = new FormData();
       form.append("file", file);
       const upResp = await fetch("/api/upload", {
@@ -140,12 +144,10 @@ export function EvidenceUploader({
         throw new Error(json?.error ?? `Upload failed (${upResp.status})`);
       }
       if (!json.uri || !json.hashHex) {
-        throw new Error("Upload response missing uri/hashHex");
+        throw new Error(t("evidence.errors.uploadResp"));
       }
       if (json.hashHex.toLowerCase() !== clientHash.toLowerCase()) {
-        throw new Error(
-          "Hash mismatch between client and server. Upload aborted to keep the attestation binding sound.",
-        );
+        throw new Error(t("evidence.errors.hashMismatch"));
       }
 
       onChange({
@@ -158,7 +160,7 @@ export function EvidenceUploader({
       });
       setProgress(null);
     } catch (err) {
-      emitError((err as Error).message ?? "Upload failed");
+      emitError((err as Error).message ?? t("evidence.errors.failed"));
     } finally {
       setBusy(false);
     }
@@ -209,7 +211,7 @@ export function EvidenceUploader({
             cursor: "pointer",
           }}
         >
-          ▣ Upload file
+          {t("evidence.tab.upload")}
         </button>
         <button
           type="button"
@@ -223,7 +225,7 @@ export function EvidenceUploader({
             cursor: "pointer",
           }}
         >
-          ↗ Paste URL
+          {t("evidence.tab.url")}
         </button>
       </div>
 
@@ -280,11 +282,11 @@ export function EvidenceUploader({
                     marginBottom: 4,
                   }}
                 >
-                  ◆ Pinned · {value!.contentType ?? "file"} ·{" "}
+                  {t("evidence.upload.pinned")} {value!.contentType ?? "file"} ·{" "}
                   {fmtBytes(value!.sizeBytes)}
                 </div>
                 <div style={{ fontWeight: 600, fontSize: 13 }}>
-                  {value!.fileName ?? "evidence"}
+                  {value!.fileName ?? t("evidence.upload.fileFallback")}
                 </div>
                 <div
                   style={{
@@ -314,7 +316,7 @@ export function EvidenceUploader({
                       cursor: "pointer",
                     }}
                   >
-                    Replace file
+                    {t("evidence.upload.replace")}
                   </button>
                 </div>
               </div>
@@ -328,7 +330,7 @@ export function EvidenceUploader({
                     marginBottom: 4,
                   }}
                 >
-                  Drop a file here, or click to choose
+                  {t("evidence.upload.cta")}
                 </div>
                 <div
                   style={{
@@ -338,7 +340,7 @@ export function EvidenceUploader({
                     letterSpacing: "0.06em",
                   }}
                 >
-                  PDF · PNG · JPEG · WEBP — MAX 25 MB
+                  {t("evidence.upload.hint")}
                 </div>
               </>
             )}
@@ -372,13 +374,11 @@ export function EvidenceUploader({
               }}
             >
               <div>
-                <strong style={{ color: "var(--stamp-deep)" }}>HASH</strong> 0x
+                <strong style={{ color: "var(--stamp-deep)" }}>{t("evidence.upload.hashLabel")}</strong> 0x
                 {value!.hashHex.slice(0, 16)}…{value!.hashHex.slice(-8)}
               </div>
               <div style={{ color: "var(--ink-3)" }}>
-                The hash is the permanent commitment. The link above is just a
-                pointer — re-pinning the same bytes anywhere yields the same
-                hash and keeps this attestation valid.
+                {t("evidence.upload.hashNote")}
               </div>
             </div>
           )}
@@ -393,16 +393,14 @@ export function EvidenceUploader({
               letterSpacing: "0.04em",
             }}
           >
-            ⚠ Files pinned to IPFS are publicly retrievable forever. Don&apos;t
-            upload documents containing PII (national IDs, signatures, home
-            addresses) you wouldn&apos;t put on a public website.
+            {t("evidence.upload.warn")}
           </div>
         </>
       ) : (
         <>
           <input
             type="url"
-            placeholder="https://… or ipfs://bafy…"
+            placeholder={t("evidence.url.placeholder")}
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             onBlur={applyUrl}
@@ -414,8 +412,7 @@ export function EvidenceUploader({
               color: "var(--ink-3)",
             }}
           >
-            URL mode does not bind the file hash. The link itself is the only
-            commitment, and it can rot. Prefer file upload when possible.
+            {t("evidence.url.hint")}
           </div>
           {value?.source === "url" && value.uri && (
             <div

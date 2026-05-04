@@ -3,14 +3,36 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { WalletButton } from "./wallet-button";
+import { LanguageToggle } from "./language-toggle";
+import { useT } from "@/lib/i18n";
 
-const LINKS = [
-  { href: "/", label: "Home", match: (p: string) => p === "/" },
-  { href: "/resolve", label: "Resolve", match: (p: string) => p.startsWith("/resolve") },
-  { href: "/attest", label: "Attest", match: (p: string) => p.startsWith("/attest") },
-  { href: "/issuers", label: "Issuers", match: (p: string) => p.startsWith("/issuers") || p.startsWith("/issuer") },
-  { href: "/register", label: "Register", match: (p: string) => p.startsWith("/register") },
-  { href: "/create", label: "+ Entity", match: (p: string) => p.startsWith("/create") },
+const LINK_DEFS = [
+  { href: "/", key: "nav.home", match: (p: string) => p === "/" },
+  {
+    href: "/resolve",
+    key: "nav.resolve",
+    match: (p: string) => p.startsWith("/resolve"),
+  },
+  {
+    href: "/attest",
+    key: "nav.attest",
+    match: (p: string) => p.startsWith("/attest"),
+  },
+  {
+    href: "/issuers",
+    key: "nav.issuers",
+    match: (p: string) => p.startsWith("/issuers") || p.startsWith("/issuer"),
+  },
+  {
+    href: "/register",
+    key: "nav.register",
+    match: (p: string) => p.startsWith("/register"),
+  },
+  {
+    href: "/create",
+    key: "nav.entity",
+    match: (p: string) => p.startsWith("/create"),
+  },
 ];
 
 function todayLabel(): string {
@@ -27,6 +49,7 @@ function todayLabel(): string {
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
+  const t = useT();
   return (
     <>
       <div className="topbar-meta">
@@ -49,16 +72,17 @@ export function Navbar() {
             </span>
           </a>
           <nav className="nav">
-            {LINKS.map((l) => (
+            {LINK_DEFS.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
                 className={`nav-link ${l.match(pathname) ? "active" : ""}`}
               >
-                {l.label}
+                {t(l.key)}
               </Link>
             ))}
-            <span style={{ marginLeft: 12 }}>
+            <span style={{ marginLeft: 12, display: "inline-flex", alignItems: "center", gap: 12 }}>
+              <LanguageToggle />
               <WalletButton />
             </span>
           </nav>

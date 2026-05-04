@@ -30,11 +30,8 @@ import {
   TierPill,
 } from "@/components/registry-bits";
 import { uploadMetadata } from "@/lib/upload-client";
-import {
-  COMMENT_RELATION_LABELS,
-  ISSUER_KIND_LABELS,
-  ISSUER_TIER_LABELS,
-} from "@/types";
+import { COMMENT_RELATION_LABELS } from "@/types";
+import { useT } from "@/lib/i18n";
 import type {
   CommentRecord,
   Entity,
@@ -50,6 +47,7 @@ type Params = { wallet: string };
 export default function ProfilePage({ params }: { params: Params }) {
   const program = useProgram();
   const { publicKey: connectedWallet, signMessage } = useWallet();
+  const t = useT();
 
   const wallet = useMemo(() => {
     try {
@@ -210,7 +208,7 @@ export default function ProfilePage({ params }: { params: Params }) {
 
   if (!wallet) {
     return (
-      <div className="no-result">INVALID WALLET ADDRESS</div>
+      <div className="no-result">{t("profile.invalidWallet")}</div>
     );
   }
 
@@ -227,7 +225,7 @@ export default function ProfilePage({ params }: { params: Params }) {
     setSaveNotice(null);
 
     if (!program || !connectedWallet || !isOwner) {
-      setSaveError("Connect the owner wallet to edit this profile.");
+      setSaveError(t("profile.edit.errors.connect"));
       return;
     }
 
@@ -239,7 +237,7 @@ export default function ProfilePage({ params }: { params: Params }) {
         return;
       }
     } else if (draftHeadline.length > 120) {
-      setSaveError("Headline must be 120 characters or fewer.");
+      setSaveError(t("profile.edit.errors.headlineLong"));
       return;
     }
 
@@ -280,9 +278,9 @@ export default function ProfilePage({ params }: { params: Params }) {
       setMeta(nextMetadata);
       setProfile((prev) => (prev ? { ...prev, metadataUri: up.uri } : prev));
       setEditOpen(false);
-      setSaveNotice("Profile updated on-chain.");
+      setSaveNotice(t("profile.edit.success"));
     } catch (err) {
-      setSaveError((err as Error).message ?? "Failed to update profile");
+      setSaveError((err as Error).message ?? t("profile.edit.errors.failed"));
     } finally {
       setSaving(false);
     }
@@ -291,14 +289,14 @@ export default function ProfilePage({ params }: { params: Params }) {
   return (
     <div data-screen="user profile">
       <div className="docnum" style={{ marginBottom: 8 }}>
-        FORM CT-USR · PUBLIC PROFILE
+        {t("profile.docnum")}
       </div>
 
       {/* Header */}
       <div className="entity-head">
         <div>
           <div className="ct-num-big">
-            WALLET · {shortKey(wallet, 10)}
+            {t("profile.walletPrefix")} {shortKey(wallet, 10)}
           </div>
           <h1>
             {profile?.username ? `@${profile.username}` : shortKey(wallet, 6)}
@@ -307,12 +305,12 @@ export default function ProfilePage({ params }: { params: Params }) {
             <p className="summary">{meta.headline}</p>
           ) : profile ? (
             <p className="summary">
-              ChainTrust user since{" "}
+              {t("profile.summary.since")}{" "}
               {formatTimestamp(profile.registeredAt)}.
             </p>
           ) : (
             <p className="summary">
-              This wallet has not registered a ChainTrust profile yet.{" "}
+              {t("profile.summary.notReg.lead")}{" "}
               <Link
                 href="/register"
                 style={{
@@ -320,52 +318,57 @@ export default function ProfilePage({ params }: { params: Params }) {
                   textDecoration: "underline",
                 }}
               >
-                Register profile →
+                {t("profile.summary.notReg.cta")}
               </Link>
             </p>
           )}
 
           <div className="entity-meta-grid">
             <div className="entity-meta-cell">
-              <div className="label">USERNAME</div>
+              <div className="label">{t("profile.meta.username")}</div>
               <div className="v">
                 {profile?.username ? `@${profile.username}` : "—"}
               </div>
             </div>
             <div className="entity-meta-cell">
-              <div className="label">REGISTERED</div>
+              <div className="label">{t("profile.meta.registered")}</div>
               <div className="v">
                 {profile ? formatTimestamp(profile.registeredAt) : "—"}
               </div>
             </div>
             <div className="entity-meta-cell">
-              <div className="label">ENTITIES FILED</div>
+              <div className="label">{t("profile.meta.entitiesFiled")}</div>
               <div className="v">{entities.length}</div>
             </div>
             <div className="entity-meta-cell">
-              <div className="label">CLAIMED ENTITIES</div>
+              <div className="label">{t("profile.meta.claimedEntities")}</div>
               <div className="v">{verifiedEntities.length}</div>
             </div>
             <div className="entity-meta-cell">
-              <div className="label">SIGNALS POSTED</div>
+              <div className="label">{t("profile.meta.signalsPosted")}</div>
               <div className="v">{comments.length}</div>
             </div>
             <div className="entity-meta-cell">
-              <div className="label">EDGES SIGNED</div>
+              <div className="label">{t("profile.meta.edgesSigned")}</div>
               <div className="v">
-                {signedRels.length} · {revokedSigned} revoked
+                {signedRels.length} · {revokedSigned}{" "}
+                {t("profile.meta.revokedTail")}
               </div>
             </div>
             <div className="entity-meta-cell">
-              <div className="label">ISSUER ROLE</div>
+              <div className="label">{t("profile.meta.issuerRole")}</div>
               <div className="v">
                 {issuer
-                  ? `T${issuer.trustTier} · ${ISSUER_KIND_LABELS[issuer.kind] ?? "Issuer"}`
+                  ? `T${issuer.trustTier} · ${
+                      issuer.kind > 0
+                        ? t(`issuerKind.${issuer.kind}`)
+                        : t("issuerKind.fallback")
+                    }`
                   : "—"}
               </div>
             </div>
             <div className="entity-meta-cell">
-              <div className="label">WALLET</div>
+              <div className="label">{t("profile.meta.wallet")}</div>
               <div className="v">{shortKey(wallet, 8)}</div>
             </div>
           </div>
@@ -382,17 +385,17 @@ export default function ProfilePage({ params }: { params: Params }) {
           >
             {profile ? (
               <span className="status status-platform">
-                ● Verified user
+                {t("profile.status.verified")}
               </span>
             ) : (
               <span className="status status-unverified">
-                ○ Unregistered
+                {t("profile.status.unregistered")}
               </span>
             )}
             {issuer && <TierPill tier={issuer.trustTier} />}
             {verifiedEntities.length > 0 && (
               <span className="status status-claimed">
-                ◆ Official representative
+                {t("profile.status.officialRep")}
               </span>
             )}
           </div>
@@ -407,11 +410,13 @@ export default function ProfilePage({ params }: { params: Params }) {
                 lineHeight: 1.6,
               }}
             >
-              ISSUER · {ISSUER_KIND_LABELS[issuer.kind] ?? "—"}
+              {t("profile.aside.issuer")}{" "}
+              {issuer.kind > 0 ? t(`issuerKind.${issuer.kind}`) : "—"}
               <br />
-              TIER · {ISSUER_TIER_LABELS[issuer.trustTier] ?? "—"}
+              {t("profile.aside.tier")}{" "}
+              {issuer.trustTier > 0 ? t(`issuerTier.${issuer.trustTier}`) : "—"}
               <br />
-              REGISTERED ·{" "}
+              {t("profile.aside.registered")}{" "}
               {formatTimestamp(issuer.registeredAt)}
             </div>
           )}
@@ -426,7 +431,7 @@ export default function ProfilePage({ params }: { params: Params }) {
                 lineHeight: 1.6,
               }}
             >
-              REPRESENTS ·{" "}
+              {t("profile.aside.represents")}{" "}
               {verifiedEntities.map((e, i) => (
                 <span key={e.publicKey.toBase58()}>
                   <Link
@@ -436,7 +441,8 @@ export default function ProfilePage({ params }: { params: Params }) {
                       textDecoration: "underline",
                     }}
                   >
-                    {verifiedEntryNames[e.publicKey.toBase58()] ?? "(loading)"}
+                    {verifiedEntryNames[e.publicKey.toBase58()] ??
+                      t("profile.aside.loading")}
                   </Link>
                   {i < verifiedEntities.length - 1 ? " · " : ""}
                 </span>
@@ -455,7 +461,7 @@ export default function ProfilePage({ params }: { params: Params }) {
                   setEditOpen((open) => !open);
                 }}
               >
-                {editOpen ? "Close editor" : "Edit profile"}
+                {editOpen ? t("profile.editBtn.close") : t("profile.editBtn")}
               </button>
               <div
                 style={{
@@ -466,9 +472,9 @@ export default function ProfilePage({ params }: { params: Params }) {
                   lineHeight: 1.6,
                 }}
               >
-                USERNAME IS FIXED AFTER REGISTRATION.
+                {t("profile.editNote.l1")}
                 <br />
-                HEADLINE, ABOUT, AND LINKS CAN BE UPDATED.
+                {t("profile.editNote.l2")}
               </div>
             </div>
           )}
@@ -480,7 +486,7 @@ export default function ProfilePage({ params }: { params: Params }) {
           className="hint"
           style={{ marginBottom: 24 }}
         >
-          LOADING ON-CHAIN RECORDS…
+          {t("profile.loading")}
         </p>
       )}
 
@@ -508,10 +514,12 @@ export default function ProfilePage({ params }: { params: Params }) {
       )}
 
       {isOwner && profile && editOpen && (
-        <Section title="Edit profile" meta="OWNER ACTION · ON-CHAIN METADATA UPDATE">
+        <Section title={t("profile.edit.title")} meta={t("profile.edit.meta")}>
           <form onSubmit={saveProfileEdits} className="doc-card">
             <div className="doc-card-h">
-              <div className="doc-card-title">Update public profile metadata</div>
+              <div className="doc-card-title">
+                {t("profile.edit.cardTitle")}
+              </div>
               <div
                 style={{
                   fontFamily: "var(--mono)",
@@ -520,28 +528,32 @@ export default function ProfilePage({ params }: { params: Params }) {
                   letterSpacing: "0.1em",
                 }}
               >
-                USERNAME LOCKED
+                {t("profile.edit.locked")}
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div className="md:col-span-2">
-                <label className="label">Headline</label>
+                <label className="label">
+                  {t("profile.edit.fields.headline")}
+                </label>
                 <input
                   className="input mt-1"
                   value={draftHeadline}
                   onChange={(e) => setDraftHeadline(e.target.value)}
-                  placeholder="Compliance lead at Acme · KYB analyst"
+                  placeholder={t("profile.edit.fields.headlinePlaceholder")}
                   maxLength={120}
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="label">About</label>
+                <label className="label">
+                  {t("profile.edit.fields.about")}
+                </label>
                 <textarea
                   className="textarea mt-1"
                   value={draftAbout}
                   onChange={(e) => setDraftAbout(e.target.value)}
-                  placeholder="What kinds of attestations you sign or rely on."
+                  placeholder={t("profile.edit.fields.aboutPlaceholder")}
                   maxLength={4000}
                 />
               </div>
@@ -601,7 +613,7 @@ export default function ProfilePage({ params }: { params: Params }) {
                 className="hint"
                 style={{ margin: 0, maxWidth: "52ch" }}
               >
-                This updates the profile metadata URI only. Your wallet and username stay unchanged.
+                {t("profile.edit.note")}
               </p>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
@@ -613,10 +625,12 @@ export default function ProfilePage({ params }: { params: Params }) {
                   }}
                   disabled={saving}
                 >
-                  Cancel
+                  {t("profile.edit.btn.cancel")}
                 </button>
                 <button className="btn btn-primary" disabled={saving}>
-                  {saving ? "Saving…" : "Save profile"}
+                  {saving
+                    ? t("profile.edit.btn.submitting")
+                    : t("profile.edit.btn.submit")}
                 </button>
               </div>
             </div>
@@ -626,7 +640,10 @@ export default function ProfilePage({ params }: { params: Params }) {
 
       {/* About / expertise */}
       {meta?.expertise && meta.expertise.length > 0 && (
-        <Section title="Expertise" meta="OFF-CHAIN METADATA">
+        <Section
+          title={t("profile.section.expertise")}
+          meta={t("profile.section.expertiseMeta")}
+        >
           <div
             style={{ display: "flex", flexWrap: "wrap", gap: 8 }}
           >
@@ -652,7 +669,10 @@ export default function ProfilePage({ params }: { params: Params }) {
       )}
 
       {meta?.workExperience && meta.workExperience.length > 0 && (
-        <Section title="Work experience" meta="OFF-CHAIN METADATA">
+        <Section
+          title={t("profile.section.workExperience")}
+          meta={t("profile.section.expertiseMeta")}
+        >
           <div className="rel-list">
             {meta.workExperience.map((exp, i) => (
               <div
@@ -669,7 +689,8 @@ export default function ProfilePage({ params }: { params: Params }) {
                 </div>
                 <span className="rel-validity">
                   <span className="v-date">
-                    {exp.fromYear ?? "—"} – {exp.toYear ?? "now"}
+                    {exp.fromYear ?? "—"} –{" "}
+                    {exp.toYear ?? t("profile.section.workNow")}
                   </span>
                 </span>
               </div>
@@ -679,7 +700,10 @@ export default function ProfilePage({ params }: { params: Params }) {
       )}
 
       {meta?.about && (
-        <Section title="About" meta="OFF-CHAIN METADATA">
+        <Section
+          title={t("profile.section.about")}
+          meta={t("profile.section.expertiseMeta")}
+        >
           <p
             style={{
               fontFamily: "var(--serif)",
@@ -697,7 +721,7 @@ export default function ProfilePage({ params }: { params: Params }) {
       )}
 
       {meta?.links && hasAnyLink(meta.links) && (
-        <Section title="Links">
+        <Section title={t("profile.section.links")}>
           <div
             style={{
               display: "flex",
@@ -725,12 +749,14 @@ export default function ProfilePage({ params }: { params: Params }) {
 
       {/* On-chain entity list */}
       <Section
-        title="Entities filed"
-        meta={`${entities.length} ${entities.length === 1 ? "ENTRY" : "ENTRIES"}`}
+        title={t("profile.section.entities.title")}
+        meta={`${entities.length} ${
+          entities.length === 1 ? t("common.entry") : t("common.entries")
+        }`}
       >
         {entities.length === 0 ? (
           <div className="no-result">
-            NO ENTITIES FILED BY THIS WALLET
+            {t("profile.section.entities.empty")}
           </div>
         ) : (
           <>
@@ -741,11 +767,19 @@ export default function ProfilePage({ params }: { params: Params }) {
                   "140px 1fr 160px 140px 100px 36px",
               }}
             >
-              <span className="label">CT-Number</span>
-              <span className="label">Entity</span>
-              <span className="label">Jurisdiction</span>
-              <span className="label">Status</span>
-              <span className="label">Filed</span>
+              <span className="label">{t("profile.section.entities.col.ct")}</span>
+              <span className="label">
+                {t("profile.section.entities.col.entity")}
+              </span>
+              <span className="label">
+                {t("profile.section.entities.col.juris")}
+              </span>
+              <span className="label">
+                {t("profile.section.entities.col.status")}
+              </span>
+              <span className="label">
+                {t("profile.section.entities.col.filed")}
+              </span>
               <span></span>
             </div>
             {entities.map((e) => {
@@ -766,11 +800,14 @@ export default function ProfilePage({ params }: { params: Params }) {
                   <span className="ct-num">{ct}</span>
                   <div>
                     <div className="ent-name">
-                      {verifiedEntryNames[e.publicKey.toBase58()] ?? `Entity ${idHex.slice(0, 6)}`}
+                      {verifiedEntryNames[e.publicKey.toBase58()] ??
+                        `Entity ${idHex.slice(0, 6)}`}
                     </div>
                     <div className="ent-sub">
-                      {e.account.projectCount} project ·{" "}
-                      {e.account.relationshipCount} attestation
+                      {e.account.projectCount}{" "}
+                      {t("profile.section.entities.subProject")} ·{" "}
+                      {e.account.relationshipCount}{" "}
+                      {t("profile.section.entities.subAtt")}
                     </div>
                   </div>
                   <span className="ent-juris">
@@ -799,12 +836,16 @@ export default function ProfilePage({ params }: { params: Params }) {
 
       {/* Signed relationships */}
       <Section
-        title="Edges signed by this wallet"
-        meta={`${signedRels.length} signed · ${activeSigned} active · ${revokedSigned} revoked`}
+        title={t("profile.section.signed.title")}
+        meta={t("profile.section.signed.meta", {
+          n: signedRels.length,
+          active: activeSigned,
+          revoked: revokedSigned,
+        })}
       >
         {signedRels.length === 0 ? (
           <div className="no-result">
-            NO RELATIONSHIPS SIGNED. REGISTER AS AN ISSUER FIRST.
+            {t("profile.section.signed.empty")}
           </div>
         ) : (
           <div className="rel-list">
@@ -819,14 +860,15 @@ export default function ProfilePage({ params }: { params: Params }) {
                   }}
                 >
                   <div className="rel-kind">
-                    KIND · {r.account.kind}
+                    {t("profile.section.signed.kindPrefix")} {r.account.kind}
                   </div>
                   <div>
                     <div className="rel-target">
-                      Edge {shortKey(r.publicKey, 4)}
+                      {t("profile.section.signed.edge")}{" "}
+                      {shortKey(r.publicKey, 4)}
                     </div>
                     <div className="rel-target-sub">
-                      ENTITY ·{" "}
+                      {t("profile.section.signed.entity")}{" "}
                       <Link
                         href={`/entry/${shortKey(r.account.entity, 8)}`}
                         style={{ color: "var(--stamp-deep)" }}
@@ -842,19 +884,22 @@ export default function ProfilePage({ params }: { params: Params }) {
                       color: "var(--ink-2)",
                     }}
                   >
-                    target {shortHash(r.account.targetRef, 6)}
+                    {t("profile.section.signed.target")}{" "}
+                    {shortHash(r.account.targetRef, 6)}
                   </span>
                   <div className="rel-validity">
                     {revoked ? (
                       <>
-                        <span className="v-revoked">Revoked</span>
+                        <span className="v-revoked">
+                          {t("profile.section.signed.revoked")}
+                        </span>
                         <span className="v-date v-revoked">
                           {formatTimestamp(r.account.revokedAt)}
                         </span>
                       </>
                     ) : (
                       <>
-                        <span>From</span>
+                        <span>{t("profile.section.signed.from")}</span>
                         <span className="v-date">
                           {formatTimestamp(r.account.validFrom)}
                         </span>
@@ -870,12 +915,17 @@ export default function ProfilePage({ params }: { params: Params }) {
 
       {/* Community signals */}
       <Section
-        title="Community signals submitted"
-        meta={`${comments.length} signal${comments.length !== 1 ? "s" : ""}`}
+        title={t("profile.section.signals.title")}
+        meta={t(
+          comments.length !== 1
+            ? "profile.section.signals.metaMany"
+            : "profile.section.signals.metaOne",
+          { n: comments.length },
+        )}
       >
         {comments.length === 0 ? (
           <div className="no-result">
-            NO COMMUNITY SIGNALS SUBMITTED YET
+            {t("profile.section.signals.empty")}
           </div>
         ) : (
           <div className="rel-list">
@@ -893,10 +943,14 @@ export default function ProfilePage({ params }: { params: Params }) {
                 </div>
                 <div>
                   <div className="rel-target">
-                    Signal #{c.account.commentIndex}
+                    {t("profile.section.signals.label", {
+                      n: c.account.commentIndex,
+                    })}
                   </div>
                   <div className="rel-target-sub">
-                    on entity {shortKey(c.account.entity, 6)} · hash{" "}
+                    {t("profile.section.signals.onEntity")}{" "}
+                    {shortKey(c.account.entity, 6)} ·{" "}
+                    {t("profile.section.signals.hash")}{" "}
                     {shortHash(c.account.contentHash, 8)}
                   </div>
                 </div>

@@ -35,13 +35,19 @@ import {
   filterSasByEntity,
   type SasAttestationRecord,
 } from "@/lib/sas/reader";
+import { useT } from "@/lib/i18n";
 
 export default function ResolveRoute() {
   return (
-    <Suspense fallback={<p className="hint">Loading resolve…</p>}>
+    <Suspense fallback={<ResolveFallback />}>
       <ResolvePage />
     </Suspense>
   );
+}
+
+function ResolveFallback() {
+  const t = useT();
+  return <p className="hint">{t("resolve.suspenseFallback")}</p>;
 }
 
 type ResolveResult = {
@@ -60,6 +66,7 @@ function ResolvePage() {
   const router = useRouter();
   const params = useSearchParams();
   const initialQuery = params.get("q") ?? "";
+  const t = useT();
 
   const [query, setQuery] = useState(initialQuery);
   const [submitted, setSubmitted] = useState(initialQuery);
@@ -141,7 +148,7 @@ function ResolvePage() {
           if (!alive) return;
           const meta = await loadMeta(acc.metadataUri);
           setResult({
-            matchType: "CT-NUMBER",
+            matchType: t("resolve.match.kind.ctNumber"),
             entity: acc,
             pda: byCt.publicKey,
             meta,
@@ -176,7 +183,7 @@ function ResolvePage() {
               entityKey,
             )) as Entity | null;
             if (!entityAccount) {
-              setError("Target found but entity is missing.");
+              setError(t("resolve.targetMissing"));
               return;
             }
             const allRelsRaw = await fetchRelationshipsForEntity(
@@ -187,10 +194,10 @@ function ResolvePage() {
             if (!alive) return;
             const matchType =
               hits[0].account.kind === 1
-                ? "PROJECT REF"
+                ? t("resolve.match.kind.project")
                 : hits[0].account.kind === 5 || hits[0].account.kind === 6
-                  ? "ENTITY REF"
-                  : "WALLET";
+                  ? t("resolve.match.kind.entity")
+                  : t("resolve.match.kind.wallet");
             setResult({
               matchType,
               entity: entityAccount,
@@ -237,7 +244,7 @@ function ResolvePage() {
                 entityKey,
               )) as Entity | null;
               if (!entityAccount) {
-                setError("Domain found but entity is missing.");
+                setError(t("resolve.domainMissing"));
                 return;
               }
               const allRelsRaw = await fetchRelationshipsForEntity(
@@ -247,7 +254,7 @@ function ResolvePage() {
               const meta = await loadMeta(entityAccount.metadataUri);
               if (!alive) return;
               setResult({
-                matchType: `DOMAIN · ${domain}`,
+                matchType: `${t("resolve.match.kind.domain")} · ${domain}`,
                 entity: entityAccount,
                 pda: entityKey,
                 meta,
@@ -268,7 +275,7 @@ function ResolvePage() {
         setResult(null);
       } catch (err) {
         if (alive)
-          setError((err as Error).message ?? "Resolve failed");
+          setError((err as Error).message ?? t("resolve.failed"));
       } finally {
         if (alive) setLoading(false);
       }
@@ -324,9 +331,9 @@ function ResolvePage() {
   }
 
   const samples = [
-    { label: "CT-Number", value: "CT-XXXX-XXXX" },
-    { label: "Wallet pubkey", value: "44-char base58" },
-    { label: "Domain", value: "example.com" },
+    { label: t("resolve.sample.ctNumber"), value: "CT-XXXX-XXXX" },
+    { label: t("resolve.sample.wallet"), value: t("resolve.sample.walletVal") },
+    { label: t("resolve.sample.domain"), value: "example.com" },
   ];
 
   const country = result
@@ -336,15 +343,13 @@ function ResolvePage() {
   return (
     <div data-screen="02 Resolve">
       <div className="docnum" style={{ marginBottom: 8 }}>
-        FORM CT-RES · 2026 EDITION
+        {t("resolve.docnum")}
       </div>
       <div className="section-h" style={{ borderTop: "none", paddingTop: 0 }}>
         <h2 className="section-title" style={{ fontSize: 36 }}>
-          Resolve to entity.
+          {t("resolve.title")}
         </h2>
-        <span className="section-meta">
-          getProgramAccounts · target_ref filter
-        </span>
+        <span className="section-meta">{t("resolve.meta")}</span>
       </div>
       <p
         style={{
@@ -356,9 +361,7 @@ function ResolvePage() {
           marginBottom: 28,
         }}
       >
-        Paste any wallet pubkey, domain, or CT-Number. The
-        registry returns the operating Entity, the chain of signed evidence,
-        and the issuer behind every edge.
+        {t("resolve.intro")}
       </p>
 
       <form onSubmit={submit} style={{ marginBottom: 24 }}>
@@ -366,17 +369,17 @@ function ResolvePage() {
           <span className="resolve-bar-icon">›_</span>
           <input
             autoFocus
-            placeholder="44-char Solana pubkey, domain, or CT-XXXX-XXXX…"
+            placeholder={t("resolve.input.placeholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoComplete="off"
           />
           <button type="submit" className="btn btn-stamp">
-            Resolve
+            {t("resolve.submit")}
           </button>
         </div>
         <div className="resolve-suggest">
-          <span>HINT:</span>
+          <span>{t("resolve.hint")}</span>
           {samples.map((s) => (
             <span
               key={s.label}
@@ -394,22 +397,21 @@ function ResolvePage() {
       </form>
 
       {loading && (
-        <div className="no-result">RESOLVING · QUERYING SOLANA…</div>
+        <div className="no-result">{t("resolve.loading")}</div>
       )}
 
       {error && (
         <div className="no-result">
-          ERROR · {error.toUpperCase()}
+          {t("common.errorPrefix")} · {error.toUpperCase()}
         </div>
       )}
 
       {!loading && !error && submitted && !result && program && (
         <div className="no-result">
-          NO MATCH IN REGISTRY · No issuer has filed a relationship with that
-          target_ref.
+          {t("resolve.noMatch.lead")}
           <br />
           <span style={{ color: "var(--ink-4)" }}>
-            This is not a verdict — only the absence of a record.
+            {t("resolve.noMatch.note")}
           </span>
         </div>
       )}
@@ -419,7 +421,7 @@ function ResolvePage() {
           <div className="resolve-result">
             <div className="resolve-result-h">
               <span className="label-stamp">
-                ◆ MATCH FOUND · {result.matchType}
+                {t("resolve.match.found")} · {result.matchType}
               </span>
               <span
                 style={{
@@ -429,21 +431,22 @@ function ResolvePage() {
                   letterSpacing: "0.1em",
                 }}
               >
-                Resolved in 1 RPC call · {result.hits.length || result.rels.length}{" "}
-                signed edges
+                {t("resolve.match.resolved")}{" "}
+                {result.hits.length || result.rels.length}{" "}
+                {t("resolve.match.signedEdges")}
               </span>
             </div>
             <div className="resolve-result-body">
               <div>
                 <div className="ct-line">{result.ctNumber}</div>
-                <h2>{result.meta?.legalName ?? "(metadata pending)"}</h2>
+                <h2>{result.meta?.legalName ?? t("resolve.match.metaPending")}</h2>
                 <div className="meta-line">
                   {result.meta?.registryIdHashHex
                     ? `id·0x${result.meta.registryIdHashHex.slice(0, 8)}…`
                     : "—"}{" "}
                   ·{" "}
                   {(country?.label ?? result.entity.jurisdiction).toUpperCase()}{" "}
-                  · FILED {formatTimestamp(result.entity.createdAt)}
+                  · {t("resolve.match.filed")} {formatTimestamp(result.entity.createdAt)}
                 </div>
                 <div
                   style={{
@@ -475,7 +478,7 @@ function ResolvePage() {
                   className="btn btn-primary"
                   onClick={() => router.push(`/entry/${result.entityIdHex}`)}
                 >
-                  Open full identity graph →
+                  {t("resolve.match.openGraph")}
                 </button>
               </div>
               <Stamp
@@ -489,11 +492,13 @@ function ResolvePage() {
             <>
               <div className="section-h">
                 <h2 className="section-title" style={{ fontSize: 20 }}>
-                  Edges signed against your query
+                  {t("resolve.edges.title")}
                 </h2>
                 <span className="section-meta">
-                  {result.hits.length} match
-                  {result.hits.length !== 1 ? "es" : ""}
+                  {result.hits.length}{" "}
+                  {result.hits.length !== 1
+                    ? t("resolve.edges.matches.many")
+                    : t("resolve.edges.matches.one")}
                 </span>
               </div>
               <div className="rel-list" style={{ marginBottom: 32 }}>
@@ -514,15 +519,18 @@ function ResolvePage() {
 
           <div className="section-h">
             <h2 className="section-title" style={{ fontSize: 20 }}>
-              Full evidence chain · {result.ctNumber}
+              {t("resolve.chain.title")} {result.ctNumber}
             </h2>
             <span className="section-meta">
-              {result.rels.length} relationship
-              {result.rels.length !== 1 ? "s" : ""} ·{" "}
+              {result.rels.length}{" "}
+              {result.rels.length !== 1
+                ? t("resolve.chain.relationships.many")
+                : t("resolve.chain.relationships.one")}{" "}
+              ·{" "}
               {result.rels.filter(
                 (r) => Number(r.account.revokedAt) > 0,
               ).length}{" "}
-              revoked
+              {t("resolve.chain.revoked")}
             </span>
           </div>
           <div className="rel-list">
@@ -552,21 +560,21 @@ function SasMirrorSection({
   records: SasAttestationRecord[];
   ctNumber: string;
 }) {
+  const t = useT();
   if (records.length === 0) {
     return (
       <div style={{ marginTop: 32 }}>
         <div className="section-h">
           <h2 className="section-title" style={{ fontSize: 20 }}>
-            Cross-program · Solana Attestation Service
+            {t("resolve.sas.title")}
           </h2>
-          <span className="section-meta">SAS · NO MIRRORED RECORDS</span>
+          <span className="section-meta">{t("resolve.sas.metaEmpty")}</span>
         </div>
         <div className="no-result">
-          NO SAS ATTESTATIONS UNDER THE CHAINTRUST CREDENTIAL FOR {ctNumber}.
+          {t("resolve.sas.empty.lead")} {ctNumber}.
           <br />
           <span style={{ color: "var(--ink-4)" }}>
-            Either dual-write is disabled, or the Credential / Schemas have
-            not been bootstrapped on this cluster yet.
+            {t("resolve.sas.empty.note")}
           </span>
         </div>
       </div>
@@ -576,11 +584,14 @@ function SasMirrorSection({
     <div style={{ marginTop: 32 }}>
       <div className="section-h">
         <h2 className="section-title" style={{ fontSize: 20 }}>
-          Cross-program · Solana Attestation Service
+          {t("resolve.sas.title")}
         </h2>
         <span className="section-meta">
-          {records.length} mirrored attestation
-          {records.length !== 1 ? "s" : ""} · readable by any SAS-aware app
+          {records.length}{" "}
+          {records.length !== 1
+            ? t("resolve.sas.metaSome.many")
+            : t("resolve.sas.metaSome.one")}{" "}
+          · {t("resolve.sas.metaSome.tail")}
         </span>
       </div>
       <div className="rel-list">
@@ -599,7 +610,7 @@ function SasMirrorSection({
             >
               <div className="rel-kind">SAS · {label}</div>
               <div>
-                <div className="rel-target">SAS attestation</div>
+                <div className="rel-target">{t("resolve.sas.row.attestation")}</div>
                 <div className="rel-target-sub">
                   PDA · {shortKey(r.pda, 6)} · NONCE ·{" "}
                   {shortKey(r.nonce, 6)}
@@ -613,12 +624,12 @@ function SasMirrorSection({
                   letterSpacing: "0.04em",
                 }}
               >
-                signer {shortKey(r.signer, 6)}
+                {t("resolve.sas.row.signer")} {shortKey(r.signer, 6)}
               </div>
               <div className="rel-validity">
-                <span>SAS expiry</span>
+                <span>{t("resolve.sas.row.expiry")}</span>
                 <span className="v-date">
-                  {r.expiry > 0 ? formatTimestamp(r.expiry) : "Open"}
+                  {r.expiry > 0 ? formatTimestamp(r.expiry) : t("resolve.sas.row.open")}
                 </span>
               </div>
             </div>

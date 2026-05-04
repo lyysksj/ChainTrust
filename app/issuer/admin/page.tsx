@@ -13,16 +13,12 @@ import {
   reviewIssuerTier,
 } from "@/lib/anchor/client";
 import { formatTimestamp, shortKey } from "@/lib/utils/format";
-import {
-  ISSUER_KIND_LABELS,
-  ISSUER_TIER_LABELS,
-  ISSUER_TIER_REQUEST_STATUS_LABELS,
-} from "@/types";
 import type {
   Issuer,
   IssuerTierRequest,
   RegistryConfig,
 } from "@/types";
+import { useT } from "@/lib/i18n";
 
 type RequestRow = {
   publicKey: PublicKey;
@@ -32,6 +28,7 @@ type RequestRow = {
 export default function IssuerAdminPage() {
   const program = useProgram();
   const { publicKey } = useWallet();
+  const t = useT();
   const [config, setConfig] = useState<RegistryConfig | null>(null);
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [issuers, setIssuers] = useState<Map<string, Issuer>>(new Map());
@@ -81,7 +78,7 @@ export default function IssuerAdminPage() {
         }
         setIssuers(issuerMap);
       } catch (err) {
-        if (alive) setError((err as Error).message ?? "Failed to load review console");
+        if (alive) setError((err as Error).message ?? t("issuerAdmin.errors.loadFailed"));
       } finally {
         if (alive) setLoading(false);
       }
@@ -159,23 +156,23 @@ export default function IssuerAdminPage() {
     setError(null);
     setNotice(null);
     if (!program || !publicKey) {
-      setError("Connect the admin wallet first.");
+      setError(t("issuerAdmin.errors.connect"));
       return;
     }
     let adminAuthority: PublicKey;
     try {
       adminAuthority = new PublicKey(adminInput.trim());
     } catch {
-      setError("Admin authority must be a valid Solana public key.");
+      setError(t("issuerAdmin.errors.adminPubkey"));
       return;
     }
     setInitializing(true);
     try {
       await initializeRegistryConfig(program, publicKey, adminAuthority);
-      setNotice("Registry admin initialized.");
+      setNotice(t("issuerAdmin.notice.initialized"));
       setRefreshKey((n) => n + 1);
     } catch (err) {
-      setError((err as Error).message ?? "Failed to initialize registry admin");
+      setError((err as Error).message ?? t("issuerAdmin.errors.initFailed"));
     } finally {
       setInitializing(false);
     }
@@ -185,7 +182,7 @@ export default function IssuerAdminPage() {
     setError(null);
     setNotice(null);
     if (!program || !publicKey) {
-      setError("Connect the admin wallet first.");
+      setError(t("issuerAdmin.errors.connect"));
       return;
     }
     setActingKey(req.publicKey.toBase58());
@@ -197,12 +194,12 @@ export default function IssuerAdminPage() {
       });
       setNotice(
         approve
-          ? `Approved issuer to T${req.account.requestedTier}.`
-          : `Rejected T${req.account.requestedTier} request.`,
+          ? t("issuerAdmin.notice.approved", { tier: req.account.requestedTier })
+          : t("issuerAdmin.notice.rejected", { tier: req.account.requestedTier }),
       );
       setRefreshKey((n) => n + 1);
     } catch (err) {
-      setError((err as Error).message ?? "Review action failed");
+      setError((err as Error).message ?? t("issuerAdmin.errors.reviewFailed"));
     } finally {
       setActingKey(null);
     }
@@ -211,13 +208,13 @@ export default function IssuerAdminPage() {
   return (
     <div data-screen="issuer admin">
       <div className="docnum" style={{ marginBottom: 8 }}>
-        ISSUER TIER REVIEW CONSOLE · ADMIN
+        {t("issuerAdmin.docnum")}
       </div>
       <div className="section-h" style={{ borderTop: "none", paddingTop: 0 }}>
         <h2 className="section-title" style={{ fontSize: 36 }}>
-          Issuer review admin.
+          {t("issuerAdmin.title")}
         </h2>
-        <span className="section-meta">T1 / T2 APPROVAL WORKFLOW</span>
+        <span className="section-meta">{t("issuerAdmin.meta")}</span>
       </div>
       <p
         style={{
@@ -229,22 +226,20 @@ export default function IssuerAdminPage() {
           marginBottom: 28,
         }}
       >
-        Tier 3 issuers can request a manual review for Tier 2 or Tier 1. The
-        registry admin wallet reviews the request note and either approves the
-        tier change on-chain or rejects it.
+        {t("issuerAdmin.intro")}
       </p>
 
       <div style={{ marginBottom: 24, display: "flex", gap: 12, flexWrap: "wrap" }}>
         <Link href="/issuers" className="btn btn-ghost">
-          Back to issuer directory
+          {t("issuerAdmin.btn.back")}
         </Link>
         <Link href="/issuer/register" className="btn btn-stamp">
-          Issuer self-service →
+          {t("issuerAdmin.btn.selfService")}
         </Link>
       </div>
 
       {!publicKey && (
-        <div className="no-result">CONNECT A WALLET TO USE THE REVIEW CONSOLE.</div>
+        <div className="no-result">{t("issuerAdmin.connect")}</div>
       )}
 
       {error && <p className="error">{error}</p>}
@@ -263,11 +258,11 @@ export default function IssuerAdminPage() {
       )}
 
       {loading ? (
-        <div className="no-result">LOADING REVIEW QUEUE…</div>
+        <div className="no-result">{t("issuerAdmin.loading")}</div>
       ) : !config ? (
         <div className="doc-card">
           <div className="doc-card-h">
-            <div className="doc-card-title">Initialize registry admin</div>
+            <div className="doc-card-title">{t("issuerAdmin.init.title")}</div>
             <div
               style={{
                 fontFamily: "var(--mono)",
@@ -276,7 +271,7 @@ export default function IssuerAdminPage() {
                 letterSpacing: "0.1em",
               }}
             >
-              ONE-TIME SETUP
+              {t("issuerAdmin.init.meta")}
             </div>
           </div>
           <p
@@ -287,20 +282,20 @@ export default function IssuerAdminPage() {
               marginTop: 0,
             }}
           >
-            No registry admin has been initialized on-chain yet. The wallet that
-            signs this action becomes the admin authority unless you explicitly
-            set another public key below.
+            {t("issuerAdmin.init.body")}
           </p>
-          <label className="label">Admin authority public key</label>
+          <label className="label">{t("issuerAdmin.init.label")}</label>
           <input
             className="input mt-1"
             value={adminInput}
             onChange={(e) => setAdminInput(e.target.value)}
-            placeholder="Wallet that can approve T1/T2 requests"
+            placeholder={t("issuerAdmin.init.placeholder")}
           />
           <div style={{ marginTop: 16 }}>
             <button className="btn btn-primary" onClick={onInitialize} disabled={initializing || !publicKey}>
-              {initializing ? "Initializing…" : "Initialize admin on-chain"}
+              {initializing
+                ? t("issuerAdmin.init.btn.busy")
+                : t("issuerAdmin.init.btn")}
             </button>
           </div>
         </div>
@@ -308,7 +303,7 @@ export default function IssuerAdminPage() {
         <>
           <div className="doc-card" style={{ marginBottom: 28 }}>
             <div className="doc-card-h">
-              <div className="doc-card-title">Registry admin status</div>
+              <div className="doc-card-title">{t("issuerAdmin.status.title")}</div>
               <div
                 style={{
                   fontFamily: "var(--mono)",
@@ -317,7 +312,7 @@ export default function IssuerAdminPage() {
                   letterSpacing: "0.1em",
                 }}
               >
-                CONFIG PDA
+                {t("issuerAdmin.status.meta")}
               </div>
             </div>
             <div
@@ -328,20 +323,34 @@ export default function IssuerAdminPage() {
                 lineHeight: 1.7,
               }}
             >
-              <div>ADMIN · {shortKey(config.adminAuthority, 8)}</div>
-              <div>INITIALIZED · {formatTimestamp(config.initializedAt)}</div>
-              <div>CONNECTED WALLET · {publicKey ? shortKey(publicKey, 8) : "—"}</div>
-              <div>STATUS · {isAdmin ? "AUTHORIZED ADMIN" : "READ-ONLY VIEWER"}</div>
+              <div>
+                {t("issuerAdmin.status.admin")} {shortKey(config.adminAuthority, 8)}
+              </div>
+              <div>
+                {t("issuerAdmin.status.initialized")} {formatTimestamp(config.initializedAt)}
+              </div>
+              <div>
+                {t("issuerAdmin.status.connected")}{" "}
+                {publicKey ? shortKey(publicKey, 8) : "—"}
+              </div>
+              <div>
+                {t("issuerAdmin.status.statusLabel")}{" "}
+                {isAdmin
+                  ? t("issuerAdmin.status.authorized")
+                  : t("issuerAdmin.status.readonly")}
+              </div>
             </div>
           </div>
 
           <section style={{ marginBottom: 36 }}>
             <div className="section-h">
-              <h2 className="section-title">Pending requests</h2>
-              <span className="section-meta">{pendingRequests.length} PENDING</span>
+              <h2 className="section-title">{t("issuerAdmin.pending.title")}</h2>
+              <span className="section-meta">
+                {t("issuerAdmin.pending.meta", { n: pendingRequests.length })}
+              </span>
             </div>
             {pendingRequests.length === 0 ? (
-              <div className="no-result">NO PENDING TIER REVIEW REQUESTS.</div>
+              <div className="no-result">{t("issuerAdmin.pending.empty")}</div>
             ) : (
               <div className="rel-list">
                 {pendingRequests.map((req) => {
@@ -355,7 +364,9 @@ export default function IssuerAdminPage() {
                     >
                       <div className="doc-card-h">
                         <div className="doc-card-title">
-                          Request for T{req.account.requestedTier}
+                          {t("issuerAdmin.req.title", {
+                            tier: req.account.requestedTier,
+                          })}
                         </div>
                         <div
                           style={{
@@ -365,7 +376,7 @@ export default function IssuerAdminPage() {
                             letterSpacing: "0.08em",
                           }}
                         >
-                          {ISSUER_TIER_REQUEST_STATUS_LABELS[req.account.status]}
+                          {t(`issuerTierReq.${req.account.status}`)}
                         </div>
                       </div>
                       <div
@@ -378,14 +389,27 @@ export default function IssuerAdminPage() {
                         }}
                       >
                         <div>
-                          ISSUER · {issuer ? ISSUER_KIND_LABELS[issuer.kind] : "Unknown"} ·{" "}
-                          {issuer ? ISSUER_TIER_LABELS[issuer.trustTier] : "—"}
+                          {t("issuerAdmin.req.issuer")}{" "}
+                          {issuer
+                            ? t(`issuerKind.${issuer.kind}`)
+                            : t("issuerKind.fallback")}{" "}
+                          ·{" "}
+                          {issuer ? t(`issuerTier.${issuer.trustTier}`) : "—"}
                         </div>
-                        <div>ISSUER PDA · {shortKey(req.account.issuer, 8)}</div>
-                        <div>REQUESTER · {shortKey(req.account.requester, 8)}</div>
-                        <div>REQUESTED · {formatTimestamp(req.account.requestedAt)}</div>
                         <div>
-                          NOTE URI ·{" "}
+                          {t("issuerAdmin.req.issuerPda")}{" "}
+                          {shortKey(req.account.issuer, 8)}
+                        </div>
+                        <div>
+                          {t("issuerAdmin.req.requester")}{" "}
+                          {shortKey(req.account.requester, 8)}
+                        </div>
+                        <div>
+                          {t("issuerAdmin.req.requested")}{" "}
+                          {formatTimestamp(req.account.requestedAt)}
+                        </div>
+                        <div>
+                          {t("issuerAdmin.req.noteUri")}{" "}
                           {req.account.noteUri ? (
                             <a
                               href={`/api/mock/fetch?uri=${encodeURIComponent(req.account.noteUri)}`}
@@ -393,7 +417,7 @@ export default function IssuerAdminPage() {
                               rel="noopener noreferrer"
                               style={{ color: "var(--stamp-deep)" }}
                             >
-                              open note
+                              {t("issuerAdmin.req.openNote")}
                             </a>
                           ) : (
                             "—"
@@ -424,7 +448,11 @@ export default function IssuerAdminPage() {
                           onClick={() => onReview(req, true)}
                           disabled={!isAdmin || busy}
                         >
-                          {busy ? "Submitting…" : `Approve T${req.account.requestedTier}`}
+                          {busy
+                            ? t("issuerAdmin.req.btn.busy")
+                            : t("issuerAdmin.req.btn.approve", {
+                                tier: req.account.requestedTier,
+                              })}
                         </button>
                         <button
                           type="button"
@@ -432,7 +460,7 @@ export default function IssuerAdminPage() {
                           onClick={() => onReview(req, false)}
                           disabled={!isAdmin || busy}
                         >
-                          Reject request
+                          {t("issuerAdmin.req.btn.reject")}
                         </button>
                       </div>
                     </div>
@@ -444,11 +472,13 @@ export default function IssuerAdminPage() {
 
           <section>
             <div className="section-h">
-              <h2 className="section-title">Recent decisions</h2>
-              <span className="section-meta">{reviewedRequests.length} RECENT</span>
+              <h2 className="section-title">{t("issuerAdmin.recent.title")}</h2>
+              <span className="section-meta">
+                {t("issuerAdmin.recent.meta", { n: reviewedRequests.length })}
+              </span>
             </div>
             {reviewedRequests.length === 0 ? (
-              <div className="no-result">NO APPROVED OR REJECTED REQUESTS YET.</div>
+              <div className="no-result">{t("issuerAdmin.recent.empty")}</div>
             ) : (
               <div className="rel-list">
                 {reviewedRequests.map((req) => (
@@ -460,10 +490,11 @@ export default function IssuerAdminPage() {
                     <div className="rel-kind">T{req.account.requestedTier}</div>
                     <div>
                       <div className="rel-target">
-                        {ISSUER_TIER_REQUEST_STATUS_LABELS[req.account.status]}
+                        {t(`issuerTierReq.${req.account.status}`)}
                       </div>
                       <div className="rel-target-sub">
-                        issuer {shortKey(req.account.issuer, 6)}
+                        {t("issuerAdmin.recent.issuer")}{" "}
+                        {shortKey(req.account.issuer, 6)}
                       </div>
                     </div>
                     <div
@@ -473,10 +504,11 @@ export default function IssuerAdminPage() {
                         color: "var(--ink-2)",
                       }}
                     >
-                      reviewed by {shortKey(req.account.reviewedBy, 6)}
+                      {t("issuerAdmin.recent.reviewedBy")}{" "}
+                      {shortKey(req.account.reviewedBy, 6)}
                     </div>
                     <div className="rel-validity">
-                      <span>Resolved</span>
+                      <span>{t("issuerAdmin.recent.resolved")}</span>
                       <span className="v-date">
                         {req.account.resolvedAt
                           ? formatTimestamp(req.account.resolvedAt)

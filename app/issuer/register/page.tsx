@@ -14,17 +14,14 @@ import {
 import { issuerPda } from "@/lib/anchor/pdas";
 import { sha256Bytes } from "@/lib/utils/hash";
 import { uploadMetadata } from "@/lib/upload-client";
-import {
-  ISSUER_KIND,
-  ISSUER_KIND_LABELS,
-  ISSUER_TIER_LABELS,
-  ISSUER_TIER_REQUEST_STATUS_LABELS,
-} from "@/types";
+import { ISSUER_KIND, ISSUER_KIND_LABELS } from "@/types";
 import type { Issuer, IssuerTierRequest } from "@/types";
+import { useT } from "@/lib/i18n";
 
 export default function IssuerRegisterPage() {
   const { publicKey, signMessage } = useWallet();
   const program = useProgram();
+  const t = useT();
 
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
   const [existing, setExisting] = useState<Issuer | null>(null);
@@ -93,11 +90,11 @@ export default function IssuerRegisterPage() {
     e.preventDefault();
     setError(null);
     if (!program || !publicKey) {
-      setError("Connect a wallet first.");
+      setError(t("issuerReg.form.errors.connect"));
       return;
     }
     if (!name.trim()) {
-      setError("Issuer name is required.");
+      setError(t("issuerReg.form.errors.name"));
       return;
     }
     setSubmitting(true);
@@ -121,7 +118,7 @@ export default function IssuerRegisterPage() {
       });
       setDone(true);
     } catch (err) {
-      setError((err as Error).message ?? "Failed to register issuer");
+      setError((err as Error).message ?? t("issuerReg.form.errors.failed"));
     } finally {
       setSubmitting(false);
     }
@@ -132,15 +129,15 @@ export default function IssuerRegisterPage() {
     setRequestError(null);
     setRequestNotice(null);
     if (!program || !publicKey || !existing) {
-      setRequestError("Register as an issuer first.");
+      setRequestError(t("issuerReg.tierReview.errors.notIssuer"));
       return;
     }
     if (existing.trustTier <= requestTier) {
-      setRequestError("You can only request a higher-trust tier.");
+      setRequestError(t("issuerReg.tierReview.errors.lower"));
       return;
     }
     if (!requestNote.trim()) {
-      setRequestError("Explain why your issuer should be reviewed.");
+      setRequestError(t("issuerReg.tierReview.errors.note"));
       return;
     }
     setRequesting(true);
@@ -158,10 +155,12 @@ export default function IssuerRegisterPage() {
       });
       setRequestNote("");
       setRequestNotice(
-        `Tier review request for T${requestTier} submitted.`,
+        t("issuerReg.tierReview.notice", { tier: requestTier }),
       );
     } catch (err) {
-      setRequestError((err as Error).message ?? "Tier review request failed");
+      setRequestError(
+        (err as Error).message ?? t("issuerReg.tierReview.errors.failed"),
+      );
     } finally {
       setRequesting(false);
     }
@@ -170,13 +169,13 @@ export default function IssuerRegisterPage() {
   return (
     <div data-screen="issuer register">
       <div className="docnum" style={{ marginBottom: 8 }}>
-        FORM CT-ISS · 2026 EDITION · ART. 5.2
+        {t("issuerReg.docnum")}
       </div>
       <div className="section-h" style={{ borderTop: "none", paddingTop: 0 }}>
         <h2 className="section-title" style={{ fontSize: 36 }}>
-          Become a ChainTrust Issuer.
+          {t("issuerReg.title")}
         </h2>
-        <span className="section-meta">PDA seeds: [&quot;issuer&quot;, authority]</span>
+        <span className="section-meta">{t("issuerReg.meta")}</span>
       </div>
       <p
         style={{
@@ -188,13 +187,11 @@ export default function IssuerRegisterPage() {
           marginBottom: 32,
         }}
       >
-        Issuers sign on-chain Relationship attestations. Each attestation is
-        tagged with the Issuer&apos;s tier — consumers decide which tiers to
-        trust.
+        {t("issuerReg.intro")}
       </p>
 
       {!publicKey && (
-        <div className="no-result">CONNECT A WALLET TO CONTINUE.</div>
+        <div className="no-result">{t("issuerReg.connect")}</div>
       )}
       {publicKey && hasProfile === false && (
         <div className="doc-card">
@@ -206,10 +203,10 @@ export default function IssuerRegisterPage() {
               margin: "0 0 16px",
             }}
           >
-            You need a verified user profile first.
+            {t("issuerReg.needProfile")}
           </p>
           <Link href="/register" className="btn btn-primary">
-            Register profile →
+            {t("issuerReg.registerProfile")}
           </Link>
         </div>
       )}
@@ -223,7 +220,7 @@ export default function IssuerRegisterPage() {
             className="docnum"
             style={{ marginBottom: 8, color: "var(--stamp-deep)" }}
           >
-            ◆ ALREADY REGISTERED
+            {t("issuerReg.already.title")}
           </div>
           <p
             style={{
@@ -233,10 +230,18 @@ export default function IssuerRegisterPage() {
               margin: 0,
             }}
           >
-            You&apos;re already an Issuer.{" "}
-            <strong>{ISSUER_KIND_LABELS[existing.kind] ?? "Unknown"}</strong>{" "}
+            {t("issuerReg.already.body.lead")}{" "}
+            <strong>
+              {existing.kind > 0
+                ? t(`issuerKind.${existing.kind}`)
+                : t("issuerKind.fallback")}
+            </strong>{" "}
             ·{" "}
-            <strong>{ISSUER_TIER_LABELS[existing.trustTier] ?? "Tier 3"}</strong>
+            <strong>
+              {existing.trustTier > 0
+                ? t(`issuerTier.${existing.trustTier}`)
+                : t("issuerTier.3")}
+            </strong>
           </p>
         </div>
       )}
@@ -244,7 +249,7 @@ export default function IssuerRegisterPage() {
       {existing && (
         <div className="doc-card" style={{ marginTop: 24 }}>
           <div className="doc-card-h">
-            <div className="doc-card-title">Tier review</div>
+            <div className="doc-card-title">{t("issuerReg.tierReview.title")}</div>
             <div
               style={{
                 fontFamily: "var(--mono)",
@@ -253,7 +258,7 @@ export default function IssuerRegisterPage() {
                 letterSpacing: "0.1em",
               }}
             >
-              REQUEST · ADMIN APPROVAL
+              {t("issuerReg.tierReview.meta")}
             </div>
           </div>
 
@@ -273,15 +278,15 @@ export default function IssuerRegisterPage() {
                     <div className="rel-kind">T{req.account.requestedTier}</div>
                     <div>
                       <div className="rel-target">
-                        {ISSUER_TIER_REQUEST_STATUS_LABELS[req.account.status] ??
-                          "Unknown"}
+                        {t(`issuerTierReq.${req.account.status}`)}
                       </div>
                       <div className="rel-target-sub">
-                        note URI · {req.account.noteUri || "—"}
+                        {t("issuerReg.tierReview.note")}{" "}
+                        {req.account.noteUri || "—"}
                       </div>
                     </div>
                     <div className="rel-validity">
-                      <span>Requested</span>
+                      <span>{t("issuerReg.tierReview.requested")}</span>
                       <span className="v-date">
                         {new Date(Number(req.account.requestedAt) * 1000)
                           .toISOString()
@@ -293,7 +298,7 @@ export default function IssuerRegisterPage() {
             </div>
           ) : (
             <p className="hint" style={{ marginTop: 0 }}>
-              No tier review requests on record yet.
+              {t("issuerReg.tierReview.empty")}
             </p>
           )}
 
@@ -301,23 +306,29 @@ export default function IssuerRegisterPage() {
             <form onSubmit={onRequestTier}>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
-                  <label className="label">Requested tier</label>
+                  <label className="label">
+                    {t("issuerReg.tierReview.fields.tier")}
+                  </label>
                   <select
                     className="select mt-1"
                     value={requestTier}
                     onChange={(e) => setRequestTier(Number(e.target.value))}
                   >
-                    <option value={2}>Tier 2 · Known Third-party</option>
-                    <option value={1}>Tier 1 · Platform / Regulated</option>
+                    <option value={2}>{t("issuerTier.2")}</option>
+                    <option value={1}>{t("issuerTier.1")}</option>
                   </select>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="label">Review note</label>
+                  <label className="label">
+                    {t("issuerReg.tierReview.fields.note")}
+                  </label>
                   <textarea
                     className="textarea mt-1"
                     value={requestNote}
                     onChange={(e) => setRequestNote(e.target.value)}
-                    placeholder="Describe your legal entity, license status, website, and why this issuer should be upgraded."
+                    placeholder={t(
+                      "issuerReg.tierReview.fields.notePlaceholder",
+                    )}
                     maxLength={1200}
                   />
                 </div>
@@ -338,16 +349,18 @@ export default function IssuerRegisterPage() {
                 }}
               >
                 <p className="hint" style={{ margin: 0, maxWidth: "48ch" }}>
-                  Requests are reviewed by the registry admin wallet from the issuer admin page.
+                  {t("issuerReg.tierReview.adminNote")}
                 </p>
                 <button className="btn btn-primary" disabled={requesting}>
-                  {requesting ? "Submitting…" : "Request tier review"}
+                  {requesting
+                    ? t("issuerReg.tierReview.btn.submitting")
+                    : t("issuerReg.tierReview.btn.submit")}
                 </button>
               </div>
             </form>
           ) : (
             <p className="hint" style={{ margin: 0 }}>
-              This issuer has already been approved above Tier 3. Future changes should go through the admin review console.
+              {t("issuerReg.tierReview.alreadyApproved")}
             </p>
           )}
         </div>
@@ -356,7 +369,7 @@ export default function IssuerRegisterPage() {
       {publicKey && hasProfile && !existing && !done && (
         <form onSubmit={onSubmit} className="doc-card">
           <div className="doc-card-h">
-            <div className="doc-card-title">Issuer registration</div>
+            <div className="doc-card-title">{t("issuerReg.form.title")}</div>
             <div
               style={{
                 fontFamily: "var(--mono)",
@@ -365,46 +378,46 @@ export default function IssuerRegisterPage() {
                 letterSpacing: "0.1em",
               }}
             >
-              SUBJECT · §1
+              {t("issuerReg.form.meta")}
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <label className="label">Issuer name</label>
+              <label className="label">{t("issuerReg.form.name.label")}</label>
               <input
                 className="input mt-1"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Acme KYB Co."
+                placeholder={t("issuerReg.form.name.placeholder")}
                 maxLength={120}
               />
             </div>
             <div>
-              <label className="label">Website (optional)</label>
+              <label className="label">{t("issuerReg.form.website.label")}</label>
               <input
                 className="input mt-1"
                 value={website}
                 onChange={(e) => setWebsite(e.target.value)}
-                placeholder="https://acme-kyb.com"
+                placeholder={t("issuerReg.form.website.placeholder")}
                 maxLength={200}
               />
             </div>
             <div>
-              <label className="label">Issuer kind</label>
+              <label className="label">{t("issuerReg.form.kind.label")}</label>
               <select
                 className="select mt-1"
                 value={kind}
                 onChange={(e) => setKind(Number(e.target.value))}
               >
-                {Object.entries(ISSUER_KIND_LABELS).map(([k, label]) => (
+                {Object.entries(ISSUER_KIND_LABELS).map(([k]) => (
                   <option key={k} value={k}>
-                    {label}
+                    {t(`issuerKind.${k}`)}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="label">Trust tier</label>
+              <label className="label">{t("issuerReg.form.tier.label")}</label>
               <div
                 style={{
                   fontFamily: "var(--mono)",
@@ -415,39 +428,33 @@ export default function IssuerRegisterPage() {
                   border: "1.5px solid var(--rule-soft)",
                 }}
               >
-                T3 · Self / Community
+                {t("issuerReg.form.tier.value")}
               </div>
-              <p className="hint mt-1">
-                Self-registration always lands at Tier 3. Higher tiers (T1
-                Platform, T2 Known third-party) are granted only after
-                platform review of the issuer&apos;s real-world identity and
-                attestation history.
-              </p>
+              <p className="hint mt-1">{t("issuerReg.form.tier.hint")}</p>
             </div>
             <div className="md:col-span-2">
-              <label className="label">Description</label>
+              <label className="label">
+                {t("issuerReg.form.description.label")}
+              </label>
               <textarea
                 className="textarea mt-1"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="What kinds of attestations will you issue?"
+                placeholder={t("issuerReg.form.description.placeholder")}
                 maxLength={1200}
               />
             </div>
           </div>
           {error && <p className="error">{error}</p>}
           <button className="btn" disabled={submitting}>
-            {submitting ? "Registering…" : "Register Issuer on-chain"}
+            {submitting
+              ? t("issuerReg.form.btn.submitting")
+              : t("issuerReg.form.btn.submit")}
           </button>
         </form>
       )}
 
-      {done && (
-        <p className="text-sm text-claimed">
-          Issuer registered. You can now attest relationships from any Entity
-          page.
-        </p>
-      )}
+      {done && <p className="text-sm text-claimed">{t("issuerReg.success")}</p>}
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
 import { bytesHex } from "@/lib/utils/format";
 import { Stamp } from "@/components/registry-bits";
 import { uploadMetadata } from "@/lib/upload-client";
+import { useT } from "@/lib/i18n";
 import {
   COUNTRIES,
   ENTITY_TYPES,
@@ -27,30 +28,28 @@ import type { EntityMetadata, FilerRole } from "@/types";
 
 type Step = 1 | 2 | 3 | 4;
 
-const STEP_TITLES: Record<Step, string> = {
-  1: "Filer & jurisdiction",
-  2: "Identity",
-  3: "Public profile",
-  4: "Disclosures & sign",
-};
-const STEP_TAGS: Record<Step, string> = {
-  1: "FILER",
-  2: "IDENTITY",
-  3: "PROFILE",
-  4: "SIGN",
-};
-
-const FILER_DECLARATIONS: Record<FilerRole, string> = {
-  "first-party":
-    "I am authorized to file this Entity record on behalf of the named legal entity.",
-  "third-party":
-    "I am filing this Entity record as a third-party observer, pending the entity's claim.",
-};
-
 export function EntryForm() {
   const router = useRouter();
   const { publicKey, signMessage } = useWallet();
   const program = useProgram();
+  const t = useT();
+
+  const STEP_TITLES: Record<Step, string> = {
+    1: t("entryForm.step.title.1"),
+    2: t("entryForm.step.title.2"),
+    3: t("entryForm.step.title.3"),
+    4: t("entryForm.step.title.4"),
+  };
+  const STEP_TAGS: Record<Step, string> = {
+    1: t("entryForm.step.tag.1"),
+    2: t("entryForm.step.tag.2"),
+    3: t("entryForm.step.tag.3"),
+    4: t("entryForm.step.tag.4"),
+  };
+  const FILER_DECLARATIONS: Record<FilerRole, string> = {
+    "first-party": t("entryForm.filer.first"),
+    "third-party": t("entryForm.filer.third"),
+  };
 
   const [step, setStep] = useState<Step>(1);
 
@@ -104,30 +103,30 @@ export function EntryForm() {
 
   function validateStep(s: Step): string | null {
     if (s === 1) {
-      if (!filerRole) return "Pick a filer role.";
-      if (!countryCode) return "Country is required.";
+      if (!filerRole) return t("entryForm.errors.role");
+      if (!countryCode) return t("entryForm.errors.country");
       const idErr = validateEin(countryCode, registryId);
       if (idErr) return idErr;
     }
     if (s === 2) {
       const nameErr = validateCompanyName(legalName);
       if (nameErr) return nameErr;
-      if (!entityType) return "Entity type is required.";
+      if (!entityType) return t("entryForm.errors.entityType");
       if (incorporationDate) {
         const d = new Date(incorporationDate);
-        if (Number.isNaN(d.getTime())) return "Invalid incorporation date.";
+        if (Number.isNaN(d.getTime())) return t("entryForm.errors.incorpInvalid");
         if (d.getTime() > Date.now())
-          return "Incorporation date cannot be in the future.";
+          return t("entryForm.errors.incorpFuture");
       }
     }
     if (s === 3) {
       const liveWebsites = websites.map((w) => w.trim()).filter(Boolean);
       for (const w of liveWebsites) {
         const werr = validateWebsite(w);
-        if (werr) return `Website: ${werr}`;
+        if (werr) return `${t("entryForm.errors.websitePrefix")} ${werr}`;
       }
       if (parentEntityCt && !/^CT-[0-9A-Z]{4}-[0-9A-Z]{4}$/i.test(parentEntityCt.trim())) {
-        return "Parent CT-Number must look like CT-XXXX-XXXX.";
+        return t("entryForm.errors.parentCt");
       }
       const siteErr = validateOptionalUrl("");
       void siteErr;
@@ -135,12 +134,12 @@ export function EntryForm() {
         contactEmail &&
         !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())
       ) {
-        return "Contact email looks invalid.";
+        return t("entryForm.errors.email");
       }
     }
     if (s === 4) {
       if (!confirmAccurate || !confirmPublic) {
-        return "Confirm both disclosures before signing.";
+        return t("entryForm.errors.disclosures");
       }
     }
     return null;
@@ -165,13 +164,13 @@ export function EntryForm() {
     e.preventDefault();
     setError(null);
     if (!publicKey || !program) {
-      setError("Connect a wallet first.");
+      setError(t("entryForm.errors.connect"));
       return;
     }
     for (const s of [1, 2, 3, 4] as Step[]) {
       const err = validateStep(s);
       if (err) {
-        setError(`Step ${s}: ${err}`);
+        setError(`${t("entryForm.errors.stepPrefix")} ${s}: ${err}`);
         setStep(s);
         return;
       }
@@ -179,7 +178,7 @@ export function EntryForm() {
 
     setSubmitting(true);
     try {
-      setProgress("Uploading entity metadata…");
+      setProgress(t("entryForm.progress.upload"));
       const liveWebsites = websites.map((w) => w.trim()).filter(Boolean);
       // Privacy: hash the registry ID client-side. Raw value never leaves
       // the browser. Only the hex prefix is stored in the public IPFS doc.
@@ -212,8 +211,8 @@ export function EntryForm() {
           : undefined,
         evidenceNote:
           filerRole === "first-party"
-            ? "First-party self-filing."
-            : "Third-party observation pending claim.",
+            ? t("entryForm.filer.evidence.first")
+            : t("entryForm.filer.evidence.third"),
       };
       const up = await uploadMetadata(
         publicKey,
@@ -221,7 +220,7 @@ export function EntryForm() {
         JSON.stringify(metadata),
       );
 
-      setProgress("Filing Entity on-chain…");
+      setProgress(t("entryForm.progress.filing"));
       const entityId = randomEntityId();
       const [pda] = entityPda(entityId);
       void pda;
@@ -233,12 +232,14 @@ export function EntryForm() {
         metadataUri: up.uri,
       });
       setProgress(
-        `Filed · CT-Number ${entityIdToCtNumber(entityId)}. Redirecting…`,
+        t("entryForm.progress.filed", {
+          ct: entityIdToCtNumber(entityId),
+        }),
       );
       router.push(`/entry/${bytesHex(entityId)}`);
     } catch (err) {
       console.error(err);
-      setError((err as Error).message ?? "Failed to file entity");
+      setError((err as Error).message ?? t("entryForm.errors.failed"));
     } finally {
       setSubmitting(false);
     }
@@ -258,7 +259,7 @@ export function EntryForm() {
         <div className="doc-card">
           <div className="doc-card-h">
             <div className="doc-card-title">
-              Step {step} of 4 · {STEP_TITLES[step]}
+              {t("entryForm.step.label", { n: step })} {STEP_TITLES[step]}
             </div>
             <div
               style={{
@@ -275,7 +276,7 @@ export function EntryForm() {
           {step === 1 && (
             <>
               <div className="form-row">
-                <label className="label">Filer declaration</label>
+                <label className="label">{t("entryForm.filer.declaration")}</label>
                 <div
                   style={{
                     display: "flex",
@@ -287,26 +288,23 @@ export function EntryForm() {
                     role="first-party"
                     selected={filerRole}
                     onSelect={setFilerRole}
-                    title="First-party · authorized representative"
-                    body="I am filing on behalf of the named legal entity. I am authorized to commit it to this public record."
+                    title={t("entryForm.filer.firstParty.title")}
+                    body={t("entryForm.filer.firstParty.body")}
                   />
                   <FilerOption
                     role="third-party"
                     selected={filerRole}
                     onSelect={setFilerRole}
-                    title="Third-party · observation"
-                    body="I am filing as a researcher / observer. The entity has not yet claimed this record."
+                    title={t("entryForm.filer.thirdParty.title")}
+                    body={t("entryForm.filer.thirdParty.body")}
                   />
                 </div>
-                <div className="hint">
-                  This selection is recorded in the metadata and influences the
-                  default issuer tier shown to consumers.
-                </div>
+                <div className="hint">{t("entryForm.filer.note")}</div>
               </div>
 
               <div className="form-grid-2">
                 <div className="form-row">
-                  <label className="label">Country of registration</label>
+                  <label className="label">{t("entryForm.country.label")}</label>
                   <select
                     value={countryCode}
                     onChange={(e) => {
@@ -329,10 +327,7 @@ export function EntryForm() {
                     placeholder={country.idFormat}
                     maxLength={40}
                   />
-                  <div className="hint">
-                    Only the SHA-256 hash goes on-chain. The raw ID stays in
-                    your private metadata.
-                  </div>
+                  <div className="hint">{t("entryForm.registryId.hint")}</div>
                 </div>
               </div>
             </>
@@ -341,45 +336,40 @@ export function EntryForm() {
           {step === 2 && (
             <>
               <div className="form-row">
-                <label className="label">Legal name (as registered)</label>
+                <label className="label">{t("entryForm.legalName.label")}</label>
                 <input
                   value={legalName}
                   onChange={(e) => setLegalName(e.target.value)}
-                  placeholder="Acme Protocol Pte. Ltd."
+                  placeholder={t("entryForm.legalName.placeholder")}
                   maxLength={200}
                 />
               </div>
               <div className="form-row">
-                <label className="label">Trade name / DBA (optional)</label>
+                <label className="label">{t("entryForm.tradeName.label")}</label>
                 <input
                   value={tradeName}
                   onChange={(e) => setTradeName(e.target.value)}
-                  placeholder="Acme · Stellaris"
+                  placeholder={t("entryForm.tradeName.placeholder")}
                   maxLength={200}
                 />
-                <div className="hint">
-                  Brand or "doing business as" name, if different from the
-                  legal name.
-                </div>
+                <div className="hint">{t("entryForm.tradeName.hint")}</div>
               </div>
               <div className="form-grid-2">
                 <div className="form-row">
-                  <label className="label">Entity type</label>
+                  <label className="label">{t("entryForm.entityType.label")}</label>
                   <select
                     value={entityType}
                     onChange={(e) => setEntityType(e.target.value)}
                   >
-                    {ENTITY_TYPES.map((t) => (
-                      <option key={t.code} value={t.code}>
-                        {t.label}
+                    {ENTITY_TYPES.map((et) => (
+                      <option key={et.code} value={et.code}>
+                        {et.label}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div className="form-row">
-                  <label className="label">
-                    Incorporation date (optional)
-                  </label>
+                  <label className="label">{t("entryForm.incorpDate.label")}</label>
                   <input
                     type="date"
                     value={incorporationDate}
@@ -393,12 +383,12 @@ export function EntryForm() {
           {step === 3 && (
             <>
               <div className="form-row">
-                <label className="label">Industry</label>
+                <label className="label">{t("entryForm.industry.label")}</label>
                 <select
                   value={industry}
                   onChange={(e) => setIndustry(e.target.value)}
                 >
-                  <option value="">— select industry —</option>
+                  <option value="">{t("entryForm.industry.placeholder")}</option>
                   {INDUSTRIES.map((i) => (
                     <option key={i.code} value={i.code}>
                       {i.label}
@@ -408,7 +398,7 @@ export function EntryForm() {
               </div>
 
               <div className="form-row">
-                <label className="label">Operating regions (optional)</label>
+                <label className="label">{t("entryForm.regions.label")}</label>
                 <div
                   style={{
                     display: "flex",
@@ -444,7 +434,7 @@ export function EntryForm() {
               </div>
 
               <div className="form-row">
-                <label className="label">Websites (optional)</label>
+                <label className="label">{t("entryForm.websites.label")}</label>
                 {websites.map((w, i) => (
                   <div
                     key={i}
@@ -458,7 +448,7 @@ export function EntryForm() {
                     <input
                       value={w}
                       onChange={(e) => updateWebsite(i, e.target.value)}
-                      placeholder="https://acme.xyz"
+                      placeholder={t("entryForm.websites.placeholder")}
                       maxLength={200}
                     />
                     <button
@@ -467,7 +457,7 @@ export function EntryForm() {
                       onClick={() => removeWebsite(i)}
                       disabled={websites.length === 1}
                     >
-                      Remove
+                      {t("entryForm.websites.remove")}
                     </button>
                   </div>
                 ))}
@@ -476,16 +466,16 @@ export function EntryForm() {
                   className="btn btn-ghost btn-sm"
                   onClick={addWebsite}
                 >
-                  + Add website
+                  {t("entryForm.websites.add")}
                 </button>
               </div>
 
               <div className="form-row">
-                <label className="label">Description</label>
+                <label className="label">{t("entryForm.description.label")}</label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="One paragraph: what this entity does, what it operates on-chain, who its primary counterparties are."
+                  placeholder={t("entryForm.description.placeholder")}
                   maxLength={1200}
                 />
               </div>
@@ -508,35 +498,35 @@ export function EntryForm() {
                     marginBottom: 12,
                   }}
                 >
-                  ▸ ADVANCED FIELDS (parent entity · LEI · contact)
+                  {t("entryForm.advanced.summary")}
                 </summary>
                 <div className="form-grid-2">
                   <div className="form-row">
-                    <label className="label">Parent Entity CT-Number</label>
+                    <label className="label">{t("entryForm.advanced.parent")}</label>
                     <input
                       value={parentEntityCt}
                       onChange={(e) =>
                         setParentEntityCt(e.target.value.toUpperCase())
                       }
-                      placeholder="CT-XXXX-XXXX"
+                      placeholder={t("entryForm.advanced.parentPlaceholder")}
                       maxLength={20}
                     />
                   </div>
                   <div className="form-row">
-                    <label className="label">LEI (optional)</label>
+                    <label className="label">{t("entryForm.advanced.lei")}</label>
                     <input
                       value={lei}
                       onChange={(e) => setLei(e.target.value.toUpperCase())}
-                      placeholder="20-char Legal Entity Identifier"
+                      placeholder={t("entryForm.advanced.leiPlaceholder")}
                       maxLength={20}
                     />
                   </div>
                   <div className="form-row" style={{ gridColumn: "1 / -1" }}>
-                    <label className="label">Public contact email</label>
+                    <label className="label">{t("entryForm.advanced.email")}</label>
                     <input
                       value={contactEmail}
                       onChange={(e) => setContactEmail(e.target.value)}
-                      placeholder="legal@acme.xyz"
+                      placeholder={t("entryForm.advanced.emailPlaceholder")}
                       maxLength={120}
                       type="email"
                     />
@@ -560,7 +550,7 @@ export function EntryForm() {
                   marginBottom: 18,
                 }}
               >
-                <strong>Filer declaration · {filerRole}</strong>
+                <strong>{t("entryForm.filer.declaration")} · {filerRole}</strong>
                 <br />
                 {filerRole && FILER_DECLARATIONS[filerRole]}
               </div>
@@ -588,9 +578,7 @@ export function EntryForm() {
                       lineHeight: 1.5,
                     }}
                   >
-                    I confirm that the information above is accurate and
-                    submitted in good faith. False filings are themselves a
-                    public, signed record.
+                    {t("entryForm.confirm.accurate")}
                   </span>
                 </label>
               </div>
@@ -617,11 +605,9 @@ export function EntryForm() {
                       lineHeight: 1.5,
                     }}
                   >
-                    I understand all data above is{" "}
-                    <strong>publicly readable, append-only, and cannot be deleted.</strong>
-                    Only the SHA-256 hash of the legal name and registry ID is
-                    written to Solana; full metadata is uploaded off-chain
-                    and addressed by hash.
+                    {t("entryForm.confirm.public.lead")}
+                    <strong>{t("entryForm.confirm.public.bold")}</strong>
+                    {t("entryForm.confirm.public.tail")}
                   </span>
                 </label>
               </div>
@@ -679,7 +665,7 @@ export function EntryForm() {
               className="btn btn-ghost"
               onClick={() => (step === 1 ? router.push("/") : back())}
             >
-              ← {step === 1 ? "Cancel" : "Back"}
+              {step === 1 ? t("entryForm.btn.cancel") : t("entryForm.btn.back")}
             </button>
             {step < 4 ? (
               <button
@@ -687,7 +673,7 @@ export function EntryForm() {
                 className="btn btn-primary"
                 onClick={next}
               >
-                Next: {STEP_TITLES[(step + 1) as Step]} →
+                {t("entryForm.btn.next")} {STEP_TITLES[(step + 1) as Step]} →
               </button>
             ) : (
               <button
@@ -697,7 +683,9 @@ export function EntryForm() {
                   submitting || !confirmAccurate || !confirmPublic
                 }
               >
-                {submitting ? "FILING…" : "◆ Sign & file Entity"}
+                {submitting
+                  ? t("entryForm.btn.submitting")
+                  : t("entryForm.btn.submit")}
               </button>
             )}
           </div>
