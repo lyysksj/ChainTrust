@@ -19,7 +19,16 @@ type NonceEntry = {
   consumed: boolean;
 };
 
-const nonces = new Map<string, NonceEntry>();
+// Pin to globalThis so every API route that imports this module shares the
+// same Map across (a) Next dev's per-route module graphs and (b) HMR
+// reloads. Without this, /api/worldid/challenge and /api/worldid/verify can
+// resolve to different module instances on first hit, so consume() never
+// sees the nonce that issue() just wrote → "Unknown or expired nonce" on the
+// first attempt of every fresh session.
+const g = globalThis as unknown as {
+  __ctWorldIdNonces?: Map<string, NonceEntry>;
+};
+const nonces = g.__ctWorldIdNonces ?? (g.__ctWorldIdNonces = new Map());
 
 function sweep(now: number) {
   for (const [k, v] of nonces) {
