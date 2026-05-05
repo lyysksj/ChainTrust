@@ -47,6 +47,118 @@ export type Chaintrust = {
       ]
     },
     {
+      "name": "attestHumanProof",
+      "discriminator": [
+        42,
+        137,
+        228,
+        60,
+        16,
+        64,
+        36,
+        184
+      ],
+      "accounts": [
+        {
+          "name": "registryConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "humanProof",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  109,
+                  97,
+                  110,
+                  112,
+                  114,
+                  111,
+                  111,
+                  102
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nullifierRecord",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  108,
+                  108,
+                  105,
+                  102,
+                  105,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "nullifierHash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "wallet",
+          "docs": [
+            "the account itself is never deserialized."
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nullifierHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "attestRelationship",
       "discriminator": [
         62,
@@ -137,115 +249,6 @@ export type Chaintrust = {
       ]
     },
     {
-      "name": "attestHumanProof",
-      "discriminator": [
-        42,
-        137,
-        228,
-        60,
-        16,
-        64,
-        36,
-        184
-      ],
-      "accounts": [
-        {
-          "name": "registryConfig",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "humanProof",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  104,
-                  117,
-                  109,
-                  97,
-                  110,
-                  112,
-                  114,
-                  111,
-                  111,
-                  102
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "wallet"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nullifierRecord",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  117,
-                  108,
-                  108,
-                  105,
-                  102,
-                  105,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "nullifierHash"
-              }
-            ]
-          }
-        },
-        {
-          "name": "admin",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "wallet"
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "nullifierHash",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
-    },
-    {
       "name": "claimEntity",
       "discriminator": [
         152,
@@ -283,7 +286,13 @@ export type Chaintrust = {
           }
         },
         {
-          "name": "officerProof"
+          "name": "officerProof",
+          "docs": [
+            "Proof: a non-revoked Relationship of kind HAS_OFFICER pointing this",
+            "signer at this entity, signed by an issuer with tier T1 or T2.",
+            "Fix for the first-come-first-claim attack: the chain itself now",
+            "witnesses that someone outside the claimer trusted them as an officer."
+          ]
         },
         {
           "name": "officerIssuer"
@@ -510,6 +519,55 @@ export type Chaintrust = {
       ]
     },
     {
+      "name": "initializeRegistryConfig",
+      "discriminator": [
+        184,
+        229,
+        7,
+        64,
+        182,
+        13,
+        240,
+        46
+      ],
+      "accounts": [
+        {
+          "name": "registryConfig",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "adminAuthority",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "likeComment",
       "discriminator": [
         129,
@@ -709,6 +767,11 @@ export type Chaintrust = {
         },
         {
           "name": "humanProof",
+          "docs": [
+            "Proof-of-personhood gate. Must be created by the registry admin via",
+            "`attest_human_proof` before this user can register, and must be bound",
+            "to this exact wallet."
+          ],
           "pda": {
             "seeds": [
               {
@@ -751,6 +814,132 @@ export type Chaintrust = {
         {
           "name": "metadataUri",
           "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "requestIssuerTier",
+      "discriminator": [
+        32,
+        120,
+        182,
+        232,
+        136,
+        254,
+        225,
+        229
+      ],
+      "accounts": [
+        {
+          "name": "issuer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tierRequest",
+          "writable": true
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "requestedTier",
+          "type": "u8"
+        },
+        {
+          "name": "noteHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "noteUri",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "reviewIssuerTier",
+      "discriminator": [
+        171,
+        93,
+        156,
+        210,
+        17,
+        218,
+        160,
+        22
+      ],
+      "accounts": [
+        {
+          "name": "registryConfig",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "issuer",
+          "writable": true
+        },
+        {
+          "name": "tierRequest",
+          "writable": true
+        },
+        {
+          "name": "signer",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "requestedTier",
+          "type": "u8"
+        },
+        {
+          "name": "approve",
+          "type": "bool"
         }
       ]
     },
@@ -1074,6 +1263,50 @@ export type Chaintrust = {
       "args": []
     },
     {
+      "name": "updateRegistryAdmin",
+      "discriminator": [
+        117,
+        216,
+        24,
+        14,
+        25,
+        46,
+        33,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "registryConfig",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "newAdminAuthority",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "updateUserMetadataUri",
       "discriminator": [
         188,
@@ -1148,6 +1381,19 @@ export type Chaintrust = {
       ]
     },
     {
+      "name": "humanProof",
+      "discriminator": [
+        225,
+        188,
+        237,
+        208,
+        200,
+        82,
+        85,
+        45
+      ]
+    },
+    {
       "name": "issuer",
       "discriminator": [
         216,
@@ -1158,6 +1404,19 @@ export type Chaintrust = {
         53,
         80,
         14
+      ]
+    },
+    {
+      "name": "issuerTierRequest",
+      "discriminator": [
+        199,
+        247,
+        190,
+        20,
+        212,
+        195,
+        245,
+        161
       ]
     },
     {
@@ -1174,6 +1433,19 @@ export type Chaintrust = {
       ]
     },
     {
+      "name": "nullifierRecord",
+      "discriminator": [
+        56,
+        18,
+        57,
+        175,
+        69,
+        202,
+        189,
+        70
+      ]
+    },
+    {
       "name": "project",
       "discriminator": [
         205,
@@ -1184,6 +1456,19 @@ export type Chaintrust = {
         247,
         142,
         19
+      ]
+    },
+    {
+      "name": "registryConfig",
+      "discriminator": [
+        23,
+        118,
+        10,
+        246,
+        173,
+        231,
+        243,
+        156
       ]
     },
     {
@@ -1210,32 +1495,6 @@ export type Chaintrust = {
         180,
         13,
         194
-      ]
-    },
-    {
-      "name": "humanProof",
-      "discriminator": [
-        225,
-        188,
-        237,
-        208,
-        200,
-        82,
-        85,
-        45
-      ]
-    },
-    {
-      "name": "nullifierRecord",
-      "discriminator": [
-        56,
-        18,
-        57,
-        175,
-        69,
-        202,
-        189,
-        70
       ]
     }
   ],
@@ -1287,108 +1546,108 @@ export type Chaintrust = {
     },
     {
       "code": 6009,
-      "name": "invalidRelationshipKind",
-      "msg": "Invalid relationship kind"
-    },
-    {
-      "code": 6010,
-      "name": "invalidValidityWindow",
-      "msg": "Invalid validity window — valid_until must be 0 or greater than valid_from"
-    },
-    {
-      "code": 6011,
-      "name": "projectEntityMismatch",
-      "msg": "Project does not belong to the given Entity"
-    },
-    {
-      "code": 6012,
-      "name": "issuerAuthorityMismatch",
-      "msg": "Issuer authority does not match signer"
-    },
-    {
-      "code": 6013,
-      "name": "alreadyRevoked",
-      "msg": "Relationship has already been revoked"
-    },
-    {
-      "code": 6014,
-      "name": "alreadyClaimed",
-      "msg": "Entity is already claimed"
-    },
-    {
-      "code": 6015,
-      "name": "notClaimed",
-      "msg": "Entity is not claimed yet"
-    },
-    {
-      "code": 6016,
-      "name": "notOfficial",
-      "msg": "Caller is not the official representative of this entity"
-    },
-    {
-      "code": 6017,
-      "name": "commentEntityMismatch",
-      "msg": "Comment does not belong to this entity"
-    },
-    {
-      "code": 6018,
-      "name": "commentCountOverflow",
-      "msg": "Comment count overflow"
-    },
-    {
-      "code": 6019,
-      "name": "projectCountOverflow",
-      "msg": "Project count overflow"
-    },
-    {
-      "code": 6020,
-      "name": "relationshipCountOverflow",
-      "msg": "Relationship count overflow"
-    },
-    {
-      "code": 6021,
-      "name": "parentEntityMismatch",
-      "msg": "Parent comment belongs to a different entity"
-    },
-    {
-      "code": 6022,
-      "name": "maxReplyDepthExceeded",
-      "msg": "Reply depth exceeds the maximum allowed nesting"
-    },
-    {
-      "code": 6023,
-      "name": "cannotRespondToReply",
-      "msg": "Official response can only target a top-level comment, not a reply"
-    },
-    {
-      "code": 6024,
-      "name": "likeCountOverflow",
-      "msg": "Like count underflow / overflow"
-    },
-    {
-      "code": 6025,
       "name": "selfRegistrationRequiresTierThree",
       "msg": "Self-registration is restricted to Tier 3"
     },
     {
-      "code": 6026,
+      "code": 6010,
       "name": "invalidTierReviewTarget",
       "msg": "Only Tier 1 or Tier 2 can be requested through review"
     },
     {
-      "code": 6027,
+      "code": 6011,
       "name": "unauthorizedRegistryAdmin",
       "msg": "The connected wallet is not the registry admin"
     },
     {
-      "code": 6028,
+      "code": 6012,
       "name": "tierRequestAlreadyPending",
       "msg": "A pending tier request already exists for this issuer and target tier"
     },
     {
-      "code": 6029,
+      "code": 6013,
       "name": "tierRequestNotPending",
       "msg": "Tier request is no longer pending"
+    },
+    {
+      "code": 6014,
+      "name": "invalidRelationshipKind",
+      "msg": "Invalid relationship kind"
+    },
+    {
+      "code": 6015,
+      "name": "invalidValidityWindow",
+      "msg": "Invalid validity window — valid_until must be 0 or greater than valid_from"
+    },
+    {
+      "code": 6016,
+      "name": "projectEntityMismatch",
+      "msg": "Project does not belong to the given Entity"
+    },
+    {
+      "code": 6017,
+      "name": "issuerAuthorityMismatch",
+      "msg": "Issuer authority does not match signer"
+    },
+    {
+      "code": 6018,
+      "name": "alreadyRevoked",
+      "msg": "Relationship has already been revoked"
+    },
+    {
+      "code": 6019,
+      "name": "alreadyClaimed",
+      "msg": "Entity is already claimed"
+    },
+    {
+      "code": 6020,
+      "name": "notClaimed",
+      "msg": "Entity is not claimed yet"
+    },
+    {
+      "code": 6021,
+      "name": "notOfficial",
+      "msg": "Caller is not the official representative of this entity"
+    },
+    {
+      "code": 6022,
+      "name": "commentEntityMismatch",
+      "msg": "Comment does not belong to this entity"
+    },
+    {
+      "code": 6023,
+      "name": "commentCountOverflow",
+      "msg": "Comment count overflow"
+    },
+    {
+      "code": 6024,
+      "name": "projectCountOverflow",
+      "msg": "Project count overflow"
+    },
+    {
+      "code": 6025,
+      "name": "relationshipCountOverflow",
+      "msg": "Relationship count overflow"
+    },
+    {
+      "code": 6026,
+      "name": "parentEntityMismatch",
+      "msg": "Parent comment belongs to a different entity"
+    },
+    {
+      "code": 6027,
+      "name": "maxReplyDepthExceeded",
+      "msg": "Reply depth exceeds the maximum allowed nesting"
+    },
+    {
+      "code": 6028,
+      "name": "cannotRespondToReply",
+      "msg": "Official response can only target a top-level comment, not a reply"
+    },
+    {
+      "code": 6029,
+      "name": "likeCountOverflow",
+      "msg": "Like count underflow / overflow"
     },
     {
       "code": 6030,
@@ -1612,6 +1871,44 @@ export type Chaintrust = {
       }
     },
     {
+      "name": "humanProof",
+      "docs": [
+        "Anti-sybil gate: existence of this PDA at seed `[\"humanproof\", wallet]`",
+        "proves that `wallet` has been bound (server-side) to a unique World ID",
+        "nullifier through the registry admin. `register_user` requires it."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "nullifierHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "verifiedAt",
+            "type": "i64"
+          },
+          {
+            "name": "attestedBy",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "issuer",
       "type": {
         "kind": "struct",
@@ -1653,6 +1950,59 @@ export type Chaintrust = {
       }
     },
     {
+      "name": "issuerTierRequest",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "requester",
+            "type": "pubkey"
+          },
+          {
+            "name": "requestedTier",
+            "type": "u8"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "noteHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "noteUri",
+            "type": "string"
+          },
+          {
+            "name": "requestedAt",
+            "type": "i64"
+          },
+          {
+            "name": "resolvedAt",
+            "type": "i64"
+          },
+          {
+            "name": "reviewedBy",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "likeRecord",
       "type": {
         "kind": "struct",
@@ -1667,6 +2017,40 @@ export type Chaintrust = {
           },
           {
             "name": "likedAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "nullifierRecord",
+      "docs": [
+        "Companion record indexed by nullifier_hash so the admin can refuse to",
+        "re-bind the same World ID to a second wallet without a full table scan.",
+        "Seed: `[\"nullifier\", nullifier_hash]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "nullifierHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "verifiedAt",
             "type": "i64"
           },
           {
@@ -1722,6 +2106,26 @@ export type Chaintrust = {
           },
           {
             "name": "createdAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "registryConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "adminAuthority",
+            "type": "pubkey"
+          },
+          {
+            "name": "initializedAt",
             "type": "i64"
           },
           {
@@ -1824,68 +2228,6 @@ export type Chaintrust = {
           }
         ]
       }
-    },
-    {
-      "name": "humanProof",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "wallet",
-            "type": "pubkey"
-          },
-          {
-            "name": "nullifierHash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "verifiedAt",
-            "type": "i64"
-          },
-          {
-            "name": "attestedBy",
-            "type": "pubkey"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "nullifierRecord",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "wallet",
-            "type": "pubkey"
-          },
-          {
-            "name": "nullifierHash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "verifiedAt",
-            "type": "i64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          }
-        ]
-      }
     }
   ],
   "constants": [
@@ -1895,9 +2237,19 @@ export type Chaintrust = {
       "value": "[99, 111, 109, 109, 101, 110, 116]"
     },
     {
+      "name": "configSeed",
+      "type": "bytes",
+      "value": "[99, 111, 110, 102, 105, 103]"
+    },
+    {
       "name": "entitySeed",
       "type": "bytes",
       "value": "[101, 110, 116, 105, 116, 121]"
+    },
+    {
+      "name": "humanproofSeed",
+      "type": "bytes",
+      "value": "[104, 117, 109, 97, 110, 112, 114, 111, 111, 102]"
     },
     {
       "name": "issuerSeed",
@@ -1905,9 +2257,19 @@ export type Chaintrust = {
       "value": "[105, 115, 115, 117, 101, 114]"
     },
     {
+      "name": "issuerTierRequestSeed",
+      "type": "bytes",
+      "value": "[105, 115, 115, 117, 101, 114, 95, 116, 105, 101, 114, 95, 114, 101, 113, 117, 101, 115, 116]"
+    },
+    {
       "name": "likeSeed",
       "type": "bytes",
       "value": "[108, 105, 107, 101]"
+    },
+    {
+      "name": "nullifierSeed",
+      "type": "bytes",
+      "value": "[110, 117, 108, 108, 105, 102, 105, 101, 114]"
     },
     {
       "name": "projectSeed",
@@ -1923,16 +2285,6 @@ export type Chaintrust = {
       "name": "userSeed",
       "type": "bytes",
       "value": "[117, 115, 101, 114]"
-    },
-    {
-      "name": "humanproofSeed",
-      "type": "bytes",
-      "value": "[104, 117, 109, 97, 110, 112, 114, 111, 111, 102]"
-    },
-    {
-      "name": "nullifierSeed",
-      "type": "bytes",
-      "value": "[110, 117, 108, 108, 105, 102, 105, 101, 114]"
     }
   ]
 };

@@ -41,6 +41,118 @@
       ]
     },
     {
+      "name": "attest_human_proof",
+      "discriminator": [
+        42,
+        137,
+        228,
+        60,
+        16,
+        64,
+        36,
+        184
+      ],
+      "accounts": [
+        {
+          "name": "registry_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "human_proof",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  117,
+                  109,
+                  97,
+                  110,
+                  112,
+                  114,
+                  111,
+                  111,
+                  102
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nullifier_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  108,
+                  108,
+                  105,
+                  102,
+                  105,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "nullifier_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "wallet",
+          "docs": [
+            "the account itself is never deserialized."
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nullifier_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "attest_relationship",
       "discriminator": [
         62,
@@ -131,115 +243,6 @@
       ]
     },
     {
-      "name": "attest_human_proof",
-      "discriminator": [
-        42,
-        137,
-        228,
-        60,
-        16,
-        64,
-        36,
-        184
-      ],
-      "accounts": [
-        {
-          "name": "registry_config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "human_proof",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  104,
-                  117,
-                  109,
-                  97,
-                  110,
-                  112,
-                  114,
-                  111,
-                  111,
-                  102
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "wallet"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nullifier_record",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  117,
-                  108,
-                  108,
-                  105,
-                  102,
-                  105,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "nullifier_hash"
-              }
-            ]
-          }
-        },
-        {
-          "name": "admin",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "wallet"
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "nullifier_hash",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
-    },
-    {
       "name": "claim_entity",
       "discriminator": [
         152,
@@ -277,7 +280,13 @@
           }
         },
         {
-          "name": "officer_proof"
+          "name": "officer_proof",
+          "docs": [
+            "Proof: a non-revoked Relationship of kind HAS_OFFICER pointing this",
+            "signer at this entity, signed by an issuer with tier T1 or T2.",
+            "Fix for the first-come-first-claim attack: the chain itself now",
+            "witnesses that someone outside the claimer trusted them as an officer."
+          ]
         },
         {
           "name": "officer_issuer"
@@ -504,6 +513,55 @@
       ]
     },
     {
+      "name": "initialize_registry_config",
+      "discriminator": [
+        184,
+        229,
+        7,
+        64,
+        182,
+        13,
+        240,
+        46
+      ],
+      "accounts": [
+        {
+          "name": "registry_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "admin_authority",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "like_comment",
       "discriminator": [
         129,
@@ -703,6 +761,11 @@
         },
         {
           "name": "human_proof",
+          "docs": [
+            "Proof-of-personhood gate. Must be created by the registry admin via",
+            "`attest_human_proof` before this user can register, and must be bound",
+            "to this exact wallet."
+          ],
           "pda": {
             "seeds": [
               {
@@ -745,6 +808,132 @@
         {
           "name": "metadata_uri",
           "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "request_issuer_tier",
+      "discriminator": [
+        32,
+        120,
+        182,
+        232,
+        136,
+        254,
+        225,
+        229
+      ],
+      "accounts": [
+        {
+          "name": "issuer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tier_request",
+          "writable": true
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "requested_tier",
+          "type": "u8"
+        },
+        {
+          "name": "note_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "note_uri",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "review_issuer_tier",
+      "discriminator": [
+        171,
+        93,
+        156,
+        210,
+        17,
+        218,
+        160,
+        22
+      ],
+      "accounts": [
+        {
+          "name": "registry_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "issuer",
+          "writable": true
+        },
+        {
+          "name": "tier_request",
+          "writable": true
+        },
+        {
+          "name": "signer",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "requested_tier",
+          "type": "u8"
+        },
+        {
+          "name": "approve",
+          "type": "bool"
         }
       ]
     },
@@ -1068,6 +1257,50 @@
       "args": []
     },
     {
+      "name": "update_registry_admin",
+      "discriminator": [
+        117,
+        216,
+        24,
+        14,
+        25,
+        46,
+        33,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "registry_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_admin_authority",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "update_user_metadata_uri",
       "discriminator": [
         188,
@@ -1112,161 +1345,6 @@
           "type": "string"
         }
       ]
-    },
-    {
-      "name": "initialize_registry_config",
-      "discriminator": [
-        184,
-        229,
-        7,
-        64,
-        182,
-        13,
-        240,
-        46
-      ],
-      "accounts": [
-        {
-          "name": "registry_config",
-          "writable": true
-        },
-        {
-          "name": "signer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "admin_authority",
-          "type": "pubkey"
-        }
-      ]
-    },
-    {
-      "name": "update_registry_admin",
-      "discriminator": [
-        117,
-        216,
-        24,
-        14,
-        25,
-        46,
-        33,
-        40
-      ],
-      "accounts": [
-        {
-          "name": "registry_config",
-          "writable": true
-        },
-        {
-          "name": "signer",
-          "signer": true
-        }
-      ],
-      "args": [
-        {
-          "name": "new_admin_authority",
-          "type": "pubkey"
-        }
-      ]
-    },
-    {
-      "name": "request_issuer_tier",
-      "discriminator": [
-        32,
-        120,
-        182,
-        232,
-        136,
-        254,
-        225,
-        229
-      ],
-      "accounts": [
-        {
-          "name": "issuer",
-          "writable": true
-        },
-        {
-          "name": "tier_request",
-          "writable": true
-        },
-        {
-          "name": "signer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "requested_tier",
-          "type": "u8"
-        },
-        {
-          "name": "note_hash",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "note_uri",
-          "type": "string"
-        }
-      ]
-    },
-    {
-      "name": "review_issuer_tier",
-      "discriminator": [
-        171,
-        93,
-        156,
-        210,
-        17,
-        218,
-        160,
-        22
-      ],
-      "accounts": [
-        {
-          "name": "registry_config",
-          "writable": true
-        },
-        {
-          "name": "issuer",
-          "writable": true
-        },
-        {
-          "name": "tier_request",
-          "writable": true
-        },
-        {
-          "name": "signer",
-          "signer": true
-        }
-      ],
-      "args": [
-        {
-          "name": "requested_tier",
-          "type": "u8"
-        },
-        {
-          "name": "approve",
-          "type": "bool"
-        }
-      ]
     }
   ],
   "accounts": [
@@ -1297,6 +1375,19 @@
       ]
     },
     {
+      "name": "HumanProof",
+      "discriminator": [
+        225,
+        188,
+        237,
+        208,
+        200,
+        82,
+        85,
+        45
+      ]
+    },
+    {
       "name": "Issuer",
       "discriminator": [
         216,
@@ -1307,6 +1398,19 @@
         53,
         80,
         14
+      ]
+    },
+    {
+      "name": "IssuerTierRequest",
+      "discriminator": [
+        199,
+        247,
+        190,
+        20,
+        212,
+        195,
+        245,
+        161
       ]
     },
     {
@@ -1323,6 +1427,19 @@
       ]
     },
     {
+      "name": "NullifierRecord",
+      "discriminator": [
+        56,
+        18,
+        57,
+        175,
+        69,
+        202,
+        189,
+        70
+      ]
+    },
+    {
       "name": "Project",
       "discriminator": [
         205,
@@ -1333,6 +1450,19 @@
         247,
         142,
         19
+      ]
+    },
+    {
+      "name": "RegistryConfig",
+      "discriminator": [
+        23,
+        118,
+        10,
+        246,
+        173,
+        231,
+        243,
+        156
       ]
     },
     {
@@ -1359,58 +1489,6 @@
         180,
         13,
         194
-      ]
-    },
-    {
-      "name": "RegistryConfig",
-      "discriminator": [
-        23,
-        118,
-        10,
-        246,
-        173,
-        231,
-        243,
-        156
-      ]
-    },
-    {
-      "name": "IssuerTierRequest",
-      "discriminator": [
-        199,
-        247,
-        190,
-        20,
-        212,
-        195,
-        245,
-        161
-      ]
-    },
-    {
-      "name": "HumanProof",
-      "discriminator": [
-        225,
-        188,
-        237,
-        208,
-        200,
-        82,
-        85,
-        45
-      ]
-    },
-    {
-      "name": "NullifierRecord",
-      "discriminator": [
-        56,
-        18,
-        57,
-        175,
-        69,
-        202,
-        189,
-        70
       ]
     }
   ],
@@ -1462,108 +1540,108 @@
     },
     {
       "code": 6009,
-      "name": "InvalidRelationshipKind",
-      "msg": "Invalid relationship kind"
-    },
-    {
-      "code": 6010,
-      "name": "InvalidValidityWindow",
-      "msg": "Invalid validity window — valid_until must be 0 or greater than valid_from"
-    },
-    {
-      "code": 6011,
-      "name": "ProjectEntityMismatch",
-      "msg": "Project does not belong to the given Entity"
-    },
-    {
-      "code": 6012,
-      "name": "IssuerAuthorityMismatch",
-      "msg": "Issuer authority does not match signer"
-    },
-    {
-      "code": 6013,
-      "name": "AlreadyRevoked",
-      "msg": "Relationship has already been revoked"
-    },
-    {
-      "code": 6014,
-      "name": "AlreadyClaimed",
-      "msg": "Entity is already claimed"
-    },
-    {
-      "code": 6015,
-      "name": "NotClaimed",
-      "msg": "Entity is not claimed yet"
-    },
-    {
-      "code": 6016,
-      "name": "NotOfficial",
-      "msg": "Caller is not the official representative of this entity"
-    },
-    {
-      "code": 6017,
-      "name": "CommentEntityMismatch",
-      "msg": "Comment does not belong to this entity"
-    },
-    {
-      "code": 6018,
-      "name": "CommentCountOverflow",
-      "msg": "Comment count overflow"
-    },
-    {
-      "code": 6019,
-      "name": "ProjectCountOverflow",
-      "msg": "Project count overflow"
-    },
-    {
-      "code": 6020,
-      "name": "RelationshipCountOverflow",
-      "msg": "Relationship count overflow"
-    },
-    {
-      "code": 6021,
-      "name": "ParentEntityMismatch",
-      "msg": "Parent comment belongs to a different entity"
-    },
-    {
-      "code": 6022,
-      "name": "MaxReplyDepthExceeded",
-      "msg": "Reply depth exceeds the maximum allowed nesting"
-    },
-    {
-      "code": 6023,
-      "name": "CannotRespondToReply",
-      "msg": "Official response can only target a top-level comment, not a reply"
-    },
-    {
-      "code": 6024,
-      "name": "LikeCountOverflow",
-      "msg": "Like count underflow / overflow"
-    },
-    {
-      "code": 6025,
       "name": "SelfRegistrationRequiresTierThree",
       "msg": "Self-registration is restricted to Tier 3"
     },
     {
-      "code": 6026,
+      "code": 6010,
       "name": "InvalidTierReviewTarget",
       "msg": "Only Tier 1 or Tier 2 can be requested through review"
     },
     {
-      "code": 6027,
+      "code": 6011,
       "name": "UnauthorizedRegistryAdmin",
       "msg": "The connected wallet is not the registry admin"
     },
     {
-      "code": 6028,
+      "code": 6012,
       "name": "TierRequestAlreadyPending",
       "msg": "A pending tier request already exists for this issuer and target tier"
     },
     {
-      "code": 6029,
+      "code": 6013,
       "name": "TierRequestNotPending",
       "msg": "Tier request is no longer pending"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidRelationshipKind",
+      "msg": "Invalid relationship kind"
+    },
+    {
+      "code": 6015,
+      "name": "InvalidValidityWindow",
+      "msg": "Invalid validity window — valid_until must be 0 or greater than valid_from"
+    },
+    {
+      "code": 6016,
+      "name": "ProjectEntityMismatch",
+      "msg": "Project does not belong to the given Entity"
+    },
+    {
+      "code": 6017,
+      "name": "IssuerAuthorityMismatch",
+      "msg": "Issuer authority does not match signer"
+    },
+    {
+      "code": 6018,
+      "name": "AlreadyRevoked",
+      "msg": "Relationship has already been revoked"
+    },
+    {
+      "code": 6019,
+      "name": "AlreadyClaimed",
+      "msg": "Entity is already claimed"
+    },
+    {
+      "code": 6020,
+      "name": "NotClaimed",
+      "msg": "Entity is not claimed yet"
+    },
+    {
+      "code": 6021,
+      "name": "NotOfficial",
+      "msg": "Caller is not the official representative of this entity"
+    },
+    {
+      "code": 6022,
+      "name": "CommentEntityMismatch",
+      "msg": "Comment does not belong to this entity"
+    },
+    {
+      "code": 6023,
+      "name": "CommentCountOverflow",
+      "msg": "Comment count overflow"
+    },
+    {
+      "code": 6024,
+      "name": "ProjectCountOverflow",
+      "msg": "Project count overflow"
+    },
+    {
+      "code": 6025,
+      "name": "RelationshipCountOverflow",
+      "msg": "Relationship count overflow"
+    },
+    {
+      "code": 6026,
+      "name": "ParentEntityMismatch",
+      "msg": "Parent comment belongs to a different entity"
+    },
+    {
+      "code": 6027,
+      "name": "MaxReplyDepthExceeded",
+      "msg": "Reply depth exceeds the maximum allowed nesting"
+    },
+    {
+      "code": 6028,
+      "name": "CannotRespondToReply",
+      "msg": "Official response can only target a top-level comment, not a reply"
+    },
+    {
+      "code": 6029,
+      "name": "LikeCountOverflow",
+      "msg": "Like count underflow / overflow"
     },
     {
       "code": 6030,
@@ -1787,6 +1865,44 @@
       }
     },
     {
+      "name": "HumanProof",
+      "docs": [
+        "Anti-sybil gate: existence of this PDA at seed `[\"humanproof\", wallet]`",
+        "proves that `wallet` has been bound (server-side) to a unique World ID",
+        "nullifier through the registry admin. `register_user` requires it."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "nullifier_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "verified_at",
+            "type": "i64"
+          },
+          {
+            "name": "attested_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "Issuer",
       "type": {
         "kind": "struct",
@@ -1828,6 +1944,59 @@
       }
     },
     {
+      "name": "IssuerTierRequest",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "requester",
+            "type": "pubkey"
+          },
+          {
+            "name": "requested_tier",
+            "type": "u8"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "note_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "note_uri",
+            "type": "string"
+          },
+          {
+            "name": "requested_at",
+            "type": "i64"
+          },
+          {
+            "name": "resolved_at",
+            "type": "i64"
+          },
+          {
+            "name": "reviewed_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "LikeRecord",
       "type": {
         "kind": "struct",
@@ -1842,6 +2011,40 @@
           },
           {
             "name": "liked_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "NullifierRecord",
+      "docs": [
+        "Companion record indexed by nullifier_hash so the admin can refuse to",
+        "re-bind the same World ID to a second wallet without a full table scan.",
+        "Seed: `[\"nullifier\", nullifier_hash]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "nullifier_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "verified_at",
             "type": "i64"
           },
           {
@@ -1897,6 +2100,26 @@
           },
           {
             "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RegistryConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "initialized_at",
             "type": "i64"
           },
           {
@@ -1999,135 +2222,6 @@
           }
         ]
       }
-    },
-    {
-      "name": "RegistryConfig",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "admin_authority",
-            "type": "pubkey"
-          },
-          {
-            "name": "initialized_at",
-            "type": "i64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "IssuerTierRequest",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "issuer",
-            "type": "pubkey"
-          },
-          {
-            "name": "requester",
-            "type": "pubkey"
-          },
-          {
-            "name": "requested_tier",
-            "type": "u8"
-          },
-          {
-            "name": "status",
-            "type": "u8"
-          },
-          {
-            "name": "note_hash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "note_uri",
-            "type": "string"
-          },
-          {
-            "name": "requested_at",
-            "type": "i64"
-          },
-          {
-            "name": "resolved_at",
-            "type": "i64"
-          },
-          {
-            "name": "reviewed_by",
-            "type": "pubkey"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "HumanProof",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "wallet",
-            "type": "pubkey"
-          },
-          {
-            "name": "nullifier_hash",
-            "type": {
-              "array": ["u8", 32]
-            }
-          },
-          {
-            "name": "verified_at",
-            "type": "i64"
-          },
-          {
-            "name": "attested_by",
-            "type": "pubkey"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "NullifierRecord",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "wallet",
-            "type": "pubkey"
-          },
-          {
-            "name": "nullifier_hash",
-            "type": {
-              "array": ["u8", 32]
-            }
-          },
-          {
-            "name": "verified_at",
-            "type": "i64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          }
-        ]
-      }
     }
   ],
   "constants": [
@@ -2137,9 +2231,19 @@
       "value": "[99, 111, 109, 109, 101, 110, 116]"
     },
     {
+      "name": "CONFIG_SEED",
+      "type": "bytes",
+      "value": "[99, 111, 110, 102, 105, 103]"
+    },
+    {
       "name": "ENTITY_SEED",
       "type": "bytes",
       "value": "[101, 110, 116, 105, 116, 121]"
+    },
+    {
+      "name": "HUMANPROOF_SEED",
+      "type": "bytes",
+      "value": "[104, 117, 109, 97, 110, 112, 114, 111, 111, 102]"
     },
     {
       "name": "ISSUER_SEED",
@@ -2147,9 +2251,19 @@
       "value": "[105, 115, 115, 117, 101, 114]"
     },
     {
+      "name": "ISSUER_TIER_REQUEST_SEED",
+      "type": "bytes",
+      "value": "[105, 115, 115, 117, 101, 114, 95, 116, 105, 101, 114, 95, 114, 101, 113, 117, 101, 115, 116]"
+    },
+    {
       "name": "LIKE_SEED",
       "type": "bytes",
       "value": "[108, 105, 107, 101]"
+    },
+    {
+      "name": "NULLIFIER_SEED",
+      "type": "bytes",
+      "value": "[110, 117, 108, 108, 105, 102, 105, 101, 114]"
     },
     {
       "name": "PROJECT_SEED",
@@ -2165,16 +2279,6 @@
       "name": "USER_SEED",
       "type": "bytes",
       "value": "[117, 115, 101, 114]"
-    },
-    {
-      "name": "HUMANPROOF_SEED",
-      "type": "bytes",
-      "value": "[104, 117, 109, 97, 110, 112, 114, 111, 111, 102]"
-    },
-    {
-      "name": "NULLIFIER_SEED",
-      "type": "bytes",
-      "value": "[110, 117, 108, 108, 105, 102, 105, 101, 114]"
     }
   ]
 }

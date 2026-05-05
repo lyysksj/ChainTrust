@@ -20,9 +20,14 @@ import { uploadMetadata } from "@/lib/upload-client";
 import { useT } from "@/lib/i18n";
 import {
   COUNTRIES,
+  EMPLOYEE_BANDS,
   ENTITY_TYPES,
   INDUSTRIES,
+  INDUSTRY_GROUPS,
+  OPERATING_STATUSES,
   REGIONS,
+  SUBDIVISIONS_BY_COUNTRY,
+  SUBDIVISION_LABEL_BY_COUNTRY,
 } from "@/types";
 import type { EntityMetadata, FilerRole } from "@/types";
 
@@ -56,6 +61,7 @@ export function EntryForm() {
   // Step 1
   const [filerRole, setFilerRole] = useState<FilerRole | "">("");
   const [countryCode, setCountryCode] = useState("SG");
+  const [subdivision, setSubdivision] = useState("");
   const [registryId, setRegistryId] = useState("");
 
   // Step 2
@@ -63,14 +69,19 @@ export function EntryForm() {
   const [tradeName, setTradeName] = useState("");
   const [entityType, setEntityType] = useState("PTE");
   const [incorporationDate, setIncorporationDate] = useState("");
+  const [operatingStatus, setOperatingStatus] = useState<
+    "active" | "dormant" | "dissolved"
+  >("active");
 
   // Step 3
   const [websites, setWebsites] = useState<string[]>([""]);
   const [industry, setIndustry] = useState("");
   const [operatingRegions, setOperatingRegions] = useState<string[]>([]);
   const [description, setDescription] = useState("");
+  const [hqCity, setHqCity] = useState("");
+  const [hqCountryCode, setHqCountryCode] = useState("");
+  const [employeeBand, setEmployeeBand] = useState("");
   const [parentEntityCt, setParentEntityCt] = useState("");
-  const [lei, setLei] = useState("");
   const [contactEmail, setContactEmail] = useState("");
 
   // Step 4
@@ -85,6 +96,13 @@ export function EntryForm() {
     () => COUNTRIES.find((c) => c.code === countryCode) ?? COUNTRIES[0],
     [countryCode],
   );
+
+  const subdivisionOptions = useMemo(
+    () => SUBDIVISIONS_BY_COUNTRY[countryCode] ?? [],
+    [countryCode],
+  );
+  const subdivisionLabel =
+    SUBDIVISION_LABEL_BY_COUNTRY[countryCode] ?? "State / Province";
 
   function updateWebsite(i: number, v: string) {
     setWebsites((prev) => prev.map((w, idx) => (idx === i ? v : w)));
@@ -194,6 +212,7 @@ export function EntryForm() {
         registryIdHashHex,
         countryCode,
         countryLabel: country.label,
+        subdivision: subdivision.trim() || undefined,
         entityType,
         incorporationDate: incorporationDate || undefined,
         industry: industry || undefined,
@@ -202,8 +221,11 @@ export function EntryForm() {
         websites: liveWebsites.length > 0 ? liveWebsites : undefined,
         parentEntityCt:
           parentEntityCt.trim().toUpperCase() || undefined,
-        lei: lei.trim() || undefined,
         contactEmail: contactEmail.trim() || undefined,
+        operatingStatus,
+        hqCity: hqCity.trim() || undefined,
+        hqCountryCode: hqCountryCode || undefined,
+        employeeBand: employeeBand || undefined,
         description: description.trim() || undefined,
         filerRole: filerRole || undefined,
         filerStatement: filerRole
@@ -309,6 +331,7 @@ export function EntryForm() {
                     value={countryCode}
                     onChange={(e) => {
                       setCountryCode(e.target.value);
+                      setSubdivision("");
                       setRegistryId("");
                     }}
                   >
@@ -320,15 +343,30 @@ export function EntryForm() {
                   </select>
                 </div>
                 <div className="form-row">
-                  <label className="label">{country.idLabel}</label>
-                  <input
-                    value={registryId}
-                    onChange={(e) => setRegistryId(e.target.value)}
-                    placeholder={country.idFormat}
-                    maxLength={40}
-                  />
-                  <div className="hint">{t("entryForm.registryId.hint")}</div>
+                  <label className="label">
+                    {subdivisionLabel} (optional)
+                  </label>
+                  <select
+                    value={subdivision}
+                    onChange={(e) => setSubdivision(e.target.value)}
+                  >
+                    <option value="">— select —</option>
+                    {subdivisionOptions.map((s) => (
+                      <option key={s.code} value={s.code}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+              </div>
+              <div className="form-row">
+                <label className="label">{country.idLabel}</label>
+                <input
+                  value={registryId}
+                  onChange={(e) => setRegistryId(e.target.value)}
+                  placeholder={country.idFormat}
+                  maxLength={40}
+                />
               </div>
             </>
           )}
@@ -377,6 +415,27 @@ export function EntryForm() {
                   />
                 </div>
               </div>
+              <div className="form-row">
+                <label className="label">Operating status</label>
+                <select
+                  value={operatingStatus}
+                  onChange={(e) =>
+                    setOperatingStatus(
+                      e.target.value as "active" | "dormant" | "dissolved",
+                    )
+                  }
+                >
+                  {OPERATING_STATUSES.map((s) => (
+                    <option key={s.code} value={s.code}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="hint">
+                  {OPERATING_STATUSES.find((s) => s.code === operatingStatus)
+                    ?.hint}
+                </div>
+              </div>
             </>
           )}
 
@@ -389,10 +448,14 @@ export function EntryForm() {
                   onChange={(e) => setIndustry(e.target.value)}
                 >
                   <option value="">{t("entryForm.industry.placeholder")}</option>
-                  {INDUSTRIES.map((i) => (
-                    <option key={i.code} value={i.code}>
-                      {i.label}
-                    </option>
+                  {INDUSTRY_GROUPS.map(({ group, items }) => (
+                    <optgroup key={group} label={group}>
+                      {items.map((i) => (
+                        <option key={i.code} value={i.code}>
+                          {i.label}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>
@@ -470,6 +533,55 @@ export function EntryForm() {
                 </button>
               </div>
 
+              <div className="form-grid-2">
+                <div className="form-row">
+                  <label className="label">Headquarters city (optional)</label>
+                  <input
+                    value={hqCity}
+                    onChange={(e) => setHqCity(e.target.value)}
+                    placeholder="e.g. Singapore, San Francisco"
+                    maxLength={64}
+                  />
+                  <div className="hint">
+                    Where the entity actually operates. May differ from
+                    jurisdiction of registration.
+                  </div>
+                </div>
+                <div className="form-row">
+                  <label className="label">Headquarters country (optional)</label>
+                  <select
+                    value={hqCountryCode}
+                    onChange={(e) => setHqCountryCode(e.target.value)}
+                  >
+                    <option value="">— same as registration —</option>
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <label className="label">Employee count (optional)</label>
+                <select
+                  value={employeeBand}
+                  onChange={(e) => setEmployeeBand(e.target.value)}
+                >
+                  <option value="">— prefer not to say —</option>
+                  {EMPLOYEE_BANDS.map((b) => (
+                    <option key={b.code} value={b.code}>
+                      {b.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="hint">
+                  Banded so you can disclose scale without committing to an
+                  exact headcount.
+                </div>
+              </div>
+
               <div className="form-row">
                 <label className="label">{t("entryForm.description.label")}</label>
                 <textarea
@@ -512,15 +624,6 @@ export function EntryForm() {
                       maxLength={20}
                     />
                   </div>
-                  <div className="form-row">
-                    <label className="label">{t("entryForm.advanced.lei")}</label>
-                    <input
-                      value={lei}
-                      onChange={(e) => setLei(e.target.value.toUpperCase())}
-                      placeholder={t("entryForm.advanced.leiPlaceholder")}
-                      maxLength={20}
-                    />
-                  </div>
                   <div className="form-row" style={{ gridColumn: "1 / -1" }}>
                     <label className="label">{t("entryForm.advanced.email")}</label>
                     <input
@@ -540,77 +643,54 @@ export function EntryForm() {
             <>
               <div
                 style={{
-                  fontFamily: "var(--serif)",
-                  fontSize: 14,
-                  color: "var(--ink-2)",
-                  lineHeight: 1.55,
                   padding: "14px 16px",
                   borderLeft: "3px solid var(--stamp)",
                   background: "var(--paper-2)",
                   marginBottom: 18,
                 }}
               >
-                <strong>{t("entryForm.filer.declaration")} · {filerRole}</strong>
-                <br />
-                {filerRole && FILER_DECLARATIONS[filerRole]}
+                <div
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 10,
+                    letterSpacing: "0.16em",
+                    color: "var(--stamp-deep)",
+                    fontWeight: 600,
+                    marginBottom: 6,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {t("entryForm.filer.declaration")} ·{" "}
+                  {filerRole || "— pending —"}
+                </div>
+                <div
+                  style={{
+                    fontFamily: "var(--serif)",
+                    fontSize: 14,
+                    color: "var(--ink)",
+                    lineHeight: 1.55,
+                  }}
+                >
+                  {filerRole
+                    ? FILER_DECLARATIONS[filerRole]
+                    : "Filer role not selected. Go back to Step 1."}
+                </div>
               </div>
 
-              <div className="form-row">
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: 10,
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={confirmAccurate}
-                    onChange={(e) => setConfirmAccurate(e.target.checked)}
-                    style={{ marginTop: 3 }}
-                  />
-                  <span
-                    style={{
-                      fontFamily: "var(--serif)",
-                      fontSize: 13,
-                      color: "var(--ink-2)",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {t("entryForm.confirm.accurate")}
-                  </span>
-                </label>
-              </div>
-              <div className="form-row">
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: 10,
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={confirmPublic}
-                    onChange={(e) => setConfirmPublic(e.target.checked)}
-                    style={{ marginTop: 3 }}
-                  />
-                  <span
-                    style={{
-                      fontFamily: "var(--serif)",
-                      fontSize: 13,
-                      color: "var(--ink-2)",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {t("entryForm.confirm.public.lead")}
-                    <strong>{t("entryForm.confirm.public.bold")}</strong>
-                    {t("entryForm.confirm.public.tail")}
-                  </span>
-                </label>
-              </div>
+              <ConfirmCheckbox
+                checked={confirmAccurate}
+                onChange={setConfirmAccurate}
+              >
+                {t("entryForm.confirm.accurate")}
+              </ConfirmCheckbox>
+              <ConfirmCheckbox
+                checked={confirmPublic}
+                onChange={setConfirmPublic}
+              >
+                {t("entryForm.confirm.public.lead")}
+                <strong>{t("entryForm.confirm.public.bold")}</strong>
+                {t("entryForm.confirm.public.tail")}
+              </ConfirmCheckbox>
 
               <div
                 style={{
@@ -692,212 +772,546 @@ export function EntryForm() {
         </div>
       </form>
 
-      {/* Live preview right panel */}
+      {/* Live preview — receipt style */}
+      <Receipt
+        legalName={legalName}
+        tradeName={tradeName}
+        country={country}
+        subdivision={subdivision}
+        subdivisionLabel={subdivisionLabel}
+        subdivisionOptions={subdivisionOptions}
+        entityType={entityType}
+        registryId={registryId}
+        incorporationDate={incorporationDate}
+        operatingStatus={operatingStatus}
+        industry={industry}
+        operatingRegions={operatingRegions}
+        filerRole={filerRole}
+        websites={websites}
+        hqCity={hqCity}
+        hqCountryCode={hqCountryCode}
+        employeeBand={employeeBand}
+        parentEntityCt={parentEntityCt}
+        contactEmail={contactEmail}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Receipt — printed-style live preview that mirrors what the user is filling.
+//
+// Why receipt-style: the "filing" metaphor reads more directly than a
+// half-rendered card. Dotted leaders + monospace + a torn footer convey
+// "this is a draft of an official record" and answer the question "what
+// will I be signing in step 4?" at a glance.
+// ---------------------------------------------------------------------------
+
+function Receipt(props: {
+  legalName: string;
+  tradeName: string;
+  country: { code: string; label: string; idLabel: string; idFormat: string };
+  subdivision: string;
+  subdivisionLabel: string;
+  subdivisionOptions: { code: string; label: string }[];
+  entityType: string;
+  registryId: string;
+  incorporationDate: string;
+  operatingStatus: "active" | "dormant" | "dissolved";
+  industry: string;
+  operatingRegions: string[];
+  filerRole: FilerRole | "";
+  websites: string[];
+  hqCity: string;
+  hqCountryCode: string;
+  employeeBand: string;
+  parentEntityCt: string;
+  contactEmail: string;
+}) {
+  const {
+    legalName,
+    tradeName,
+    country,
+    subdivision,
+    subdivisionLabel,
+    subdivisionOptions,
+    entityType,
+    registryId,
+    incorporationDate,
+    operatingStatus,
+    industry,
+    operatingRegions,
+    filerRole,
+    websites,
+    hqCity,
+    hqCountryCode,
+    employeeBand,
+    parentEntityCt,
+    contactEmail,
+  } = props;
+
+  // Subdivisions are stored as codes for curated lists (US "DE" = Delaware,
+  // AU "NSW", CN "BJ"). The receipt shows the human label. Free-text values
+  // pass through unchanged.
+  const subdivisionDisplay = subdivision
+    ? subdivisionOptions.find((s) => s.code === subdivision)?.label ??
+      subdivision
+    : "";
+
+  const filledFields = [
+    legalName.trim(),
+    tradeName.trim(),
+    registryId.trim(),
+    subdivision,
+    incorporationDate,
+    operatingStatus,
+    industry,
+    operatingRegions.length > 0 ? "ok" : "",
+    websites.some((w) => w.trim()) ? "ok" : "",
+    hqCity.trim(),
+    hqCountryCode,
+    employeeBand,
+    parentEntityCt.trim(),
+    contactEmail.trim(),
+  ].filter(Boolean).length;
+  const totalFields = 14;
+  const operatingStatusLabel =
+    operatingStatus === "active"
+      ? "Active"
+      : operatingStatus === "dormant"
+        ? "Dormant"
+        : "Dissolved";
+  const hqCountryLabel =
+    COUNTRIES.find((c) => c.code === hqCountryCode)?.label ?? hqCountryCode;
+  const employeeBandLabel =
+    EMPLOYEE_BANDS.find((b) => b.code === employeeBand)?.label;
+
+  const liveWebsiteCount = websites.filter((w) => w.trim()).length;
+  const industryLabel = INDUSTRIES.find((i) => i.code === industry)?.label;
+  const entityTypeLabel =
+    ENTITY_TYPES.find((t) => t.code === entityType)?.code ?? "—";
+
+  return (
+    <div style={{ position: "sticky", top: 24 }}>
       <div
-        className="doc-card"
-        style={{ position: "sticky", top: 24 }}
+        style={{
+          background: "var(--paper)",
+          border: "1px solid var(--rule)",
+          padding: "20px 22px 0",
+          fontFamily: "var(--mono)",
+          fontSize: 12,
+          color: "var(--ink)",
+          // Torn / receipt-paper feel: drop a tiny shadow under the bottom
+          // edge but keep the top crisp.
+          boxShadow: "0 8px 18px -14px rgba(0,0,0,0.18)",
+        }}
       >
-        <div className="doc-card-h">
-          <div className="doc-card-title">Live preview</div>
+        {/* Header */}
+        <div style={{ textAlign: "center", paddingBottom: 12 }}>
           <div
             style={{
-              fontFamily: "var(--mono)",
-              fontSize: 10,
-              color: "var(--ink-3)",
-              letterSpacing: "0.1em",
-            }}
-          >
-            UNFILED DRAFT
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <div className="docnum" style={{ marginBottom: 4 }}>
-            ENTITY · CT-NUMBER (auto)
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: 13,
+              fontSize: 11,
+              letterSpacing: "0.28em",
               color: "var(--stamp-deep)",
-              fontWeight: 600,
-              letterSpacing: "0.08em",
+              fontWeight: 700,
             }}
           >
-            CT-XXXX-XXXX
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: 10,
-              color: "var(--ink-3)",
-              letterSpacing: "0.04em",
-            }}
-          >
-            Assigned at signing
+            ENTITY FILING LIVE PREVIEW
           </div>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <div className="docnum" style={{ marginBottom: 4 }}>
+        <DoubleRule />
+
+        {/* Filing metadata: receipt no. + clock */}
+        <ReceiptMetaRow
+          left={["FILING #", "DRAFT-PENDING"]}
+          right={["DATE", new Date().toISOString().slice(0, 10)]}
+        />
+        <ReceiptMetaRow
+          left={["CT-NUMBER", "CT-XXXX-XXXX"]}
+          right={["STATUS", "UNFILED"]}
+        />
+
+        <DashedRule />
+
+        {/* Legal name block — feature line */}
+        <div style={{ padding: "10px 0 4px" }}>
+          <div
+            style={{
+              fontSize: 9,
+              letterSpacing: "0.2em",
+              color: "var(--ink-3)",
+            }}
+          >
             LEGAL NAME
           </div>
           {legalName.trim() ? (
-            <>
-              <div
-                style={{
-                  fontFamily: "var(--serif)",
-                  fontSize: 18,
-                  fontWeight: 600,
-                  lineHeight: 1.2,
-                }}
-              >
-                {legalName}
-              </div>
-              {tradeName.trim() && (
-                <div
-                  style={{
-                    fontFamily: "var(--mono)",
-                    fontSize: 11,
-                    color: "var(--ink-3)",
-                    letterSpacing: "0.04em",
-                  }}
-                >
-                  DBA · {tradeName}
-                </div>
-              )}
-            </>
+            <div
+              style={{
+                fontFamily: "var(--serif)",
+                fontSize: 19,
+                fontWeight: 700,
+                lineHeight: 1.2,
+                marginTop: 2,
+              }}
+            >
+              {legalName}
+            </div>
           ) : (
-            <div className="hint">— LEGAL NAME NOT SET —</div>
-          )}
-        </div>
-
-        <div className="form-grid-2">
-          <div style={{ marginBottom: 12 }}>
-            <div className="docnum" style={{ marginBottom: 4 }}>
-              JURISDICTION
-            </div>
             <div
               style={{
-                fontFamily: "var(--mono)",
-                fontSize: 12,
-              }}
-            >
-              {country.label}
-            </div>
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <div className="docnum" style={{ marginBottom: 4 }}>
-              ENTITY TYPE
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 12,
-              }}
-            >
-              {ENTITY_TYPES.find((t) => t.code === entityType)?.code ?? "—"}
-            </div>
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <div className="docnum" style={{ marginBottom: 4 }}>
-              REGISTRY ID HASH
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--mono)",
                 fontSize: 11,
-                color: "var(--ink-2)",
-              }}
-            >
-              {registryId.trim()
-                ? `0x${sha256Bytes(`${countryCode}:${registryId.trim()}`)
-                    .slice(0, 4)
-                    .map((b) => b.toString(16).padStart(2, "0"))
-                    .join("")}…`
-                : "—"}
-            </div>
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <div className="docnum" style={{ marginBottom: 4 }}>
-              INCORPORATED
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 12,
-              }}
-            >
-              {incorporationDate || "—"}
-            </div>
-          </div>
-        </div>
-
-        {industry && (
-          <div style={{ marginBottom: 12 }}>
-            <div className="docnum" style={{ marginBottom: 4 }}>
-              INDUSTRY
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 11,
-              }}
-            >
-              {INDUSTRIES.find((i) => i.code === industry)?.label}
-            </div>
-          </div>
-        )}
-
-        {operatingRegions.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <div className="docnum" style={{ marginBottom: 4 }}>
-              OPERATING REGIONS
-            </div>
-            <div
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 10,
+                color: "var(--ink-3)",
+                marginTop: 4,
                 letterSpacing: "0.04em",
               }}
             >
-              {operatingRegions
-                .map((c) => REGIONS.find((r) => r.code === c)?.code ?? c)
-                .join(" · ")}
+              — not yet entered —
             </div>
-          </div>
-        )}
+          )}
+          {tradeName.trim() && (
+            <div
+              style={{
+                fontSize: 10,
+                color: "var(--ink-3)",
+                letterSpacing: "0.06em",
+                marginTop: 2,
+              }}
+            >
+              DBA · {tradeName}
+            </div>
+          )}
+        </div>
 
-        {filerRole && (
+        <DashedRule />
+
+        {/* Itemized fields */}
+        <div style={{ padding: "8px 0 4px" }}>
+          <ReceiptItem
+            label="Jurisdiction"
+            value={`${country.code} · ${country.label}`}
+          />
+          {subdivisionDisplay && (
+            <ReceiptItem label={subdivisionLabel} value={subdivisionDisplay} />
+          )}
+          <ReceiptItem label="Entity type" value={entityTypeLabel} />
+          <ReceiptItem
+            label="Operating status"
+            value={operatingStatusLabel}
+            emphasis={operatingStatus !== "active"}
+          />
+          <ReceiptItem
+            label={country.idLabel}
+            value={registryId.trim() || "—"}
+            mono
+          />
+          <ReceiptItem
+            label="Incorporated"
+            value={incorporationDate || "—"}
+          />
+          {industry && (
+            <ReceiptItem label="Industry" value={industryLabel ?? industry} />
+          )}
+          {operatingRegions.length > 0 && (
+            <ReceiptItem
+              label="Regions"
+              value={operatingRegions.join(" · ")}
+            />
+          )}
+          {liveWebsiteCount > 0 && (
+            <ReceiptItem
+              label="Websites"
+              value={`${liveWebsiteCount} listed`}
+            />
+          )}
+          {(hqCity.trim() || hqCountryCode) && (
+            <ReceiptItem
+              label="Headquarters"
+              value={
+                [hqCity.trim(), hqCountryLabel]
+                  .filter(Boolean)
+                  .join(", ") || "—"
+              }
+            />
+          )}
+          {employeeBandLabel && (
+            <ReceiptItem label="Employees" value={employeeBandLabel} />
+          )}
+          {parentEntityCt.trim() && (
+            <ReceiptItem
+              label="Parent CT"
+              value={parentEntityCt.trim().toUpperCase()}
+              mono
+            />
+          )}
+          {contactEmail.trim() && (
+            <ReceiptItem label="Contact" value={contactEmail.trim()} mono />
+          )}
+        </div>
+
+        <DashedRule />
+
+        {/* Subtotal-style summary */}
+        <div style={{ padding: "8px 0" }}>
+          <ReceiptItem
+            label="Fields entered"
+            value={`${filledFields} of ${totalFields}`}
+            emphasis
+          />
+          <ReceiptItem
+            label="Filer"
+            value={filerRole ? filerRole.toUpperCase() : "— pending —"}
+            emphasis
+          />
+        </div>
+
+        <DoubleRule />
+
+        {/* Footer + stamp */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            padding: "12px 0 6px",
+            gap: 12,
+          }}
+        >
           <div
-            className="rule-h-soft"
             style={{
-              paddingTop: 14,
-              marginTop: 8,
-              fontFamily: "var(--mono)",
-              fontSize: 10,
+              fontSize: 9,
+              letterSpacing: "0.16em",
               color: "var(--ink-3)",
-              letterSpacing: "0.04em",
               lineHeight: 1.6,
             }}
           >
-            <div>FILER · {filerRole.toUpperCase()}</div>
-            <div>WEBSITES · {websites.filter((w) => w.trim()).length}</div>
-            <div>PARENT · {parentEntityCt || "—"}</div>
-            <div>LEI · {lei || "—"}</div>
+            <div>SIGNS AT STEP 4</div>
+            <div>METADATA → IPFS</div>
+            <div>RAW {country.idLabel.toUpperCase()} STAYS LOCAL</div>
           </div>
-        )}
-
-        <div
-          style={{
-            marginTop: 18,
-            display: "flex",
-            justifyContent: "flex-end",
-          }}
-        >
           <Stamp text="Pending" sub="UNFILED" size="small" />
         </div>
+
+        {/* Torn-edge feel via SVG zig-zag */}
+        <TornEdge />
       </div>
+    </div>
+  );
+}
+
+function ReceiptItem({
+  label,
+  value,
+  mono,
+  emphasis,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  emphasis?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        gap: 6,
+        padding: "3px 0",
+        fontSize: 12,
+      }}
+    >
+      <span
+        style={{
+          color: emphasis ? "var(--ink)" : "var(--ink-2)",
+          fontWeight: emphasis ? 600 : 400,
+          flexShrink: 0,
+          letterSpacing: "0.02em",
+        }}
+      >
+        {label}
+      </span>
+      <span
+        aria-hidden
+        style={{
+          flex: 1,
+          borderBottom: "1px dotted var(--rule)",
+          marginBottom: 4,
+        }}
+      />
+      <span
+        style={{
+          fontFamily: mono ? "var(--mono)" : "inherit",
+          fontWeight: emphasis ? 700 : 500,
+          color: emphasis ? "var(--stamp-deep)" : "var(--ink)",
+          textAlign: "right",
+          maxWidth: "55%",
+          wordBreak: "break-word",
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function ReceiptMetaRow({
+  left,
+  right,
+}: {
+  left: [string, string];
+  right: [string, string];
+}) {
+  const cellStyle: React.CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    fontSize: 10,
+    letterSpacing: "0.06em",
+  };
+  const tagStyle: React.CSSProperties = {
+    color: "var(--ink-3)",
+    letterSpacing: "0.16em",
+    fontSize: 9,
+  };
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        padding: "6px 0",
+        gap: 12,
+      }}
+    >
+      <div style={cellStyle}>
+        <span style={tagStyle}>{left[0]}</span>
+        <span style={{ color: "var(--ink-2)" }}>{left[1]}</span>
+      </div>
+      <div style={{ ...cellStyle, alignItems: "flex-end" }}>
+        <span style={tagStyle}>{right[0]}</span>
+        <span style={{ color: "var(--ink-2)" }}>{right[1]}</span>
+      </div>
+    </div>
+  );
+}
+
+function DoubleRule() {
+  return (
+    <div
+      aria-hidden
+      style={{
+        borderTop: "1px solid var(--rule)",
+        borderBottom: "1px solid var(--rule)",
+        height: 3,
+      }}
+    />
+  );
+}
+
+function DashedRule() {
+  return (
+    <div
+      aria-hidden
+      style={{
+        borderTop: "1px dashed var(--rule)",
+        marginTop: 2,
+      }}
+    />
+  );
+}
+
+function TornEdge() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 200 6"
+      preserveAspectRatio="none"
+      style={{
+        display: "block",
+        width: "calc(100% + 44px)",
+        height: 6,
+        marginLeft: -22,
+        marginRight: -22,
+        marginTop: 8,
+        color: "var(--paper)",
+      }}
+    >
+      <path
+        d="M0 0 L8 6 L16 0 L24 6 L32 0 L40 6 L48 0 L56 6 L64 0 L72 6 L80 0 L88 6 L96 0 L104 6 L112 0 L120 6 L128 0 L136 6 L144 0 L152 6 L160 0 L168 6 L176 0 L184 6 L192 0 L200 6 L200 0 Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function ConfirmCheckbox({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  children: React.ReactNode;
+}) {
+  // Same reason as FilerOption: the global `.form-row input` rule mangles
+  // native checkboxes. We hide the real input visually but keep it
+  // accessible, and draw the box ourselves so layout stays predictable.
+  return (
+    <div className="form-row">
+      <label
+        style={{
+          display: "grid",
+          gridTemplateColumns: "20px 1fr",
+          columnGap: 12,
+          alignItems: "start",
+          cursor: "pointer",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          style={{
+            position: "absolute",
+            opacity: 0,
+            width: 1,
+            height: 1,
+            padding: 0,
+            margin: -1,
+            overflow: "hidden",
+            clip: "rect(0,0,0,0)",
+            border: 0,
+          }}
+        />
+        <span
+          aria-hidden
+          style={{
+            width: 16,
+            height: 16,
+            border: `1.5px solid ${checked ? "var(--stamp-deep)" : "var(--ink-3)"}`,
+            background: checked ? "var(--stamp-deep)" : "var(--paper)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginTop: 3,
+            color: "var(--paper)",
+            fontSize: 12,
+            fontWeight: 700,
+            fontFamily: "var(--mono)",
+            lineHeight: 1,
+          }}
+        >
+          {checked && "✓"}
+        </span>
+        <span
+          style={{
+            fontFamily: "var(--serif)",
+            fontSize: 13,
+            color: "var(--ink-2)",
+            lineHeight: 1.55,
+          }}
+        >
+          {children}
+        </span>
+      </label>
     </div>
   );
 }
@@ -916,13 +1330,20 @@ function FilerOption({
   body: string;
 }) {
   const active = selected === role;
+  // Why we hide the real radio: the form's global `.form-row input`
+  // rule (padding 10/12, border 1.5px, mono font) is meant for text
+  // inputs — it inflates the radio glyph and pushes the surrounding
+  // text out of place. We keep the input for keyboard / form semantics
+  // but draw the indicator ourselves.
   return (
     <label
       style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 10,
-        padding: "12px 14px",
+        display: "grid",
+        gridTemplateColumns: "20px 1fr",
+        columnGap: 12,
+        rowGap: 4,
+        alignItems: "start",
+        padding: "14px 16px",
         border: `1.5px solid ${active ? "var(--stamp-deep)" : "var(--rule)"}`,
         background: active ? "var(--paper-3)" : "var(--paper-2)",
         cursor: "pointer",
@@ -934,31 +1355,66 @@ function FilerOption({
         name="filer-role"
         checked={active}
         onChange={() => onSelect(role)}
-        style={{ marginTop: 3 }}
+        style={{
+          position: "absolute",
+          opacity: 0,
+          width: 1,
+          height: 1,
+          padding: 0,
+          margin: -1,
+          overflow: "hidden",
+          clip: "rect(0,0,0,0)",
+          border: 0,
+        }}
       />
-      <div>
-        <div
-          style={{
-            fontFamily: "var(--serif)",
-            fontSize: 14,
-            fontWeight: 600,
-            color: "var(--ink)",
-          }}
-        >
-          {title}
-        </div>
-        <div
-          style={{
-            fontFamily: "var(--serif)",
-            fontSize: 13,
-            color: "var(--ink-2)",
-            marginTop: 2,
-            lineHeight: 1.45,
-          }}
-        >
-          {body}
-        </div>
-      </div>
+      <span
+        aria-hidden
+        style={{
+          gridRow: "1 / span 2",
+          width: 16,
+          height: 16,
+          borderRadius: "50%",
+          border: `1.5px solid ${active ? "var(--stamp-deep)" : "var(--ink-3)"}`,
+          background: "var(--paper)",
+          marginTop: 3,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        {active && (
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: "var(--stamp-deep)",
+            }}
+          />
+        )}
+      </span>
+      <span
+        style={{
+          fontFamily: "var(--serif)",
+          fontSize: 15,
+          fontWeight: 600,
+          color: "var(--ink)",
+          lineHeight: 1.3,
+        }}
+      >
+        {title}
+      </span>
+      <span
+        style={{
+          fontFamily: "var(--serif)",
+          fontSize: 13,
+          color: "var(--ink-2)",
+          lineHeight: 1.5,
+        }}
+      >
+        {body}
+      </span>
     </label>
   );
 }

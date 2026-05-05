@@ -163,18 +163,10 @@ export default function HomePage() {
           </div>
           <div className="hero-stamp-wrap">
             <AttestationSample />
-            <div
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 10,
-                color: "var(--ink-3)",
-                textAlign: "right",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
-            >
-              Sample dossier · for illustration
-              <br />Solana · v0.4
+            <div className="r-caption">
+              <span>Sample dossier · for illustration</span>
+              <span className="dot" />
+              <span>Solana · v0.4</span>
             </div>
           </div>
         </div>
