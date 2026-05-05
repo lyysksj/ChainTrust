@@ -5,6 +5,8 @@ ChainTrust_Product_Design.md
 ChainTrust_VibeCoding_Prompt.md
 ChainTrust_Product_Design_CN.md
 instruction_v2.md
+instruction_v3.md
+
 
 node_modules/
 .next/
@@ -24,3 +26,4 @@ test-ledger/
 
 # Mock storage
 data/mock-storage/
+tsconfig.tsbuildinfo

@@ -1,126 +1,240 @@
 # ChainTrust
 
-Public identity registry for Web3 entities on Solana.
+**Public identity & attestation registry for Web3 entities, on Solana.**
 
-ChainTrust links legal entities, wallets, projects, domains, and issuer-signed attestations in a public, append-only graph. The current codebase is a Next.js 14 dApp backed by an Anchor program on Solana. Community comments still exist, but the core product is now the entity and relationship registry rather than a review-first app.
+ChainTrust links legal entities, wallets, projects, domains, officers, and issuer-signed attestations into one public, append-only graph. Anyone can resolve a wallet, domain, or short CT-Number back to the entity behind it and inspect every piece of signed evidence on the way.
 
-## Overview
+The current codebase is a Next.js 14 dApp backed by an Anchor program on Solana. Community comments, replies, likes, and append-only official responses are still part of the surface, but the core product is the entity / relationship graph — not a review-first app.
 
-- File on-chain `Entity` records and derive stable CT-Numbers from 8-byte entity IDs.
-- Register `Issuer` accounts with public trust tiers.
+> **Hackathon submission for Solana Colosseum.**
+> Program is live on **devnet**: [`HBxcCBx4ZPVnhGazehwZjF72J3neJsz5HyvGoPMTzUPt`](https://explorer.solana.com/address/HBxcCBx4ZPVnhGazehwZjF72J3neJsz5HyvGoPMTzUPt?cluster=devnet)
+
+[中文版 README](./README_CN.md)
+
+---
+
+## What it does
+
+- File on-chain `Entity` records and derive a stable, citable `CT-XXXX-XXXX` short code from each 8-byte entity ID.
+- Register `Issuer` accounts with a public 3-tier trust level (1 = platform, 2 = known third party, 3 = community / self).
 - Create `Project` records under an entity.
-- Attest signed relationships such as `OPERATES_PROJECT`, `CONTROLS_WALLET`, `HAS_DOMAIN`, `PARENT_OF`, and `AUDITED_BY`.
-- Resolve a CT-Number, wallet, or domain back to an entity and inspect its evidence trail.
-- Allow community comments, replies, likes, and append-only official responses.
+- Attest signed `Relationship` edges between entities, wallets, domains, projects, officers, UBOs, auditors, and parent / subsidiary entities.
+- Resolve any CT-Number, wallet, or domain back to the entity that owns it and inspect the full evidence trail.
+- Allow community comments, threaded replies, likes, and append-only official responses.
+- Gate user registration with an on-chain proof-of-personhood PDA backed by World ID.
 - Optionally dual-write relationship attestations to the Solana Attestation Service (SAS).
 
-Program ID: `HBxcCBx4ZPVnhGazehwZjF72J3neJsz5HyvGoPMTzUPt`
+## Tech stack
 
-## Stack
+| Layer | Tech |
+|---|---|
+| Frontend | Next.js 14 App Router, React 18, TypeScript, Tailwind CSS |
+| Wallets | Solana Wallet Adapter (Phantom, Solflare, …) |
+| On-chain | Anchor 0.30.1 program in [`anchor/`](anchor/) |
+| Storage | Pinata IPFS (`ipfs://`) when configured, local mock fallback (`mock://`) otherwise |
+| RPC / indexing | Helius RPC (devnet/mainnet), optional Helius webhook receiver |
+| Identity gate | World ID IDKit on the client, server-verified, anchored on-chain via `HumanProof` PDA |
+| i18n | English / 中文 toggle |
+| Interop | Optional Solana Attestation Service dual-write |
 
-- Frontend: Next.js 14, React 18, Tailwind CSS
-- Wallets: Solana Wallet Adapter, Phantom, Solflare
-- On-chain: Anchor 0.30.1 program in `anchor/`
-- Storage: local `mock://` storage by default, optional Pinata-backed `ipfs://`
-- Human verification: World ID gate for profile registration
-- Interop: optional SAS dual-write for relationship attestations
-
-## Repository Layout
+## Repository layout
 
 ```text
 .
-├── app/                         # Next.js App Router pages and API routes
-├── components/                  # UI components: forms, graph, review list, wallet UI
+├── app/                          # Next.js App Router pages and API routes
+│   ├── (pages)                   # /, /resolve, /create, /entry/[id], /attest,
+│   │                             # /issuers, /issuer/register, /issuer/admin,
+│   │                             # /register, /profile/[wallet]
+│   └── api/                      # worldid, upload, helius, mock, dev/humanproof
+├── components/                   # Forms, identity graph, comment list, navbar, …
 ├── lib/
-│   ├── anchor/                  # IDL, PDA helpers, read/write client, React hooks
-│   ├── mock/                    # Mock DNS, storage, and World ID state
-│   ├── sas/                     # SAS config, PDA helpers, instruction builders
-│   ├── storage/                 # Storage abstraction: mock or Pinata/IPFS
-│   └── utils/                   # Hashing, formatting, validation, CT-Number helpers
-├── anchor/                      # Anchor workspace and Solana program
-├── scripts/sas-bootstrap.ts     # One-time SAS bootstrap script
-├── types/                       # TypeScript account and metadata types
-├── ChainTrust_Product_Design.md
+│   ├── anchor/                   # IDL, PDA helpers, read/write client, React hooks
+│   ├── helius/                   # RPC URL resolution, webhook helpers
+│   ├── i18n/                     # Language provider + dictionary (en / zh)
+│   ├── mock/                     # Mock DNS, local storage, World ID staging cache
+│   ├── sas/                      # SAS config, PDA helpers, instruction builders
+│   ├── server/                   # Admin keypair, audit log, rate limit, nonce,
+│   │                             # signature verification, anchor-server provider
+│   ├── storage/                  # Storage abstraction: Pinata or mock
+│   └── utils/                    # CT-Number, hash, format, validation
+├── anchor/                       # Anchor workspace (program in programs/chaintrust)
+├── scripts/
+│   ├── init-registry.ts          # One-time RegistryConfig PDA bootstrap
+│   ├── sas-bootstrap.ts          # One-time SAS credential + 9 schemas
+│   └── helius-setup-webhook.ts   # CRUD for the Helius transaction webhook
+├── types/                        # TypeScript account snapshots & metadata shapes
+├── ChainTrust_Product_Design.md  # Product design (EN)
 └── ChainTrust_Product_Design_CN.md
 ```
 
-## On-Chain Model
+---
+
+## On-chain model
 
 ### Accounts
 
-| Account         | Purpose                                                        | PDA seeds                                       |
-| --------------- | -------------------------------------------------------------- | ----------------------------------------------- |
-| `UserProfile`   | User identity and metadata URI                                 | `["user", wallet]`                              |
-| `Issuer`        | Attestor authority, kind, trust tier                           | `["issuer", authority]`                         |
-| `Entity`        | Legal entity anchor for the registry                           | `["entity", entity_id]`                         |
-| `Project`       | Project filed under an entity                                  | `["project", entity, project_id]`               |
-| `Relationship`  | Signed edge from entity to wallet/domain/project/entity/person | `["rel", entity, kind, target_ref, issuer]`     |
-| `CommentRecord` | Community signal or reply                                      | `["comment", entity, commenter, comment_index]` |
-| `LikeRecord`    | Like state for a comment                                       | `["like", comment, liker]`                      |
+| Account              | Purpose                                                                  | PDA seeds                                       |
+|----------------------|--------------------------------------------------------------------------|-------------------------------------------------|
+| `RegistryConfig`     | Holds the registry admin authority. Created once after deploy.           | `["config"]`                                    |
+| `UserProfile`        | User identity + metadata URI                                             | `["user", wallet]`                              |
+| `HumanProof`         | Anti-sybil gate — proves a wallet was bound to a unique World ID         | `["humanproof", wallet]`                        |
+| `NullifierRecord`    | Companion of `HumanProof`, indexed by World ID nullifier                 | `["nullifier", nullifier_hash]`                 |
+| `Issuer`             | Attestor authority: kind, trust tier, name hash, metadata URI            | `["issuer", authority]`                         |
+| `IssuerTierRequest`  | Pending / approved / rejected tier-upgrade request                       | `["issuer_tier_request", issuer, requested_tier]` |
+| `Entity`             | Legal-entity anchor for the registry                                     | `["entity", entity_id]` (8-byte id)             |
+| `Project`            | A project filed under an entity                                          | `["project", entity, project_id]`               |
+| `Relationship`       | Signed edge from entity to wallet / domain / project / entity / person   | `["rel", entity, kind, target_ref, issuer]`     |
+| `CommentRecord`      | Top-level community signal or threaded reply (max depth 2)               | `["comment", entity, commenter, comment_index]` |
+| `LikeRecord`         | Per-wallet like state for a comment                                      | `["like", comment, liker]`                      |
 
 ### Instructions
 
-`register_user`, `update_user_metadata_uri`, `register_issuer`, `create_entity`, `create_project`, `attest_relationship`, `revoke_relationship`, `claim_entity`, `submit_comment`, `submit_reply`, `like_comment`, `unlike_comment`, `add_official_response`
+```
+register_user                update_user_metadata_uri
+attest_human_proof           (admin only — anti-sybil gate)
+initialize_registry_config   update_registry_admin
 
-### Important invariants
+register_issuer              request_issuer_tier   review_issuer_tier (admin)
 
-- No delete path for relationships or comments.
-- Revocation marks `Relationship.revoked_at`; it does not erase history.
-- Official responses append a new URI; they do not mutate the original comment body or hash.
+create_entity                create_project        claim_entity
+attest_relationship          revoke_relationship
 
-## Key Screens
+submit_comment               submit_reply
+like_comment                 unlike_comment
+add_official_response
+```
 
-- `/`: registry home, stats, recent entities, quick resolve
-- `/resolve`: resolve CT-Number, wallet, or domain to an entity
-- `/create`: file a new entity
-- `/entry/[entryId]`: entity profile, graph, relationships, projects, signals, raw view
-- `/attest`: guided attestation flow
-- `/issuers`: issuer registry and trust tier list
-- `/issuer/register`: issuer self-registration
-- `/register`: user registration with World ID verification
+### Relationship kinds
 
-## Local Development
+| Kind | Code | `target_ref` interpretation     |
+|------|------|----------------------------------|
+| `OPERATES_PROJECT` | 1 | Project PDA                       |
+| `DEPLOYS_WALLET`   | 2 | Wallet pubkey                     |
+| `CONTROLS_WALLET`  | 3 | Wallet pubkey                     |
+| `HAS_DOMAIN`       | 4 | `sha256(domain)`                  |
+| `SUBSIDIARY_OF`    | 5 | Parent Entity PDA                 |
+| `PARENT_OF`        | 6 | Child Entity PDA                  |
+| `HAS_UBO`          | 7 | `sha256(person_id)`               |
+| `HAS_OFFICER`      | 8 | Officer wallet pubkey             |
+| `AUDITED_BY`       | 9 | Issuer PDA                        |
+
+### Anti-sybil gate (`HumanProof`)
+
+`register_user` requires a `HumanProof` PDA at `["humanproof", wallet]`. The PDA can only be created by the registry admin via `attest_human_proof`. The flow is:
+
+1. Client passes World ID IDKit, gets a proof + nullifier hash.
+2. Client signs a fresh server-issued nonce with the wallet (proves the caller actually controls the wallet).
+3. `POST /api/worldid/verify` verifies the proof upstream against `developer.worldcoin.org`, verifies the wallet signature, then sends an `attest_human_proof` tx signed by `REGISTRY_ADMIN_KEYPAIR`.
+4. The instruction `init`s both `HumanProof[wallet]` and `NullifierRecord[nullifier_hash]`. The `init` on the nullifier record is what makes binding the same World ID to a second wallet fail.
+5. `register_user` is now unblocked for that wallet.
+
+### Issuer trust tiers
+
+Self-registration is restricted to **Tier 3** (community). Upgrades go through review:
+
+1. Issuer calls `request_issuer_tier(2 or 1, note_hash, note_uri)`.
+2. Registry admin reviews and calls `review_issuer_tier(approve)`.
+3. On approval, `Issuer.trust_tier` is updated. On rejection, the request is closed.
+
+The `/issuer/admin` page lets the admin wallet review pending requests interactively.
+
+### Claiming an entity
+
+`claim_entity` flips `Entity.is_claimed = true` and sets `official_wallet`, but only if the caller can present a `HAS_OFFICER` relationship that:
+- targets exactly the caller's wallet,
+- belongs to the entity being claimed,
+- is not revoked,
+- was issued by an issuer of trust tier 1 or 2.
+
+This is what unlocks `add_official_response` for community comments.
+
+### Invariants
+
+- No delete path for `Relationship`, `CommentRecord`, or `LikeRecord` once liked-then-unliked (the like record gets closed; the comment stays).
+- Revocation only writes `Relationship.revoked_at`; history is never erased.
+- `add_official_response` only appends a URI; the original comment body and hash are immutable.
+- Top-level comments allow at most one official response.
+- Reply depth is hard-capped at 2.
+
+---
+
+## Pages
+
+| Route                 | Purpose                                                                 |
+|-----------------------|-------------------------------------------------------------------------|
+| `/`                   | Stats, recent entities, quick resolve, attestation sample               |
+| `/resolve`            | Resolve a CT-Number, wallet, or domain to its entity                    |
+| `/create`             | File a new entity                                                       |
+| `/entry/[entryId]`    | Entity profile: identity graph, relationships, projects, signals, raw   |
+| `/attest`             | Guided attestation form (8 relationship verbs)                          |
+| `/issuers`            | Issuer registry + trust-tier reference                                  |
+| `/issuer/register`    | Self-register as a Tier 3 issuer; request upgrade to Tier 2/1           |
+| `/issuer/admin`       | Admin-only: review pending tier requests                                |
+| `/register`           | World ID + wallet-signature gate, then `register_user`                  |
+| `/profile/[wallet]`   | Profile, entities created, attestations issued                          |
+
+## API routes
+
+| Route                          | Method | Purpose                                                                |
+|--------------------------------|--------|------------------------------------------------------------------------|
+| `/api/worldid/challenge`       | GET    | Mint a single-use nonce for a wallet to sign                           |
+| `/api/worldid/verify`          | POST   | Verify IDKit proof + wallet signature, then `attest_human_proof`        |
+| `/api/worldid/check`           | GET    | Cheap pre-check: has this wallet already passed the gate?              |
+| `/api/worldid/rp-signature`    | POST   | Server-side signature for IDKit relying-party flow                     |
+| `/api/upload/challenge`        | GET    | Mint a single-use nonce for the upload flow                            |
+| `/api/upload`                  | POST   | Auth + rate-limited binary upload (PDF / PNG / JPEG / WebP)            |
+| `/api/upload/image`            | POST   | Auth + rate-limited image-only upload                                  |
+| `/api/upload/metadata`         | POST   | Auth + rate-limited JSON metadata upload                               |
+| `/api/helius/webhook`          | POST   | Receives Helius enhanced-tx deliveries; appends to chain-events log    |
+| `/api/dev/humanproof`          | POST   | Dev-only shortcut to mint HumanProof without World ID (disabled in prod) |
+| `/api/mock/upload` / `fetch` / `verify` / `upload-image` | GET/POST | Local dev fallbacks when Pinata / IDKit aren't configured |
+
+All write-heavy routes require:
+- A wallet pubkey header
+- An ed25519 signature over a server-issued nonce
+- A per-wallet rate-limit token bucket
+- An entry in [`data/audit/upload.log`](data/audit/) (file is created on first request)
+
+---
+
+## Local development
 
 ### Prerequisites
 
 - Node.js 20+
-- Rust and Cargo
+- Rust + Cargo
 - Solana CLI 1.18+
 - Anchor CLI compatible with `anchor-lang` 0.30.1
 
-If `anchor build` fails with an `edition2024` / platform-tools error, update your Solana platform tools before building.
+If `anchor build` fails with an `edition2024` / platform-tools error, install platform-tools v1.54+ first.
 
-### 1. Install dependencies
+### 1. Install
 
 ```bash
 npm install
-cd anchor && npm install
+cd anchor && npm install && cd ..
 ```
 
-### 2. Point the frontend at localnet
+### 2. Configure env
 
-The frontend defaults to `devnet` when no RPC env var is set. For local development, set:
+Copy `.env.local.example` (or copy from the table below) into `.env.local`. For pure local dev:
 
 ```bash
 NEXT_PUBLIC_SOLANA_RPC=http://127.0.0.1:8899
+SOLANA_RPC_URL=http://127.0.0.1:8899
+REGISTRY_ADMIN_KEYPAIR_JSON=<JSON array of your local admin keypair>
 ```
-
-Add it to `.env.local` before running the app.
 
 ### 3. Build the program
 
 ```bash
 cd anchor && anchor build
-```
-
-If you rebuild the program, sync the generated frontend artifacts:
-
-```bash
+# Sync the generated artifacts back to the frontend:
 cp anchor/target/idl/chaintrust.json lib/anchor/idl/chaintrust.json
-cp anchor/target/types/chaintrust.ts lib/anchor/idl/chaintrust.ts
+cp anchor/target/types/chaintrust.ts  lib/anchor/idl/chaintrust.ts
 ```
 
-### 4. Start a validator and deploy
+### 4. Validator + deploy
 
 Terminal A:
 
@@ -133,79 +247,113 @@ Terminal B:
 ```bash
 solana config set --url http://127.0.0.1:8899
 solana airdrop 10
-cd anchor && anchor deploy --provider.cluster localnet
+cd anchor && anchor deploy --provider.cluster localnet && cd ..
+# One-time: create the RegistryConfig PDA. Requires bootstrap admin signer.
+npx ts-node --project tsconfig.scripts.json -r tsconfig-paths/register scripts/init-registry.ts
 ```
+
+> The bootstrap admin pubkey is **hardcoded** in [`anchor/programs/chaintrust/src/constants.rs`](anchor/programs/chaintrust/src/constants.rs) as `REGISTRY_BOOTSTRAP_ADMIN`. Edit the constant and rebuild before deploying somewhere new.
 
 ### 5. Run the app
 
 ```bash
-npm run dev
+npm run dev   # http://localhost:3000
 ```
 
-Open `http://localhost:3000`.
+### Suggested demo flow
 
-## Suggested Demo Flow
-
-1. Connect a wallet and register a `UserProfile`.
+1. Connect a wallet, go to `/register`, pass the World ID + signature gate, then `register_user`.
 2. File an `Entity` from `/create`.
-3. Register the same wallet as an `Issuer`.
-4. File an attestation from `/attest`.
-5. Resolve the entity by CT-Number, wallet, or domain on `/resolve`.
-6. Open the entity page to inspect the graph, relationship list, comments, and official responses.
+3. Self-register the same wallet as a Tier 3 issuer at `/issuer/register`.
+4. From `/attest`, sign an `OPERATES_PROJECT` or `HAS_DOMAIN` attestation.
+5. From `/resolve`, search by CT-Number / wallet / domain — you should land on the entity page.
+6. Open the entity page: identity graph, relationships, projects, comments, raw view.
+7. (Optional) From the entity page, leave a comment; if claimed, post an official response.
 
-## Environment Variables
+---
 
-Put local overrides in `.env.local`.
+## Environment variables
 
-| Variable                               | Required    | Purpose                                                                                                |
-| -------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------ |
-| `NEXT_PUBLIC_SOLANA_RPC`               | Recommended | RPC endpoint for the frontend. If omitted, the app falls back to `NEXT_PUBLIC_RPC_URL`, then `devnet`. |
-| `NEXT_PUBLIC_RPC_URL`                  | Optional    | Legacy RPC fallback alias.                                                                             |
-| `NEXT_PUBLIC_WORLDID_APP_ID`           | Optional    | Enables the World ID registration gate when paired with RP ID.                                         |
-| `NEXT_PUBLIC_WORLDID_RP_ID`            | Optional    | World ID relying party ID.                                                                             |
-| `NEXT_PUBLIC_WORLDID_ACTION`           | Optional    | World ID action name. Defaults to `register-chaintrust-user`.                                          |
-| `NEXT_PUBLIC_WORLDID_ENV`              | Optional    | `staging` or `production`.                                                                             |
-| `WORLDID_RP_SIGNING_KEY`               | Optional    | Server-side key for `/api/worldid/rp-signature`.                                                       |
-| `PINATA_JWT`                           | Optional    | Server-side Pinata JWT. If absent, uploads use local mock storage.                                     |
-| `NEXT_PUBLIC_PINATA_GATEWAY`           | Optional    | Public Pinata gateway host for reading pinned content.                                                 |
-| `PINATA_GATEWAY`                       | Optional    | Server-side fallback gateway host.                                                                     |
-| `NEXT_PUBLIC_SAS_DUAL_WRITE`           | Optional    | Enables SAS dual-write on relationship attestations.                                                   |
-| `NEXT_PUBLIC_SAS_CREDENTIAL_AUTHORITY` | Optional    | Authority used to derive the shared SAS credential PDA.                                                |
+Put local overrides in `.env.local`. Mark the sensitive ones as Sensitive when promoting to a host like Vercel.
 
-## Storage Modes
+| Variable | Required | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_SOLANA_RPC`               | recommended | Frontend RPC endpoint. Falls back to `NEXT_PUBLIC_RPC_URL`, then `NEXT_PUBLIC_HELIUS_RPC_URL`, then `devnet`. |
+| `NEXT_PUBLIC_HELIUS_RPC_URL`           | recommended | Helius RPC URL with API key, used by client + server when set. |
+| `SOLANA_RPC_URL`                       | recommended | Server-side RPC (admin-keypair routes). |
+| `NEXT_PUBLIC_RPC_URL`                  | optional | Legacy alias. |
+| `NEXT_PUBLIC_WORLDID_APP_ID`           | required for prod | World ID app id (`app_…`). |
+| `NEXT_PUBLIC_WORLDID_RP_ID`            | optional | Relying-party id (`rp_…`). |
+| `NEXT_PUBLIC_WORLDID_ACTION`           | optional | Action name. Defaults to `register-chaintrust-user`. |
+| `NEXT_PUBLIC_WORLDID_ENV`              | optional | `staging` or `production`. |
+| `WORLDID_RP_SIGNING_KEY`               | optional | **Sensitive.** Server-side key for `/api/worldid/rp-signature`. |
+| `REGISTRY_ADMIN_KEYPAIR_JSON`          | required | **Sensitive.** JSON array of 64 bytes. Signs `attest_human_proof`. |
+| `REGISTRY_ADMIN_KEYPAIR_BASE58`        | optional | **Sensitive.** Base58 alternative to the JSON form. |
+| `PINATA_JWT`                           | required for prod | **Sensitive.** Pinata JWT. Without it, uploads fall back to local mock and **break on serverless**. |
+| `NEXT_PUBLIC_PINATA_GATEWAY`           | optional | Public Pinata gateway hostname (no scheme). |
+| `PINATA_GATEWAY`                       | optional | Server-side gateway fallback. |
+| `HELIUS_API_KEY`                       | optional | Used by `npm run helius:*` scripts to manage the webhook. |
+| `HELIUS_CLUSTER`                       | optional | `devnet` or `mainnet-beta`. |
+| `HELIUS_WEBHOOK_URL`                   | optional | Public URL of `/api/helius/webhook`. |
+| `HELIUS_WEBHOOK_AUTH`                  | optional | **Sensitive.** Shared secret enforced by the webhook route. |
+| `NEXT_PUBLIC_SAS_DUAL_WRITE`           | optional | `true` enables SAS dual-write on relationship attestations. |
+| `NEXT_PUBLIC_SAS_CREDENTIAL_AUTHORITY` | optional | Authority used to derive the shared SAS credential PDA. |
 
-- Without `PINATA_JWT`, uploads are written to local mock storage under `data/mock-storage/` and returned as `mock://...` URIs.
-- With `PINATA_JWT`, public uploads are pinned to IPFS and returned as `ipfs://...` URIs.
-- Sensitive evidence is flagged as sensitive today, but not yet encrypted. The storage interface is prepared for a future Lit Protocol layer.
+---
 
-## SAS Dual-Write
+## Storage modes
 
-To mirror `Relationship` attestations into SAS:
+- **Pinata IPFS (recommended)** — set `PINATA_JWT` and the gateway hostname. Public payloads return `ipfs://<cid>` URIs; binary uploads carry an extension hint (`ipfs://<cid>.png`) so the fetch route can pick a Content-Type without a metadata round-trip.
+- **Local mock** — without `PINATA_JWT`, uploads land in `data/mock-storage/` and return `mock://<id>` URIs. This works on a dev machine but **does not work on serverless hosts** (filesystem is ephemeral).
+- **Sensitive evidence** — currently only flagged sensitive, not encrypted. The storage interface is shaped to drop a Lit Protocol layer in later.
 
-1. Bootstrap the platform credential and schemas:
+## Helius webhook (optional)
+
+Helius can stream every transaction touching the program ID into `/api/helius/webhook`. The receiver appends each tx to [`data/audit/chain-events.log`](data/audit/) without decoding the instructions yet — an indexer can read that log later.
 
 ```bash
-npm run sas:bootstrap
+# Set HELIUS_API_KEY, HELIUS_CLUSTER, HELIUS_WEBHOOK_URL, HELIUS_WEBHOOK_AUTH first.
+npm run helius:list      # list webhooks under the API key
+npm run helius:create    # register the program ID filter pointing at HELIUS_WEBHOOK_URL
+npm run helius:delete    # tear down the webhook
 ```
 
-2. Set:
+## SAS dual-write (optional)
+
+To mirror `Relationship` attestations into the Solana Attestation Service:
 
 ```bash
+npm run sas:bootstrap          # creates the platform Credential + 9 Schemas, one-time
+# Then in .env.local:
 NEXT_PUBLIC_SAS_DUAL_WRITE=true
-NEXT_PUBLIC_SAS_CREDENTIAL_AUTHORITY=<bootstrap-authority-pubkey>
+NEXT_PUBLIC_SAS_CREDENTIAL_AUTHORITY=<runner pubkey from the bootstrap step>
 ```
 
-3. Make sure any wallet that signs attestations is in the credential's `authorized_signers` list.
+Any wallet that signs attestations must be listed in the credential's `authorized_signers`.
 
-## Current Limitations
+---
 
-- `anchor/tests/smoke.ts` still targets an older API shape (`create_entry`, `add_wallet_mapping`, older account names) and should be rewritten before relying on it as a current end-to-end test.
-- DNS verification is still mocked.
+## Deploying
+
+The Anchor program is already live on **devnet** at `HBxcCBx4ZPVnhGazehwZjF72J3neJsz5HyvGoPMTzUPt`. Frontend is a standard Next.js 14 App Router build (`npm run build`) — Vercel is the easiest host:
+
+1. Push the repo to GitHub.
+2. Import into Vercel (Next.js preset auto-detected).
+3. In **Environment Variables**, set everything from the table above. Mark `REGISTRY_ADMIN_KEYPAIR_JSON`, `WORLDID_RP_SIGNING_KEY`, `HELIUS_WEBHOOK_AUTH`, and `PINATA_JWT` as Sensitive.
+4. Deploy.
+
+To redeploy the program to mainnet later, swap the cluster in `anchor/Anchor.toml`, `anchor build`, `anchor deploy --provider.cluster mainnet`, then flip the RPC env vars.
+
+---
+
+## Current limitations
+
+- `anchor/tests/smoke.ts` still targets an older API shape (`create_entry`, `add_wallet_mapping`) and is not a faithful end-to-end test today.
+- DNS verification is mocked (the on-chain `target_ref` is `sha256(domain)`; the off-chain proof of control is a demo).
 - Sensitive evidence is not encrypted yet.
-- Reads currently depend on `getProgramAccounts` filters rather than a dedicated indexer.
+- Reads currently rely on `getProgramAccounts` filters; there is no dedicated indexer (the Helius log is a foothold for one).
 
 ## Notes
 
-- The current design direction is documented in `ChainTrust_Product_Design.md`.
-- The Chinese product document lives in `ChainTrust_Product_Design_CN.md`.
-- A Chinese version of this README is available at `README_CN.md`.
+- Product design is documented in [`ChainTrust_Product_Design.md`](ChainTrust_Product_Design.md) and [`ChainTrust_Product_Design_CN.md`](ChainTrust_Product_Design_CN.md).
+- A Chinese version of this README lives at [`README_CN.md`](README_CN.md).
