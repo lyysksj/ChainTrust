@@ -1,39 +1,38 @@
 /**
- * Single-use challenge store for World ID wallet binding.
+ * Stateless HMAC-signed challenge tokens for World ID wallet binding.
  *
- * The /api/worldid/verify endpoint used to trust the `wallet` field in the
- * request body. That let anyone bind a real WorldID nullifier to someone
- * else's wallet. The fix: issue a server-signed nonce, have the wallet sign
- * it client-side, and verify the signature before recording anything.
+ * Same rationale as upload-nonce.ts: encode {random, wallet, expiry,
+ * message} into a self-contained token authenticated with HMAC-SHA256, so
+ * the verifier needs no shared state with the issuer. This is the form that
+ * survives Vercel / Cloudflare serverless deployments where successive
+ * requests can land on different instances.
  *
- * Same in-process limitations as upload-nonce.ts: single instance only;
- * production should swap for Redis.
+ * The wallet pubkey is part of the signed message AND the HMAC payload, so
+ * a stolen token can't be used to bind a different wallet — the server
+ * reconstructs the exact message it issued and the verify route then checks
+ * the user's signature over that same string.
  */
-import { randomBytes } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  timingSafeEqual,
+} from "node:crypto";
 
 const TTL_MS = 5 * 60 * 1000;
 
-type NonceEntry = {
-  message: string;
-  expiresAt: number;
-  consumed: boolean;
-};
+function getSecret(): Buffer {
+  const explicit = process.env.NONCE_HMAC_SECRET;
+  if (explicit && explicit.length >= 32) return Buffer.from(explicit, "utf8");
+  const seed =
+    process.env.REGISTRY_ADMIN_KEYPAIR_JSON ||
+    process.env.REGISTRY_ADMIN_KEYPAIR_BASE58 ||
+    "chaintrust-dev-fallback-please-set-NONCE_HMAC_SECRET";
+  return createHash("sha256").update(seed).update("ct-worldid-nonce-v1").digest();
+}
 
-// Pin to globalThis so every API route that imports this module shares the
-// same Map across (a) Next dev's per-route module graphs and (b) HMR
-// reloads. Without this, /api/worldid/challenge and /api/worldid/verify can
-// resolve to different module instances on first hit, so consume() never
-// sees the nonce that issue() just wrote → "Unknown or expired nonce" on the
-// first attempt of every fresh session.
-const g = globalThis as unknown as {
-  __ctWorldIdNonces?: Map<string, NonceEntry>;
-};
-const nonces = g.__ctWorldIdNonces ?? (g.__ctWorldIdNonces = new Map());
-
-function sweep(now: number) {
-  for (const [k, v] of nonces) {
-    if (v.expiresAt < now) nonces.delete(k);
-  }
+function sign(payload: string): string {
+  return createHmac("sha256", getSecret()).update(payload).digest("base64url");
 }
 
 export type IssuedWorldIdChallenge = {
@@ -46,20 +45,20 @@ export function issueWorldIdNonce(
   wallet: string,
   now: number = Date.now(),
 ): IssuedWorldIdChallenge {
-  sweep(now);
-  const nonce = randomBytes(32).toString("hex");
   const expiresAt = now + TTL_MS;
-  const iso = new Date(expiresAt).toISOString();
-  // The wallet pubkey is part of the signed message so a stolen nonce can't
-  // be re-used to bind a different wallet.
+  const random = randomBytes(32).toString("hex");
   const message = [
     "ChainTrust World ID binding",
     `wallet: ${wallet}`,
-    `nonce: ${nonce}`,
-    `expires: ${iso}`,
+    `nonce: ${random}`,
+    `expires: ${new Date(expiresAt).toISOString()}`,
   ].join("\n");
-  nonces.set(nonce, { message, expiresAt, consumed: false });
-  return { nonce, message, expiresAt };
+  const payload = Buffer.from(
+    JSON.stringify({ random, wallet, expiresAt, message }),
+    "utf8",
+  ).toString("base64url");
+  const sig = sign(payload);
+  return { nonce: `${payload}.${sig}`, message, expiresAt };
 }
 
 export type ConsumeWorldIdResult =
@@ -70,10 +69,32 @@ export function consumeWorldIdNonce(
   nonce: string,
   now: number = Date.now(),
 ): ConsumeWorldIdResult {
-  sweep(now);
-  const entry = nonces.get(nonce);
-  if (!entry) return { ok: false, reason: "Unknown or expired nonce" };
-  if (entry.consumed) return { ok: false, reason: "Nonce already used" };
-  entry.consumed = true;
-  return { ok: true, message: entry.message };
+  const dot = nonce.indexOf(".");
+  if (dot < 0) return { ok: false, reason: "Malformed nonce" };
+  const payload = nonce.slice(0, dot);
+  const providedSig = nonce.slice(dot + 1);
+  const expectedSig = sign(payload);
+  const a = Buffer.from(providedSig);
+  const b = Buffer.from(expectedSig);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    return { ok: false, reason: "Bad signature" };
+  }
+  let parsed: {
+    random: string;
+    wallet: string;
+    expiresAt: number;
+    message: string;
+  };
+  try {
+    parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    return { ok: false, reason: "Malformed payload" };
+  }
+  if (typeof parsed.expiresAt !== "number" || now > parsed.expiresAt) {
+    return { ok: false, reason: "Expired nonce" };
+  }
+  if (typeof parsed.message !== "string") {
+    return { ok: false, reason: "Malformed payload" };
+  }
+  return { ok: true, message: parsed.message };
 }

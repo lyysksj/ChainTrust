@@ -54,17 +54,23 @@ export async function recordVerification(
   wallet: string,
   nullifierHash: string,
 ): Promise<void> {
-  await ensureDir();
-  const record: Record = {
-    wallet,
-    nullifierHash,
-    verifiedAt: Date.now(),
-  };
-  // Write both indexes so we can look up by either side.
-  await fs.writeFile(
-    nullifierFile(nullifierHash),
-    JSON.stringify(record),
-    "utf8",
-  );
-  await fs.writeFile(walletFile(wallet), JSON.stringify(record), "utf8");
+  // Best-effort local cache. Source of truth is the on-chain HumanProof PDA;
+  // if the runtime filesystem is read-only (Vercel, Cloudflare Workers), we
+  // silently skip the write so the user-facing verify request still 200s.
+  try {
+    await ensureDir();
+    const record: Record = {
+      wallet,
+      nullifierHash,
+      verifiedAt: Date.now(),
+    };
+    await fs.writeFile(
+      nullifierFile(nullifierHash),
+      JSON.stringify(record),
+      "utf8",
+    );
+    await fs.writeFile(walletFile(wallet), JSON.stringify(record), "utf8");
+  } catch {
+    // ignore — read paths fall back to on-chain check
+  }
 }
