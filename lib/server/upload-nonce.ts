@@ -25,7 +25,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 
-const TTL_MS = 5 * 60 * 1000;
+const TTL_MS = 15 * 60 * 1000;
 
 /** Derive a stable HMAC secret. Production should set NONCE_HMAC_SECRET to
  *  a strong random string (`openssl rand -hex 32`). Otherwise we auto-derive

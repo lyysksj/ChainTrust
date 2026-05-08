@@ -19,7 +19,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 
-const TTL_MS = 5 * 60 * 1000;
+const TTL_MS = 15 * 60 * 1000;
 
 function getSecret(): Buffer {
   const explicit = process.env.NONCE_HMAC_SECRET;

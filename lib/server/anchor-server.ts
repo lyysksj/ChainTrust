@@ -59,12 +59,25 @@ export function buildAdminProgram(
   return { program, provider };
 }
 
+/**
+ * Read-only program handle for endpoints that only fetch account state
+ * (e.g. /api/worldid/check). Uses a throwaway keypair so we don't pull in
+ * REGISTRY_ADMIN_KEYPAIR_JSON for plain reads — useful when the admin key
+ * isn't configured yet but we still want the route to function.
+ */
+export function buildReadonlyProgram(
+  rpcUrl: string,
+): { program: Program<Chaintrust>; provider: AnchorProvider } {
+  return buildAdminProgram(Keypair.generate(), rpcUrl);
+}
+
 export function defaultRpcUrl(): string {
   // Prefer Helius when configured — its rate limits and reliability are
   // strictly better than the public devnet endpoint, and the URL already
   // carries the auth.
   return (
     process.env.SOLANA_RPC_URL ||
+    process.env.NEXT_PUBLIC_SOLANA_RPC ||
     process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
     heliusRpcUrl() ||
     "http://127.0.0.1:8899"

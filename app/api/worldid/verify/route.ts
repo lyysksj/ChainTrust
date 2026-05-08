@@ -44,6 +44,9 @@ import {
 } from "@/lib/server/tx-confirm";
 
 export const runtime = "nodejs";
+// Verify performs an admin-signed on-chain attestation; devnet confirmation
+// can take 8-15s, well over Vercel's 10s default. Requires Pro plan.
+export const maxDuration = 60;
 
 const APP_ID = process.env.NEXT_PUBLIC_WORLDID_APP_ID || "";
 const RP_ID = process.env.NEXT_PUBLIC_WORLDID_RP_ID || "";

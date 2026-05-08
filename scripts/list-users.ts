@@ -1,12 +1,9 @@
 /**
- * Pitch-deck traction snapshot.
- *
- * Reads live counts from the deployed program on whatever cluster the
- * configured RPC points at (devnet by default).
+ * Dump all registered ChainTrust users from the deployed program.
  *
  * Usage:
  *   npx ts-node --project tsconfig.scripts.json -r tsconfig-paths/register \
- *     scripts/traction-snapshot.ts
+ *     scripts/list-users.ts
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -51,45 +48,25 @@ async function main() {
   const provider = new AnchorProvider(conn, wallet, { commitment: "confirmed" });
   const program = new Program(idlJson as Chaintrust, provider);
 
-  const [entities, issuers, rels, users, projects, comments, humanproofs] =
-    await Promise.all([
-      program.account.entity.all(),
-      program.account.issuer.all(),
-      program.account.relationship.all(),
-      program.account.userProfile.all(),
-      program.account.project.all(),
-      program.account.commentRecord.all(),
-      program.account.humanProof.all(),
-    ]);
+  const users = await program.account.userProfile.all();
+  users.sort(
+    (a, b) =>
+      Number((b.account as any).registeredAt) -
+      Number((a.account as any).registeredAt),
+  );
 
-  const tier1 = issuers.filter((i) => (i.account as any).trustTier === 1).length;
-  const tier2 = issuers.filter((i) => (i.account as any).trustTier === 2).length;
-  const tier3 = issuers.filter((i) => (i.account as any).trustTier === 3).length;
-
-  const claimedEntities = entities.filter(
-    (e) => (e.account as any).isClaimed,
-  ).length;
-
-  const out = {
-    cluster_rpc: rpc.replace(/api-key=[^&]+/, "api-key=<redacted>"),
-    timestamp_iso: new Date().toISOString(),
-    program_id: "HBxcCBx4ZPVnhGazehwZjF72J3neJsz5HyvGoPMTzUPt",
-    counts: {
-      entities: entities.length,
-      entities_claimed: claimedEntities,
-      relationships: rels.length,
-      issuers_total: issuers.length,
-      issuers_tier1: tier1,
-      issuers_tier2: tier2,
-      issuers_tier3: tier3,
-      users: users.length,
-      humanproofs: humanproofs.length,
-      projects: projects.length,
-      comments: comments.length,
-    },
-  };
-
-  console.log(JSON.stringify(out, null, 2));
+  console.log(`Total registered users: ${users.length}\n`);
+  for (const u of users) {
+    const a = u.account as any;
+    const ts = Number(a.registeredAt);
+    const date = ts > 0 ? new Date(ts * 1000).toISOString() : "(unknown)";
+    console.log(`wallet:    ${a.wallet.toBase58()}`);
+    console.log(`username:  ${a.username}`);
+    console.log(`registered: ${date}`);
+    console.log(`metadata:  ${a.metadataUri || "(none)"}`);
+    console.log(`pda:       ${u.publicKey.toBase58()}`);
+    console.log("---");
+  }
 }
 
 main().catch((e) => {

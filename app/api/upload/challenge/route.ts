@@ -14,6 +14,10 @@ import { NextResponse } from "next/server";
 import { issueNonce } from "@/lib/server/upload-nonce";
 
 export const runtime = "nodejs";
+// Each call must mint a fresh nonce. Without this, Next 14 would statically
+// pre-render the route at build time and hand every user the same expired
+// token after deploy.
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const ch = issueNonce();
