@@ -320,26 +320,17 @@ export type Chaintrust = {
       "accounts": [
         {
           "name": "entity",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  110,
-                  116,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "entityId"
-              }
-            ]
-          }
+          "writable": true
+        },
+        {
+          "name": "primaryIdClaim",
+          "docs": [
+            "IdClaim for the primary identifier. Anchor `init` here is what",
+            "enforces \"one (country, id_type, id_value) → at most one Entity\"",
+            "at the network level. A second filer attempting the same tuple gets",
+            "`account already in use`."
+          ],
+          "writable": true
         },
         {
           "name": "creatorProfile",
@@ -373,34 +364,15 @@ export type Chaintrust = {
       ],
       "args": [
         {
-          "name": "entityId",
-          "type": {
-            "array": [
-              "u8",
-              8
-            ]
-          }
+          "name": "country",
+          "type": "string"
         },
         {
-          "name": "legalNameHash",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
+          "name": "idType",
+          "type": "string"
         },
         {
-          "name": "registryIdHash",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "jurisdiction",
+          "name": "idValue",
           "type": "string"
         },
         {
@@ -640,6 +612,52 @@ export type Chaintrust = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "registerAdditionalId",
+      "discriminator": [
+        240,
+        224,
+        95,
+        94,
+        39,
+        10,
+        248,
+        125
+      ],
+      "accounts": [
+        {
+          "name": "entity",
+          "writable": true
+        },
+        {
+          "name": "idClaim",
+          "writable": true
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "country",
+          "type": "string"
+        },
+        {
+          "name": "idType",
+          "type": "string"
+        },
+        {
+          "name": "idValue",
+          "type": "string"
+        }
+      ]
     },
     {
       "name": "registerIssuer",
@@ -1263,6 +1281,35 @@ export type Chaintrust = {
       "args": []
     },
     {
+      "name": "updateEntityMetadataUri",
+      "discriminator": [
+        133,
+        141,
+        209,
+        63,
+        190,
+        68,
+        38,
+        48
+      ],
+      "accounts": [
+        {
+          "name": "entity",
+          "writable": true
+        },
+        {
+          "name": "signer",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "metadataUri",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "updateRegistryAdmin",
       "discriminator": [
         117,
@@ -1391,6 +1438,19 @@ export type Chaintrust = {
         82,
         85,
         45
+      ]
+    },
+    {
+      "name": "idClaim",
+      "discriminator": [
+        141,
+        48,
+        225,
+        101,
+        70,
+        35,
+        207,
+        69
       ]
     },
     {
@@ -1708,6 +1768,36 @@ export type Chaintrust = {
       "code": 6041,
       "name": "humanProofWalletMismatch",
       "msg": "HumanProof wallet field does not match signer"
+    },
+    {
+      "code": 6042,
+      "name": "invalidIdCountry",
+      "msg": "Identifier country is empty or exceeds max length"
+    },
+    {
+      "code": 6043,
+      "name": "invalidIdType",
+      "msg": "Identifier type is empty or exceeds max length"
+    },
+    {
+      "code": 6044,
+      "name": "invalidIdValue",
+      "msg": "Identifier value is empty or exceeds max length"
+    },
+    {
+      "code": 6045,
+      "name": "tooManyIdentifiers",
+      "msg": "Identifier count exceeds the per-entity maximum"
+    },
+    {
+      "code": 6046,
+      "name": "idClaimEntityMismatch",
+      "msg": "IdClaim does not point at this entity"
+    },
+    {
+      "code": 6047,
+      "name": "notCreator",
+      "msg": "Caller is not the creator of this entity"
     }
   ],
   "types": [
@@ -1789,6 +1879,25 @@ export type Chaintrust = {
     },
     {
       "name": "entity",
+      "docs": [
+        "Entity — the on-chain identity anchor for a real-world legal entity.",
+        "",
+        "`entity_id` is **deterministically derived** from the primary identifier",
+        "(country | id_type | normalized id_value), not random. This means:",
+        "- The CT-Number is a 1:1 encoding of `entity_id` (no truncation, no",
+        "dead bytes), which is itself a stable function of (country, id_type,",
+        "id_value). The same primary identifier always produces the same CT.",
+        "- Anchor's `init` constraint on `[ENTITY_SEED, &entity_id]` is what",
+        "enforces global uniqueness for the primary identifier.",
+        "- Legal name and other descriptive fields live in IPFS metadata (mutable",
+        "by `official_wallet` post-claim) so a company rename does NOT change",
+        "the CT-Number.",
+        "",
+        "The previous `legal_name_hash` / `registry_id_hash` fields have been",
+        "removed. They were a privacy theater (legal name was already plaintext on",
+        "IPFS; registry IDs have a search space small enough to brute-force). The",
+        "authoritative copies of those values now live in the public IPFS metadata."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1797,31 +1906,13 @@ export type Chaintrust = {
             "type": {
               "array": [
                 "u8",
-                8
+                5
               ]
             }
           },
           {
             "name": "createdBy",
             "type": "pubkey"
-          },
-          {
-            "name": "legalNameHash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "registryIdHash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
           },
           {
             "name": "jurisdiction",
@@ -1854,6 +1945,10 @@ export type Chaintrust = {
           {
             "name": "commentCount",
             "type": "u32"
+          },
+          {
+            "name": "identifierCount",
+            "type": "u8"
           },
           {
             "name": "createdAt",
@@ -1900,6 +1995,40 @@ export type Chaintrust = {
           {
             "name": "attestedBy",
             "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "idClaim",
+      "docs": [
+        "IdClaim — global unique reservation for a single (country, id_type,",
+        "id_value) tuple, pointing back at the Entity that owns it.",
+        "",
+        "One Entity may have multiple identifiers (e.g. a US company with both",
+        "EIN and SEC CIK). Each identifier gets its own IdClaim PDA. The PDA seed",
+        "hashes the normalized inputs so:",
+        "- Anchor's `init` enforces global uniqueness for that identifier.",
+        "- Third parties can compute the PDA address from public inputs and",
+        "resolve `(country, id_type, id_value) → Entity` in O(1).",
+        "",
+        "The account stores only the entity pointer and a creation timestamp; the",
+        "human-readable identifiers live in the Entity's IPFS metadata."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "entity",
+            "type": "pubkey"
+          },
+          {
+            "name": "createdAt",
+            "type": "i64"
           },
           {
             "name": "bump",
@@ -2250,6 +2379,11 @@ export type Chaintrust = {
       "name": "humanproofSeed",
       "type": "bytes",
       "value": "[104, 117, 109, 97, 110, 112, 114, 111, 111, 102]"
+    },
+    {
+      "name": "idClaimSeed",
+      "type": "bytes",
+      "value": "[105, 100, 45, 99, 108, 97, 105, 109]"
     },
     {
       "name": "issuerSeed",

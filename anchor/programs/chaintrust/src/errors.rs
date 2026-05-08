@@ -86,4 +86,16 @@ pub enum ChainTrustError {
     HumanProofMissing,
     #[msg("HumanProof wallet field does not match signer")]
     HumanProofWalletMismatch,
+    #[msg("Identifier country is empty or exceeds max length")]
+    InvalidIdCountry,
+    #[msg("Identifier type is empty or exceeds max length")]
+    InvalidIdType,
+    #[msg("Identifier value is empty or exceeds max length")]
+    InvalidIdValue,
+    #[msg("Identifier count exceeds the per-entity maximum")]
+    TooManyIdentifiers,
+    #[msg("IdClaim does not point at this entity")]
+    IdClaimEntityMismatch,
+    #[msg("Caller is not the creator of this entity")]
+    NotCreator,
 }

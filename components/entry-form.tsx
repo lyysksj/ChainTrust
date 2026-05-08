@@ -5,12 +5,17 @@ import { useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useProgram } from "@/lib/anchor/hooks";
 import { createEntity } from "@/lib/anchor/client";
-import { entityPda } from "@/lib/anchor/pdas";
-import { randomEntityId, sha256Bytes } from "@/lib/utils/hash";
-import { entityIdToCtNumber } from "@/lib/utils/ct-number";
+import {
+  CT_NUMBER_PATTERN,
+  ctNumberFromPrimaryId,
+  deriveEntityId,
+  idHashBytes,
+  normalizeIdValue,
+} from "@/lib/utils/ct-number";
 import {
   validateCompanyName,
-  validateEin,
+  validateCustomIdTypeLabel,
+  validateIdentifierValue,
   validateOptionalUrl,
   validateWebsite,
 } from "@/lib/utils/validation";
@@ -22,14 +27,57 @@ import {
   COUNTRIES,
   EMPLOYEE_BANDS,
   ENTITY_TYPES,
+  ID_TYPES_BY_COUNTRY,
+  ID_TYPE_CUSTOM_CODE,
   INDUSTRIES,
   INDUSTRY_GROUPS,
   OPERATING_STATUSES,
   REGIONS,
   SUBDIVISIONS_BY_COUNTRY,
   SUBDIVISION_LABEL_BY_COUNTRY,
+  findIdType,
 } from "@/types";
-import type { EntityMetadata, FilerRole } from "@/types";
+import type {
+  EntityIdentifier,
+  EntityMetadata,
+  FilerRole,
+  IdTypeOption,
+} from "@/types";
+
+// Hard cap mirrors MAX_IDENTIFIERS_PER_ENTITY in the on-chain program.
+const MAX_IDENTIFIERS = 5;
+
+type LocalIdentifier = {
+  type: string; // catalog code or ID_TYPE_CUSTOM_CODE
+  customTypeLabel: string; // populated only when type === ID_TYPE_CUSTOM_CODE
+  value: string;
+};
+
+function emptyIdentifier(country: string): LocalIdentifier {
+  const list = ID_TYPES_BY_COUNTRY[country] ?? [];
+  return {
+    type: list[0]?.code ?? ID_TYPE_CUSTOM_CODE,
+    customTypeLabel: "",
+    value: "",
+  };
+}
+
+/** Resolve the on-chain canonical type code (uppercase, matches `validate_identifier_inputs`). */
+function canonicalTypeCode(country: string, ident: LocalIdentifier): string {
+  if (ident.type === ID_TYPE_CUSTOM_CODE) {
+    return ident.customTypeLabel.trim().toUpperCase();
+  }
+  return ident.type.toUpperCase();
+}
+
+/** Resolve the human-friendly label for the receipt and metadata. */
+function typeLabelFor(country: string, ident: LocalIdentifier): string {
+  if (ident.type === ID_TYPE_CUSTOM_CODE) {
+    return ident.customTypeLabel.trim();
+  }
+  const found = findIdType(country, ident.type);
+  return found?.label ?? ident.type;
+}
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -62,7 +110,10 @@ export function EntryForm() {
   const [filerRole, setFilerRole] = useState<FilerRole | "">("");
   const [countryCode, setCountryCode] = useState("SG");
   const [subdivision, setSubdivision] = useState("");
-  const [registryId, setRegistryId] = useState("");
+  const [identifiers, setIdentifiers] = useState<LocalIdentifier[]>(() => [
+    emptyIdentifier("SG"),
+  ]);
+  const [primaryIndex, setPrimaryIndex] = useState(0);
 
   // Step 2
   const [legalName, setLegalName] = useState("");
@@ -97,12 +148,46 @@ export function EntryForm() {
     [countryCode],
   );
 
+  const idTypeOptions: IdTypeOption[] = useMemo(
+    () => ID_TYPES_BY_COUNTRY[countryCode] ?? [],
+    [countryCode],
+  );
+
   const subdivisionOptions = useMemo(
     () => SUBDIVISIONS_BY_COUNTRY[countryCode] ?? [],
     [countryCode],
   );
   const subdivisionLabel =
     SUBDIVISION_LABEL_BY_COUNTRY[countryCode] ?? "State / Province";
+
+  // ----- Identifier helpers -------------------------------------------------
+  function setIdentifierField(
+    i: number,
+    patch: Partial<LocalIdentifier>,
+  ) {
+    setIdentifiers((prev) =>
+      prev.map((ident, idx) => (idx === i ? { ...ident, ...patch } : ident)),
+    );
+  }
+  function addIdentifier() {
+    if (identifiers.length >= MAX_IDENTIFIERS) return;
+    setIdentifiers((prev) => [...prev, emptyIdentifier(countryCode)]);
+  }
+  function removeIdentifier(i: number) {
+    if (identifiers.length === 1) return;
+    setIdentifiers((prev) => prev.filter((_, idx) => idx !== i));
+    setPrimaryIndex((prev) => {
+      if (prev === i) return 0;
+      if (prev > i) return prev - 1;
+      return prev;
+    });
+  }
+  function changeCountry(newCode: string) {
+    setCountryCode(newCode);
+    setSubdivision("");
+    setIdentifiers([emptyIdentifier(newCode)]);
+    setPrimaryIndex(0);
+  }
 
   function updateWebsite(i: number, v: string) {
     setWebsites((prev) => prev.map((w, idx) => (idx === i ? v : w)));
@@ -123,8 +208,35 @@ export function EntryForm() {
     if (s === 1) {
       if (!filerRole) return t("entryForm.errors.role");
       if (!countryCode) return t("entryForm.errors.country");
-      const idErr = validateEin(countryCode, registryId);
-      if (idErr) return idErr;
+      if (identifiers.length === 0) return "Add at least one identifier";
+      // Each identifier must validate. Custom labels need a separate format
+      // check; preset types delegate to the per-type validator.
+      const seenKeys = new Set<string>();
+      for (let i = 0; i < identifiers.length; i++) {
+        const ident = identifiers[i];
+        if (ident.type === ID_TYPE_CUSTOM_CODE) {
+          const labelErr = validateCustomIdTypeLabel(ident.customTypeLabel);
+          if (labelErr) return `Identifier #${i + 1}: ${labelErr}`;
+        } else if (!ident.type) {
+          return `Identifier #${i + 1}: type is required`;
+        }
+        const valErr = validateIdentifierValue(
+          countryCode,
+          ident.type === ID_TYPE_CUSTOM_CODE ? ID_TYPE_CUSTOM_CODE : ident.type,
+          ident.value,
+        );
+        if (valErr) return `Identifier #${i + 1}: ${valErr}`;
+        const canonType = canonicalTypeCode(countryCode, ident);
+        const norm = normalizeIdValue(ident.value);
+        const key = `${countryCode}|${canonType}|${norm}`;
+        if (seenKeys.has(key)) {
+          return `Identifier #${i + 1}: duplicate of an earlier identifier in this filing`;
+        }
+        seenKeys.add(key);
+      }
+      if (primaryIndex < 0 || primaryIndex >= identifiers.length) {
+        return "Mark one identifier as primary";
+      }
     }
     if (s === 2) {
       const nameErr = validateCompanyName(legalName);
@@ -143,7 +255,7 @@ export function EntryForm() {
         const werr = validateWebsite(w);
         if (werr) return `${t("entryForm.errors.websitePrefix")} ${werr}`;
       }
-      if (parentEntityCt && !/^CT-[0-9A-Z]{4}-[0-9A-Z]{4}$/i.test(parentEntityCt.trim())) {
+      if (parentEntityCt && !CT_NUMBER_PATTERN.test(parentEntityCt.trim())) {
         return t("entryForm.errors.parentCt");
       }
       const siteErr = validateOptionalUrl("");
@@ -198,18 +310,61 @@ export function EntryForm() {
     try {
       setProgress(t("entryForm.progress.upload"));
       const liveWebsites = websites.map((w) => w.trim()).filter(Boolean);
-      // Privacy: hash the registry ID client-side. Raw value never leaves
-      // the browser. Only the hex prefix is stored in the public IPFS doc.
-      const registryIdHashBytes = sha256Bytes(
-        `${countryCode}:${registryId.trim()}`,
+
+      // Build the public identifiers array. Each entry stores:
+      //   - the canonical type code (uppercase machine label) for hashing
+      //   - the user-facing label for display
+      //   - the raw user input AND the normalized form. Both are saved so
+      //     the receipt can show "12-3456789" while the on-chain hash
+      //     references "123456789".
+      const metadataIdentifiers: EntityIdentifier[] = identifiers.map((ident, i) => {
+        const canonType = canonicalTypeCode(countryCode, ident);
+        const label = typeLabelFor(countryCode, ident);
+        const normalized = normalizeIdValue(ident.value);
+        return {
+          type: canonType,
+          typeLabel: label,
+          value: ident.value.trim(),
+          normalizedValue: normalized,
+          primary: i === primaryIndex,
+          custom: ident.type === ID_TYPE_CUSTOM_CODE,
+        };
+      });
+
+      const primary = identifiers[primaryIndex];
+      const primaryCanonType = canonicalTypeCode(countryCode, primary);
+      const primaryNormalized = normalizeIdValue(primary.value);
+      const primaryHash = Array.from(
+        idHashBytes(countryCode, primaryCanonType, primary.value),
       );
-      const registryIdHashHex = registryIdHashBytes
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
+      const entityId = deriveEntityId(
+        countryCode,
+        primaryCanonType,
+        primary.value,
+      );
+
+      const additional = identifiers
+        .map((ident, i) => ({ ident, i }))
+        .filter(({ i }) => i !== primaryIndex)
+        .map(({ ident }) => {
+          const canonType = canonicalTypeCode(countryCode, ident);
+          const idHash = Array.from(
+            idHashBytes(countryCode, canonType, ident.value),
+          );
+          return {
+            input: {
+              country: countryCode,
+              idType: canonType,
+              idValue: normalizeIdValue(ident.value),
+            },
+            idHash,
+          };
+        });
+
       const metadata: EntityMetadata = {
         legalName: legalName.trim(),
         tradeName: tradeName.trim() || undefined,
-        registryIdHashHex,
+        identifiers: metadataIdentifiers,
         countryCode,
         countryLabel: country.label,
         subdivision: subdivision.trim() || undefined,
@@ -243,19 +398,24 @@ export function EntryForm() {
       );
 
       setProgress(t("entryForm.progress.filing"));
-      const entityId = randomEntityId();
-      const [pda] = entityPda(entityId);
-      void pda;
       await createEntity(program, publicKey, {
-        entityId,
-        legalNameHash: sha256Bytes(legalName.trim()),
-        registryIdHash: registryIdHashBytes,
-        jurisdiction: countryCode,
+        primary: {
+          country: countryCode,
+          idType: primaryCanonType,
+          idValue: primaryNormalized,
+        },
+        primaryIdHash: primaryHash,
+        additional,
         metadataUri: up.uri,
+        entityId,
       });
       setProgress(
         t("entryForm.progress.filed", {
-          ct: entityIdToCtNumber(entityId),
+          ct: ctNumberFromPrimaryId(
+            countryCode,
+            primaryCanonType,
+            primary.value,
+          ),
         }),
       );
       router.push(`/entry/${bytesHex(entityId)}`);
@@ -329,11 +489,7 @@ export function EntryForm() {
                   <label className="label">{t("entryForm.country.label")}</label>
                   <select
                     value={countryCode}
-                    onChange={(e) => {
-                      setCountryCode(e.target.value);
-                      setSubdivision("");
-                      setRegistryId("");
-                    }}
+                    onChange={(e) => changeCountry(e.target.value)}
                   >
                     {COUNTRIES.map((c) => (
                       <option key={c.code} value={c.code}>
@@ -359,14 +515,44 @@ export function EntryForm() {
                   </select>
                 </div>
               </div>
+
               <div className="form-row">
-                <label className="label">{country.idLabel}</label>
-                <input
-                  value={registryId}
-                  onChange={(e) => setRegistryId(e.target.value)}
-                  placeholder={country.idFormat}
-                  maxLength={40}
-                />
+                <label className="label">Identifiers</label>
+                <div className="hint" style={{ marginTop: -4, marginBottom: 8 }}>
+                  Add one or more registry IDs for this entity. Mark the
+                  primary one — it determines the CT-Number and locks this
+                  entity globally on chain. Additional IDs (e.g. SEC CIK
+                  alongside an EIN) attach via per-identifier IdClaim PDAs.
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {identifiers.map((ident, i) => (
+                    <IdentifierRow
+                      key={i}
+                      index={i}
+                      identifier={ident}
+                      isPrimary={i === primaryIndex}
+                      canRemove={identifiers.length > 1}
+                      typeOptions={idTypeOptions}
+                      onChange={(patch) => setIdentifierField(i, patch)}
+                      onMakePrimary={() => setPrimaryIndex(i)}
+                      onRemove={() => removeIdentifier(i)}
+                    />
+                  ))}
+                </div>
+                {identifiers.length < MAX_IDENTIFIERS && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={addIdentifier}
+                    style={{ marginTop: 8 }}
+                  >
+                    + Add identifier
+                  </button>
+                )}
+                <div className="hint" style={{ marginTop: 8 }}>
+                  Up to {MAX_IDENTIFIERS} identifiers per entity. The primary
+                  identifier cannot be changed after signing.
+                </div>
               </div>
             </>
           )}
@@ -692,6 +878,68 @@ export function EntryForm() {
                 {t("entryForm.confirm.public.tail")}
               </ConfirmCheckbox>
 
+              {(() => {
+                // Preview the CT-Number that will be locked at signing —
+                // computed from the *primary* identifier the same way the
+                // on-chain program will derive it. Helps the user catch
+                // typos before the value is committed for good.
+                const primary = identifiers[primaryIndex];
+                if (!primary || !primary.value.trim()) return null;
+                let canonType = "";
+                let ctPreview = "";
+                let primaryLabel = "";
+                try {
+                  canonType = canonicalTypeCode(countryCode, primary);
+                  primaryLabel = typeLabelFor(countryCode, primary);
+                  ctPreview = ctNumberFromPrimaryId(
+                    countryCode,
+                    canonType,
+                    primary.value,
+                  );
+                } catch {
+                  return null;
+                }
+                return (
+                  <div
+                    style={{
+                      padding: "14px 16px",
+                      borderLeft: "3px solid var(--stamp-deep)",
+                      background: "var(--paper-3)",
+                      marginBottom: 18,
+                      fontFamily: "var(--mono)",
+                      fontSize: 12,
+                      color: "var(--ink)",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 10,
+                        letterSpacing: "0.16em",
+                        color: "var(--stamp-deep)",
+                        fontWeight: 700,
+                        marginBottom: 6,
+                      }}
+                    >
+                      THIS CT-NUMBER WILL LOCK TO ↓
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>
+                      {ctPreview}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "var(--ink-3)",
+                        marginTop: 4,
+                      }}
+                    >
+                      {countryCode} · {primaryLabel} ·{" "}
+                      {normalizeIdValue(primary.value)}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div
                 style={{
                   fontFamily: "var(--mono)",
@@ -707,8 +955,19 @@ export function EntryForm() {
                 <div>
                   PROGRAM · HBxcCBx4ZPVnhGazehwZjF72J3neJsz5HyvGoPMTzUPt
                 </div>
-                <div>SEEDS · [&quot;entity&quot;, entity_id (8 random bytes)]</div>
-                <div>FEE · ~0.00204 SOL (rent-exempt deposit)</div>
+                <div>
+                  ENTITY SEED · [&quot;entity&quot;, sha256(country|type|value)[..5]]
+                </div>
+                <div>
+                  ID CLAIM SEED · [&quot;id-claim&quot;, sha256(country|type|value)]
+                </div>
+                <div>
+                  IDENTIFIERS · {identifiers.length} (primary + {identifiers.length - 1} additional)
+                </div>
+                <div>
+                  FEE · ~{(0.00204 + 0.001 * identifiers.length).toFixed(5)}{" "}
+                  SOL (rent-exempt deposit)
+                </div>
               </div>
             </>
           )}
@@ -781,7 +1040,9 @@ export function EntryForm() {
         subdivisionLabel={subdivisionLabel}
         subdivisionOptions={subdivisionOptions}
         entityType={entityType}
-        registryId={registryId}
+        identifiers={identifiers}
+        primaryIndex={primaryIndex}
+        countryCode={countryCode}
         incorporationDate={incorporationDate}
         operatingStatus={operatingStatus}
         industry={industry}
@@ -810,12 +1071,14 @@ export function EntryForm() {
 function Receipt(props: {
   legalName: string;
   tradeName: string;
-  country: { code: string; label: string; idLabel: string; idFormat: string };
+  country: { code: string; label: string };
   subdivision: string;
   subdivisionLabel: string;
   subdivisionOptions: { code: string; label: string }[];
   entityType: string;
-  registryId: string;
+  identifiers: LocalIdentifier[];
+  primaryIndex: number;
+  countryCode: string;
   incorporationDate: string;
   operatingStatus: "active" | "dormant" | "dissolved";
   industry: string;
@@ -836,7 +1099,9 @@ function Receipt(props: {
     subdivisionLabel,
     subdivisionOptions,
     entityType,
-    registryId,
+    identifiers,
+    primaryIndex,
+    countryCode,
     incorporationDate,
     operatingStatus,
     industry,
@@ -858,10 +1123,11 @@ function Receipt(props: {
       subdivision
     : "";
 
+  const validIdentifiers = identifiers.filter((id) => id.value.trim());
   const filledFields = [
     legalName.trim(),
     tradeName.trim(),
-    registryId.trim(),
+    validIdentifiers.length > 0 ? "ok" : "",
     subdivision,
     incorporationDate,
     operatingStatus,
@@ -875,6 +1141,27 @@ function Receipt(props: {
     contactEmail.trim(),
   ].filter(Boolean).length;
   const totalFields = 14;
+
+  // Preview the CT-Number whenever the primary identifier is populated.
+  const primary = identifiers[primaryIndex];
+  let ctPreview: string | null = null;
+  if (primary && primary.value.trim()) {
+    try {
+      const canonType =
+        primary.type === ID_TYPE_CUSTOM_CODE
+          ? primary.customTypeLabel.trim().toUpperCase()
+          : primary.type.toUpperCase();
+      if (canonType) {
+        ctPreview = ctNumberFromPrimaryId(
+          countryCode,
+          canonType,
+          primary.value,
+        );
+      }
+    } catch {
+      ctPreview = null;
+    }
+  }
   const operatingStatusLabel =
     operatingStatus === "active"
       ? "Active"
@@ -928,7 +1215,7 @@ function Receipt(props: {
           right={["DATE", new Date().toISOString().slice(0, 10)]}
         />
         <ReceiptMetaRow
-          left={["CT-NUMBER", "CT-XXXX-XXXX"]}
+          left={["CT-NUMBER", ctPreview ?? "— pending —"]}
           right={["STATUS", "UNFILED"]}
         />
 
@@ -1000,11 +1287,27 @@ function Receipt(props: {
             value={operatingStatusLabel}
             emphasis={operatingStatus !== "active"}
           />
-          <ReceiptItem
-            label={country.idLabel}
-            value={registryId.trim() || "—"}
-            mono
-          />
+          {validIdentifiers.length === 0 ? (
+            <ReceiptItem label="Identifiers" value="—" />
+          ) : (
+            identifiers.map((ident, i) => {
+              if (!ident.value.trim()) return null;
+              const label =
+                ident.type === ID_TYPE_CUSTOM_CODE
+                  ? ident.customTypeLabel.trim() || "CUSTOM"
+                  : findIdType(countryCode, ident.type)?.label ?? ident.type;
+              const isPrimary = i === primaryIndex;
+              return (
+                <ReceiptItem
+                  key={i}
+                  label={isPrimary ? `${label} (primary)` : label}
+                  value={ident.value.trim()}
+                  mono
+                  emphasis={isPrimary}
+                />
+              );
+            })
+          )}
           <ReceiptItem
             label="Incorporated"
             value={incorporationDate || "—"}
@@ -1086,8 +1389,8 @@ function Receipt(props: {
             }}
           >
             <div>SIGNS AT STEP 4</div>
-            <div>METADATA → IPFS</div>
-            <div>RAW {country.idLabel.toUpperCase()} STAYS LOCAL</div>
+            <div>METADATA → IPFS (PLAINTEXT)</div>
+            <div>CT FROM PRIMARY ID HASH</div>
           </div>
           <Stamp text="Pending" sub="UNFILED" size="small" />
         </div>
@@ -1239,6 +1542,196 @@ function TornEdge() {
         fill="currentColor"
       />
     </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// IdentifierRow — one row in Step 1's identifiers list.
+//
+// Lays out: type dropdown · primary radio · value input · remove button.
+// When the user picks "CUSTOM" from the type dropdown, an extra label input
+// appears above the value input so they can name the type (e.g. "STATE_FILE_NO").
+// ---------------------------------------------------------------------------
+
+function IdentifierRow({
+  index,
+  identifier,
+  isPrimary,
+  canRemove,
+  typeOptions,
+  onChange,
+  onMakePrimary,
+  onRemove,
+}: {
+  index: number;
+  identifier: LocalIdentifier;
+  isPrimary: boolean;
+  canRemove: boolean;
+  typeOptions: IdTypeOption[];
+  onChange: (patch: Partial<LocalIdentifier>) => void;
+  onMakePrimary: () => void;
+  onRemove: () => void;
+}) {
+  const isCustom = identifier.type === ID_TYPE_CUSTOM_CODE;
+  const presetMatch = typeOptions.find((t) => t.code === identifier.type);
+  const placeholder = isCustom
+    ? "value (uppercase letters + digits)"
+    : presetMatch?.format ?? "identifier value";
+  const description = isCustom
+    ? "Custom type — pick a stable label for this kind of ID."
+    : presetMatch?.description;
+
+  return (
+    <div
+      style={{
+        border: `1.5px solid ${isPrimary ? "var(--stamp-deep)" : "var(--rule)"}`,
+        background: isPrimary ? "var(--paper-3)" : "var(--paper-2)",
+        padding: "12px 14px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 8,
+          gap: 8,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 10,
+            letterSpacing: "0.16em",
+            color: "var(--ink-3)",
+            fontWeight: 600,
+          }}
+        >
+          ID #{index + 1}
+        </span>
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            cursor: "pointer",
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            letterSpacing: "0.06em",
+            color: isPrimary ? "var(--stamp-deep)" : "var(--ink-2)",
+            fontWeight: isPrimary ? 700 : 500,
+          }}
+        >
+          <input
+            type="radio"
+            name="primary-identifier"
+            checked={isPrimary}
+            onChange={onMakePrimary}
+            style={{
+              position: "absolute",
+              opacity: 0,
+              width: 1,
+              height: 1,
+              padding: 0,
+              margin: -1,
+              overflow: "hidden",
+              clip: "rect(0,0,0,0)",
+              border: 0,
+            }}
+          />
+          <span
+            aria-hidden
+            style={{
+              width: 14,
+              height: 14,
+              borderRadius: "50%",
+              border: `1.5px solid ${isPrimary ? "var(--stamp-deep)" : "var(--ink-3)"}`,
+              background: "var(--paper)",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {isPrimary && (
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: "var(--stamp-deep)",
+                }}
+              />
+            )}
+          </span>
+          PRIMARY
+        </label>
+      </div>
+
+      <div className="form-grid-2" style={{ gap: 8 }}>
+        <div className="form-row" style={{ marginBottom: 0 }}>
+          <label className="label">Type</label>
+          <select
+            value={identifier.type}
+            onChange={(e) => onChange({ type: e.target.value })}
+          >
+            {typeOptions.map((t) => (
+              <option key={t.code} value={t.code}>
+                {t.label}
+              </option>
+            ))}
+            <option value={ID_TYPE_CUSTOM_CODE}>— Custom type —</option>
+          </select>
+        </div>
+        <div className="form-row" style={{ marginBottom: 0 }}>
+          <label className="label">Value</label>
+          <input
+            value={identifier.value}
+            onChange={(e) => onChange({ value: e.target.value })}
+            placeholder={placeholder}
+            maxLength={64}
+          />
+        </div>
+      </div>
+
+      {isCustom && (
+        <div className="form-row" style={{ marginTop: 8, marginBottom: 0 }}>
+          <label className="label">Custom type label</label>
+          <input
+            value={identifier.customTypeLabel}
+            onChange={(e) =>
+              onChange({
+                customTypeLabel: e.target.value
+                  .toUpperCase()
+                  .replace(/[^A-Z0-9_-]/g, ""),
+              })
+            }
+            placeholder="e.g. STATE_FILE_NO"
+            maxLength={32}
+          />
+          <div className="hint">
+            Uppercase letters, digits, underscore, dash. Locked into the
+            on-chain hash, so pick a stable label.
+          </div>
+        </div>
+      )}
+
+      {description && (
+        <div className="hint" style={{ marginTop: 6 }}>
+          {description}
+        </div>
+      )}
+
+      {canRemove && (
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={onRemove}
+          style={{ marginTop: 8 }}
+        >
+          Remove
+        </button>
+      )}
+    </div>
   );
 }
 

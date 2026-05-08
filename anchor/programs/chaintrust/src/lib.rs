@@ -78,20 +78,28 @@ pub mod chaintrust {
 
     pub fn create_entity(
         ctx: Context<CreateEntity>,
-        entity_id: [u8; 8],
-        legal_name_hash: [u8; 32],
-        registry_id_hash: [u8; 32],
-        jurisdiction: String,
+        country: String,
+        id_type: String,
+        id_value: String,
         metadata_uri: String,
     ) -> Result<()> {
-        instructions::create_entity(
-            ctx,
-            entity_id,
-            legal_name_hash,
-            registry_id_hash,
-            jurisdiction,
-            metadata_uri,
-        )
+        instructions::create_entity(ctx, country, id_type, id_value, metadata_uri)
+    }
+
+    pub fn register_additional_id(
+        ctx: Context<RegisterAdditionalId>,
+        country: String,
+        id_type: String,
+        id_value: String,
+    ) -> Result<()> {
+        instructions::register_additional_id(ctx, country, id_type, id_value)
+    }
+
+    pub fn update_entity_metadata_uri(
+        ctx: Context<UpdateEntityMetadataUri>,
+        metadata_uri: String,
+    ) -> Result<()> {
+        instructions::update_entity_metadata_uri(ctx, metadata_uri)
     }
 
     pub fn create_project(

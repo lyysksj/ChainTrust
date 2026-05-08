@@ -12,6 +12,8 @@ pub const ISSUER_TIER_REQUEST_SEED: &[u8] = b"issuer_tier_request";
 #[constant]
 pub const ENTITY_SEED: &[u8] = b"entity";
 #[constant]
+pub const ID_CLAIM_SEED: &[u8] = b"id-claim";
+#[constant]
 pub const PROJECT_SEED: &[u8] = b"project";
 #[constant]
 pub const REL_SEED: &[u8] = b"rel";
@@ -41,6 +43,14 @@ pub const MAX_CONTENT_URI_LEN: usize = 200;
 pub const MAX_EVIDENCE_URI_LEN: usize = 200;
 pub const MAX_OFFICIAL_RESPONSE_URI_LEN: usize = 200;
 pub const MAX_REVIEW_NOTE_URI_LEN: usize = 200;
+
+// Identifier inputs — feed into the (country | id_type | id_value) hash that
+// derives entity_id and IdClaim PDA addresses. Lengths are bounded so the
+// instruction payload is predictable; values longer than these are rejected.
+pub const MAX_ID_COUNTRY_LEN: usize = 8;
+pub const MAX_ID_TYPE_LEN: usize = 32;
+pub const MAX_ID_VALUE_LEN: usize = 64;
+pub const MAX_IDENTIFIERS_PER_ENTITY: u8 = 5;
 
 // Entity status
 pub const STATUS_UNVERIFIED: u8 = 0;

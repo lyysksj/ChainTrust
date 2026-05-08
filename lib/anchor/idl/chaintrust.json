@@ -314,26 +314,17 @@
       "accounts": [
         {
           "name": "entity",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  110,
-                  116,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "entity_id"
-              }
-            ]
-          }
+          "writable": true
+        },
+        {
+          "name": "primary_id_claim",
+          "docs": [
+            "IdClaim for the primary identifier. Anchor `init` here is what",
+            "enforces \"one (country, id_type, id_value) → at most one Entity\"",
+            "at the network level. A second filer attempting the same tuple gets",
+            "`account already in use`."
+          ],
+          "writable": true
         },
         {
           "name": "creator_profile",
@@ -367,34 +358,15 @@
       ],
       "args": [
         {
-          "name": "entity_id",
-          "type": {
-            "array": [
-              "u8",
-              8
-            ]
-          }
+          "name": "country",
+          "type": "string"
         },
         {
-          "name": "legal_name_hash",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
+          "name": "id_type",
+          "type": "string"
         },
         {
-          "name": "registry_id_hash",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "jurisdiction",
+          "name": "id_value",
           "type": "string"
         },
         {
@@ -634,6 +606,52 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "register_additional_id",
+      "discriminator": [
+        240,
+        224,
+        95,
+        94,
+        39,
+        10,
+        248,
+        125
+      ],
+      "accounts": [
+        {
+          "name": "entity",
+          "writable": true
+        },
+        {
+          "name": "id_claim",
+          "writable": true
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "country",
+          "type": "string"
+        },
+        {
+          "name": "id_type",
+          "type": "string"
+        },
+        {
+          "name": "id_value",
+          "type": "string"
+        }
+      ]
     },
     {
       "name": "register_issuer",
@@ -1257,6 +1275,35 @@
       "args": []
     },
     {
+      "name": "update_entity_metadata_uri",
+      "discriminator": [
+        133,
+        141,
+        209,
+        63,
+        190,
+        68,
+        38,
+        48
+      ],
+      "accounts": [
+        {
+          "name": "entity",
+          "writable": true
+        },
+        {
+          "name": "signer",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "metadata_uri",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "update_registry_admin",
       "discriminator": [
         117,
@@ -1385,6 +1432,19 @@
         82,
         85,
         45
+      ]
+    },
+    {
+      "name": "IdClaim",
+      "discriminator": [
+        141,
+        48,
+        225,
+        101,
+        70,
+        35,
+        207,
+        69
       ]
     },
     {
@@ -1702,6 +1762,36 @@
       "code": 6041,
       "name": "HumanProofWalletMismatch",
       "msg": "HumanProof wallet field does not match signer"
+    },
+    {
+      "code": 6042,
+      "name": "InvalidIdCountry",
+      "msg": "Identifier country is empty or exceeds max length"
+    },
+    {
+      "code": 6043,
+      "name": "InvalidIdType",
+      "msg": "Identifier type is empty or exceeds max length"
+    },
+    {
+      "code": 6044,
+      "name": "InvalidIdValue",
+      "msg": "Identifier value is empty or exceeds max length"
+    },
+    {
+      "code": 6045,
+      "name": "TooManyIdentifiers",
+      "msg": "Identifier count exceeds the per-entity maximum"
+    },
+    {
+      "code": 6046,
+      "name": "IdClaimEntityMismatch",
+      "msg": "IdClaim does not point at this entity"
+    },
+    {
+      "code": 6047,
+      "name": "NotCreator",
+      "msg": "Caller is not the creator of this entity"
     }
   ],
   "types": [
@@ -1783,6 +1873,25 @@
     },
     {
       "name": "Entity",
+      "docs": [
+        "Entity — the on-chain identity anchor for a real-world legal entity.",
+        "",
+        "`entity_id` is **deterministically derived** from the primary identifier",
+        "(country | id_type | normalized id_value), not random. This means:",
+        "- The CT-Number is a 1:1 encoding of `entity_id` (no truncation, no",
+        "dead bytes), which is itself a stable function of (country, id_type,",
+        "id_value). The same primary identifier always produces the same CT.",
+        "- Anchor's `init` constraint on `[ENTITY_SEED, &entity_id]` is what",
+        "enforces global uniqueness for the primary identifier.",
+        "- Legal name and other descriptive fields live in IPFS metadata (mutable",
+        "by `official_wallet` post-claim) so a company rename does NOT change",
+        "the CT-Number.",
+        "",
+        "The previous `legal_name_hash` / `registry_id_hash` fields have been",
+        "removed. They were a privacy theater (legal name was already plaintext on",
+        "IPFS; registry IDs have a search space small enough to brute-force). The",
+        "authoritative copies of those values now live in the public IPFS metadata."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1791,31 +1900,13 @@
             "type": {
               "array": [
                 "u8",
-                8
+                5
               ]
             }
           },
           {
             "name": "created_by",
             "type": "pubkey"
-          },
-          {
-            "name": "legal_name_hash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "registry_id_hash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
           },
           {
             "name": "jurisdiction",
@@ -1848,6 +1939,10 @@
           {
             "name": "comment_count",
             "type": "u32"
+          },
+          {
+            "name": "identifier_count",
+            "type": "u8"
           },
           {
             "name": "created_at",
@@ -1894,6 +1989,40 @@
           {
             "name": "attested_by",
             "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "IdClaim",
+      "docs": [
+        "IdClaim — global unique reservation for a single (country, id_type,",
+        "id_value) tuple, pointing back at the Entity that owns it.",
+        "",
+        "One Entity may have multiple identifiers (e.g. a US company with both",
+        "EIN and SEC CIK). Each identifier gets its own IdClaim PDA. The PDA seed",
+        "hashes the normalized inputs so:",
+        "- Anchor's `init` enforces global uniqueness for that identifier.",
+        "- Third parties can compute the PDA address from public inputs and",
+        "resolve `(country, id_type, id_value) → Entity` in O(1).",
+        "",
+        "The account stores only the entity pointer and a creation timestamp; the",
+        "human-readable identifiers live in the Entity's IPFS metadata."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "entity",
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
           },
           {
             "name": "bump",
@@ -2244,6 +2373,11 @@
       "name": "HUMANPROOF_SEED",
       "type": "bytes",
       "value": "[104, 117, 109, 97, 110, 112, 114, 111, 111, 102]"
+    },
+    {
+      "name": "ID_CLAIM_SEED",
+      "type": "bytes",
+      "value": "[105, 100, 45, 99, 108, 97, 105, 109]"
     },
     {
       "name": "ISSUER_SEED",

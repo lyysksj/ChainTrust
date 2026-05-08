@@ -109,10 +109,12 @@ export default function HomePage() {
   }
 
   const samples = [
-    { label: t("home.sample.firstEntity"), value: entities[0]?.ctNumber ?? "" },
+    { label: t("home.sample.ctNumber"), value: entities[0]?.ctNumber ?? t("home.sample.ctNumberVal") },
+    { label: t("home.sample.legalId"), value: t("home.sample.legalIdVal") },
+    { label: t("home.sample.companyName"), value: t("home.sample.companyNameVal") },
+    { label: t("home.sample.wallet"), value: t("home.sample.walletVal") },
     { label: t("home.sample.domain"), value: "example.com" },
-    { label: t("home.sample.ctNumber"), value: "CT-XXXX-XXXX" },
-  ].filter((s) => s.value);
+  ];
 
   const recent = useMemo(() => entities.slice(0, 12), [entities]);
 
@@ -187,7 +189,7 @@ export default function HomePage() {
           </button>
         </div>
         {samples.length > 0 && (
-          <div className="resolve-suggest">
+          <div className="resolve-suggest" style={{ marginTop: 8 }}>
             <span>{t("home.resolveBar.try")}</span>
             {samples.map((s) => (
               <button
@@ -297,9 +299,14 @@ export default function HomePage() {
                     {row.meta?.legalName ?? t("home.recent.metaPending")}
                   </div>
                   <div className="ent-sub">
-                    {row.meta?.registryIdHashHex
-                      ? `id·0x${row.meta.registryIdHashHex.slice(0, 8)}…`
-                      : "—"}{" "}
+                    {(() => {
+                      const primary = row.meta?.identifiers?.find(
+                        (id) => id.primary,
+                      );
+                      return primary
+                        ? `${primary.typeLabel}·${primary.value}`
+                        : "—";
+                    })()}{" "}
                     · INC{" "}
                     {formatTimestamp(row.account.createdAt)}
                   </div>

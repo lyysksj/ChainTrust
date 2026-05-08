@@ -14,12 +14,13 @@ export function sha256Bytes(input: string | undefined | null): number[] {
   return Array.from(buf);
 }
 
-/** Random 8-byte id used as PDA seed for Entity / Project. */
+/** Random 8-byte id used as a PDA seed (Project still uses this; Entity is
+ *  now derived deterministically from its primary identifier — see
+ *  lib/utils/ct-number.ts `deriveEntityId`). */
 export function randomId8(): number[] {
   return Array.from(randomBytes(8));
 }
 
-export const randomEntityId = randomId8;
 export const randomProjectId = randomId8;
 
 export function bytesToHex(bytes: number[] | Uint8Array): string {

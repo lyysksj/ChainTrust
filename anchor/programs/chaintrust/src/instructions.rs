@@ -424,15 +424,86 @@ pub fn review_issuer_tier(
 }
 
 // ---------------------------------------------------------------------------
+// Entity identifier helpers
+// ---------------------------------------------------------------------------
+//
+// Entity identity is anchored to the **primary identifier** — a (country,
+// id_type, id_value) tuple chosen by the filer. The hash of this tuple seeds
+// both the Entity PDA (truncated to 5 bytes) and the IdClaim PDA (full 32
+// bytes), so:
+//   - Same primary identifier always derives the same Entity PDA (and CT
+//     number). Re-filing the same company is rejected by Anchor `init`.
+//   - Each additional identifier gets its own IdClaim PDA, giving the same
+//     uniqueness guarantee for non-primary IDs (e.g. EIN and CIK both go
+//     through Anchor `init` and cannot collide with another entity's IDs).
+//
+// `id_value` is expected to be normalized client-side to ASCII uppercase
+// alphanumeric — separators (spaces, dashes, dots) stripped. The handler
+// re-validates that invariant so the hash input is deterministic regardless
+// of caller behavior.
+//
+// Pipe separators in the hash input prevent boundary collisions: "US|EIN|123"
+// vs "USE|IN|123" vs "U|SEIN|123" all hash to different values.
+
+pub fn id_hash_bytes(country: &str, id_type: &str, id_value: &str) -> [u8; 32] {
+    anchor_lang::solana_program::hash::hashv(&[
+        country.as_bytes(),
+        b"|",
+        id_type.as_bytes(),
+        b"|",
+        id_value.as_bytes(),
+    ])
+    .to_bytes()
+}
+
+pub fn derive_entity_id(country: &str, id_type: &str, id_value: &str) -> [u8; 5] {
+    let h = id_hash_bytes(country, id_type, id_value);
+    [h[0], h[1], h[2], h[3], h[4]]
+}
+
+fn validate_identifier_inputs(country: &str, id_type: &str, id_value: &str) -> Result<()> {
+    require!(
+        !country.is_empty() && country.len() <= MAX_ID_COUNTRY_LEN,
+        ChainTrustError::InvalidIdCountry
+    );
+    require!(
+        country
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_'),
+        ChainTrustError::InvalidIdCountry
+    );
+    require!(
+        !id_type.is_empty() && id_type.len() <= MAX_ID_TYPE_LEN,
+        ChainTrustError::InvalidIdType
+    );
+    require!(
+        id_type
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_' || c == '-'),
+        ChainTrustError::InvalidIdType
+    );
+    require!(
+        !id_value.is_empty() && id_value.len() <= MAX_ID_VALUE_LEN,
+        ChainTrustError::InvalidIdValue
+    );
+    require!(
+        id_value
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()),
+        ChainTrustError::InvalidIdValue
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // create_entity
 // ---------------------------------------------------------------------------
 
 #[derive(Accounts)]
 #[instruction(
-    entity_id: [u8; 8],
-    legal_name_hash: [u8; 32],
-    registry_id_hash: [u8; 32],
-    jurisdiction: String,
+    country: String,
+    id_type: String,
+    id_value: String,
     metadata_uri: String,
 )]
 pub struct CreateEntity<'info> {
@@ -440,10 +511,28 @@ pub struct CreateEntity<'info> {
         init,
         payer = signer,
         space = 8 + Entity::INIT_SPACE,
-        seeds = [ENTITY_SEED, &entity_id],
+        seeds = [
+            ENTITY_SEED,
+            &derive_entity_id(&country, &id_type, &id_value)[..]
+        ],
         bump
     )]
     pub entity: Account<'info, Entity>,
+    /// IdClaim for the primary identifier. Anchor `init` here is what
+    /// enforces "one (country, id_type, id_value) → at most one Entity"
+    /// at the network level. A second filer attempting the same tuple gets
+    /// `account already in use`.
+    #[account(
+        init,
+        payer = signer,
+        space = 8 + IdClaim::INIT_SPACE,
+        seeds = [
+            ID_CLAIM_SEED,
+            &id_hash_bytes(&country, &id_type, &id_value)[..]
+        ],
+        bump
+    )]
+    pub primary_id_claim: Account<'info, IdClaim>,
     #[account(
         seeds = [USER_SEED, signer.key().as_ref()],
         bump = creator_profile.bump,
@@ -457,14 +546,14 @@ pub struct CreateEntity<'info> {
 
 pub fn create_entity(
     ctx: Context<CreateEntity>,
-    entity_id: [u8; 8],
-    legal_name_hash: [u8; 32],
-    registry_id_hash: [u8; 32],
-    jurisdiction: String,
+    country: String,
+    id_type: String,
+    id_value: String,
     metadata_uri: String,
 ) -> Result<()> {
+    validate_identifier_inputs(&country, &id_type, &id_value)?;
     require!(
-        !jurisdiction.is_empty() && jurisdiction.len() <= MAX_JURISDICTION_LEN,
+        country.len() <= MAX_JURISDICTION_LEN,
         ChainTrustError::InvalidJurisdiction
     );
     require!(
@@ -472,12 +561,12 @@ pub fn create_entity(
         ChainTrustError::InvalidMetadataUri
     );
 
+    let now = Clock::get()?.unix_timestamp;
+
     let entity = &mut ctx.accounts.entity;
-    entity.entity_id = entity_id;
+    entity.entity_id = derive_entity_id(&country, &id_type, &id_value);
     entity.created_by = ctx.accounts.signer.key();
-    entity.legal_name_hash = legal_name_hash;
-    entity.registry_id_hash = registry_id_hash;
-    entity.jurisdiction = jurisdiction;
+    entity.jurisdiction = country.clone();
     entity.status = STATUS_UNVERIFIED;
     entity.is_claimed = false;
     entity.official_wallet = Pubkey::default();
@@ -485,9 +574,130 @@ pub fn create_entity(
     entity.project_count = 0;
     entity.relationship_count = 0;
     entity.comment_count = 0;
-    entity.created_at = Clock::get()?.unix_timestamp;
+    entity.identifier_count = 1;
+    entity.created_at = now;
     entity.claimed_at = 0;
     entity.bump = ctx.bumps.entity;
+
+    let claim = &mut ctx.accounts.primary_id_claim;
+    claim.entity = entity.key();
+    claim.created_at = now;
+    claim.bump = ctx.bumps.primary_id_claim;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// register_additional_id
+// ---------------------------------------------------------------------------
+//
+// Adds a non-primary identifier to an existing Entity (e.g. attaching a SEC
+// CIK to a US company that was originally filed with just an EIN). Each call
+// inits one IdClaim PDA, so:
+//   - The new identifier is globally unique (Anchor `init` rejects repeats).
+//   - `(country, id_type, id_value) → entity` resolution stays O(1) for the
+//     newly added ID.
+//
+// Authorization: pre-claim, only the original creator can extend the list
+// (third-party filer maintenance). Post-claim, only the official_wallet can
+// extend it (the legal entity now controls its own identity record).
+
+#[derive(Accounts)]
+#[instruction(
+    country: String,
+    id_type: String,
+    id_value: String,
+)]
+pub struct RegisterAdditionalId<'info> {
+    #[account(mut)]
+    pub entity: Account<'info, Entity>,
+    #[account(
+        init,
+        payer = signer,
+        space = 8 + IdClaim::INIT_SPACE,
+        seeds = [
+            ID_CLAIM_SEED,
+            &id_hash_bytes(&country, &id_type, &id_value)[..]
+        ],
+        bump
+    )]
+    pub id_claim: Account<'info, IdClaim>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn register_additional_id(
+    ctx: Context<RegisterAdditionalId>,
+    country: String,
+    id_type: String,
+    id_value: String,
+) -> Result<()> {
+    validate_identifier_inputs(&country, &id_type, &id_value)?;
+
+    let entity = &mut ctx.accounts.entity;
+    let signer_key = ctx.accounts.signer.key();
+    if entity.is_claimed {
+        require!(
+            signer_key == entity.official_wallet,
+            ChainTrustError::NotOfficial
+        );
+    } else {
+        require!(
+            signer_key == entity.created_by,
+            ChainTrustError::NotCreator
+        );
+    }
+    require!(
+        entity.identifier_count < MAX_IDENTIFIERS_PER_ENTITY,
+        ChainTrustError::TooManyIdentifiers
+    );
+
+    let claim = &mut ctx.accounts.id_claim;
+    claim.entity = entity.key();
+    claim.created_at = Clock::get()?.unix_timestamp;
+    claim.bump = ctx.bumps.id_claim;
+
+    entity.identifier_count = entity.identifier_count.saturating_add(1);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// update_entity_metadata_uri
+// ---------------------------------------------------------------------------
+//
+// Lets the entity's controller (creator pre-claim, official_wallet post-claim)
+// repoint metadata_uri at a corrected/updated IPFS CID. The on-chain Entity
+// PDA and CT-Number are unaffected — only the descriptive payload changes.
+
+#[derive(Accounts)]
+pub struct UpdateEntityMetadataUri<'info> {
+    #[account(mut)]
+    pub entity: Account<'info, Entity>,
+    pub signer: Signer<'info>,
+}
+
+pub fn update_entity_metadata_uri(
+    ctx: Context<UpdateEntityMetadataUri>,
+    metadata_uri: String,
+) -> Result<()> {
+    require!(
+        metadata_uri.len() <= MAX_METADATA_URI_LEN,
+        ChainTrustError::InvalidMetadataUri
+    );
+    let entity = &mut ctx.accounts.entity;
+    let signer_key = ctx.accounts.signer.key();
+    if entity.is_claimed {
+        require!(
+            signer_key == entity.official_wallet,
+            ChainTrustError::NotOfficial
+        );
+    } else {
+        require!(
+            signer_key == entity.created_by,
+            ChainTrustError::NotCreator
+        );
+    }
+    entity.metadata_uri = metadata_uri;
     Ok(())
 }
 

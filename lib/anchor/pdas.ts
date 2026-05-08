@@ -9,6 +9,7 @@ const ISSUER = Buffer.from("issuer");
 const CONFIG = Buffer.from("config");
 const ISSUER_TIER_REQUEST = Buffer.from("issuer_tier_request");
 const ENTITY = Buffer.from("entity");
+const ID_CLAIM = Buffer.from("id-claim");
 const PROJECT = Buffer.from("project");
 const REL = Buffer.from("rel");
 const COMMENT = Buffer.from("comment");
@@ -40,8 +41,19 @@ export function issuerTierRequestPda(
 
 export function entityPda(entityId: number[] | Uint8Array): [PublicKey, number] {
   const id = Buffer.from(entityId);
-  if (id.length !== 8) throw new Error("entity_id must be 8 bytes");
+  if (id.length !== 5) throw new Error("entity_id must be 5 bytes");
   return PublicKey.findProgramAddressSync([ENTITY, id], PROGRAM_ID);
+}
+
+/** IdClaim PDA — keyed by the 32-byte SHA-256 of
+ *  `${country}|${id_type}|${normalizedIdValue}`. Use `idHashBytes` from
+ *  `lib/utils/ct-number.ts` to compute the hash. */
+export function idClaimPda(
+  idHash: number[] | Uint8Array,
+): [PublicKey, number] {
+  const buf = Buffer.from(idHash);
+  if (buf.length !== 32) throw new Error("id_hash must be 32 bytes");
+  return PublicKey.findProgramAddressSync([ID_CLAIM, buf], PROGRAM_ID);
 }
 
 export function projectPda(

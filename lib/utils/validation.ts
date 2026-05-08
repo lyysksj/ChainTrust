@@ -55,19 +55,35 @@ export function validatePubkey(v: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// EIN / business ID validation by country
+// Identifier validation
 // ---------------------------------------------------------------------------
+//
+// Each identifier goes through two passes:
+//   1. `validateIdentifierValue(country, type, raw)` checks the raw user input
+//      matches the expected format for that type — digit count, alphanumeric
+//      shape, etc. Different types in the same country (US EIN vs CIK) have
+//      different formats.
+//   2. The form then hashes `normalizeIdValue(raw)` and feeds it into
+//      ct-number derivation. The on-chain validator re-runs the
+//      uppercase-alphanumeric check on the normalized value.
 
-// US EIN: 9 digits, optionally formatted as XX-XXXXXXX
+// US EIN: 9 digits, displayed as XX-XXXXXXX.
 function validateUsEin(v: string): string | null {
-  const digits = v.replace(/-/g, "");
+  const digits = v.replace(/[-\s]/g, "");
   if (!/^\d{9}$/.test(digits))
     return "US EIN must be 9 digits (e.g. 12-3456789)";
   return null;
 }
 
-// China Unified Social Credit Code: 18 alphanumeric uppercase (letters + digits)
-// Allowed charset excludes I, O, S, V, Z per GB 32100-2015
+// SEC CIK: 1–10 digits (assigned sequentially; older filers have shorter).
+function validateUsCik(v: string): string | null {
+  const digits = v.replace(/[-\s]/g, "");
+  if (!/^\d{1,10}$/.test(digits))
+    return "SEC CIK must be up to 10 digits";
+  return null;
+}
+
+// China Unified Social Credit Code: 18 chars, GB 32100-2015 charset (no I/O/S/V/Z).
 function validateChinaUscc(v: string): string | null {
   const s = v.toUpperCase();
   if (!/^[0-9A-HJ-NPQR-UWY]{18}$/.test(s))
@@ -75,15 +91,28 @@ function validateChinaUscc(v: string): string | null {
   return null;
 }
 
-// Hong Kong BR: 8 digits (may be shown with leading 0, some formats are 8 + 3)
-function validateHkBr(v: string): string | null {
+// China legacy 工商注册号: 15 digits.
+function validateChinaIcr(v: string): string | null {
   const digits = v.replace(/[-\s]/g, "");
-  if (!/^\d{8}(\d{3})?$/.test(digits))
-    return "Hong Kong BR No. must be 8 digits (or 11 digits with branch)";
+  if (!/^\d{15}$/.test(digits))
+    return "中国工商注册号 must be 15 digits";
   return null;
 }
 
-// Singapore UEN: 9 or 10 alphanumeric
+function validateHkBr(v: string): string | null {
+  const digits = v.replace(/[-\s]/g, "");
+  if (!/^\d{8}(\d{3})?$/.test(digits))
+    return "Hong Kong BR No. must be 8 digits (or 11 with branch)";
+  return null;
+}
+
+function validateHkCr(v: string): string | null {
+  const s = v.toUpperCase().replace(/[-\s]/g, "");
+  if (!/^[0-9A-Z]{6,12}$/.test(s))
+    return "Hong Kong CR No. must be 6–12 alphanumeric characters";
+  return null;
+}
+
 function validateSgUen(v: string): string | null {
   const s = v.toUpperCase();
   if (!/^[0-9A-Z]{9,10}$/.test(s))
@@ -91,23 +120,27 @@ function validateSgUen(v: string): string | null {
   return null;
 }
 
-// UK Company Number: 8 alphanumeric (often 2 letters + 6 digits, or 8 digits)
-function validateGbCompanyNo(v: string): string | null {
+function validateGbCh(v: string): string | null {
   const s = v.toUpperCase().replace(/\s/g, "");
   if (!/^[0-9A-Z]{8}$/.test(s))
-    return "UK Company Number must be 8 alphanumeric characters";
+    return "UK Companies House No. must be 8 alphanumeric characters";
   return null;
 }
 
-// Japan Corporate Number: 13 digits
-function validateJpCorpNo(v: string): string | null {
+function validateJpCorp(v: string): string | null {
   const digits = v.replace(/[-\s]/g, "");
   if (!/^\d{13}$/.test(digits))
-    return "Japan Corporate Number must be 13 digits";
+    return "Japan 法人番号 must be 13 digits";
   return null;
 }
 
-// Korea Business Registration No.: 10 digits (often XXX-XX-XXXXX)
+function validateJpReg(v: string): string | null {
+  const digits = v.replace(/[-\s]/g, "");
+  if (!/^\d{12}$/.test(digits))
+    return "Japan 商業登記番号 must be 12 digits";
+  return null;
+}
+
 function validateKrBrn(v: string): string | null {
   const digits = v.replace(/-/g, "");
   if (!/^\d{10}$/.test(digits))
@@ -115,52 +148,91 @@ function validateKrBrn(v: string): string | null {
   return null;
 }
 
-// Canada BN: 9 digits
 function validateCaBn(v: string): string | null {
-  const digits = v.replace(/-/g, "");
+  const digits = v.replace(/[-\s]/g, "");
   if (!/^\d{9}$/.test(digits)) return "Canada BN must be 9 digits";
   return null;
 }
 
-// Australia ABN: 11 digits
 function validateAuAbn(v: string): string | null {
   const digits = v.replace(/\s/g, "");
   if (!/^\d{11}$/.test(digits)) return "Australia ABN must be 11 digits";
   return null;
 }
 
-// Generic fallback: at least 4 chars, alphanumeric + dashes
-function validateGenericId(v: string): string | null {
-  if (v.length < 4) return "Company ID is too short";
-  if (v.length > 40) return "Company ID is too long";
-  if (!/^[A-Za-z0-9\-\/ ]+$/.test(v))
-    return "Use only letters, digits, dashes, slashes, and spaces";
+function validateChUid(v: string): string | null {
+  const s = v.toUpperCase().replace(/[\s.\-]/g, "");
+  if (!/^CHE\d{9}$/.test(s))
+    return "Switzerland CHE/UID must be CHE-XXX.XXX.XXX";
   return null;
 }
 
-export function validateEin(countryCode: string, v: string): string | null {
-  if (!v || !v.trim()) return "Company ID is required";
+// Generic fallback: 3-40 chars, alphanumeric + common separators.
+function validateGenericId(v: string): string | null {
+  if (v.length < 3) return "Identifier is too short";
+  if (v.length > 40) return "Identifier is too long";
+  if (!/^[A-Za-z0-9\-./\s]+$/.test(v))
+    return "Use only letters, digits, dashes, slashes, dots, and spaces";
+  return null;
+}
+
+/**
+ * Validate the raw user input for one identifier (country, type, value).
+ * `type` is the catalog code from `ID_TYPES_BY_COUNTRY` (e.g. "EIN", "CIK").
+ * Returns null on success, or a user-facing error string.
+ */
+export function validateIdentifierValue(
+  countryCode: string,
+  typeCode: string,
+  v: string,
+): string | null {
+  if (!v || !v.trim()) return "Identifier value is required";
   const trimmed = v.trim();
-  switch (countryCode) {
-    case "US":
+  const key = `${countryCode}:${typeCode}`;
+  switch (key) {
+    case "US:EIN":
       return validateUsEin(trimmed);
-    case "CN":
+    case "US:CIK":
+      return validateUsCik(trimmed);
+    case "CN:USCC":
       return validateChinaUscc(trimmed);
-    case "HK":
+    case "CN:ICR":
+      return validateChinaIcr(trimmed);
+    case "HK:BR":
       return validateHkBr(trimmed);
-    case "SG":
+    case "HK:CR":
+      return validateHkCr(trimmed);
+    case "SG:UEN":
       return validateSgUen(trimmed);
-    case "GB":
-      return validateGbCompanyNo(trimmed);
-    case "JP":
-      return validateJpCorpNo(trimmed);
-    case "KR":
+    case "GB:CH":
+      return validateGbCh(trimmed);
+    case "JP:CORP":
+      return validateJpCorp(trimmed);
+    case "JP:REG":
+      return validateJpReg(trimmed);
+    case "KR:BRN":
       return validateKrBrn(trimmed);
-    case "CA":
+    case "CA:BN":
       return validateCaBn(trimmed);
-    case "AU":
+    case "AU:ABN":
       return validateAuAbn(trimmed);
+    case "CH:UID":
+      return validateChUid(trimmed);
     default:
       return validateGenericId(trimmed);
   }
+}
+
+/**
+ * Validate a custom (user-defined) ID type label. The label feeds into the
+ * on-chain hash, so it must be deterministic and on-chain-friendly: ASCII
+ * uppercase letters, digits, underscores, dashes; 1–32 chars.
+ */
+export function validateCustomIdTypeLabel(label: string): string | null {
+  const trimmed = label.trim();
+  if (!trimmed) return "Custom type label is required";
+  if (trimmed.length > 32) return "Custom type label must be 32 chars or fewer";
+  if (!/^[A-Z0-9_\-]+$/.test(trimmed))
+    return "Custom type label: uppercase letters, digits, underscore, dash only";
+  return null;
 }

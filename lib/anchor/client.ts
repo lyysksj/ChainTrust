@@ -150,41 +150,25 @@ export async function fetchAllEntities(program: Program<Chaintrust>) {
   return program.account.entity.all();
 }
 
-/**
- * Fetch entities whose `entity_id` starts with `prefixBytes`. The CT-Number
- * is derived deterministically from the first 5 bytes of `entity_id`, so a
- * 5-byte memcmp at offset 8 (after the 8-byte account discriminator) is
- * enough to narrow down a Resolve query without pulling every entity.
- *
- * Caller passes the raw bytes; we base58-encode for the memcmp filter.
- */
-export async function fetchEntitiesByIdPrefix(
-  program: Program<Chaintrust>,
-  prefixBytes: number[] | Uint8Array,
-) {
-  const buf = Buffer.from(prefixBytes);
-  if (buf.length === 0 || buf.length > 8) {
-    throw new Error("entity_id prefix must be 1-8 bytes");
-  }
-  const bs58 = await import("bs58");
-  return program.account.entity.all([
-    {
-      memcmp: {
-        offset: 8,
-        bytes: bs58.default.encode(buf),
-      },
-    },
-  ]);
-}
-
 export async function fetchEntitiesCreatedBy(
   program: Program<Chaintrust>,
   wallet: PublicKey,
 ) {
-  // created_by is after 8-byte discriminator + 8-byte entity_id
+  // created_by is after 8-byte discriminator + 5-byte entity_id
   return program.account.entity.all([
-    { memcmp: { offset: 8 + 8, bytes: wallet.toBase58() } },
+    { memcmp: { offset: 8 + 5, bytes: wallet.toBase58() } },
   ]);
+}
+
+/** Resolve `(country, id_type, id_value)` to its IdClaim PDA, returning the
+ *  Entity it points to (or null if none registered). Used by the Resolve
+ *  page to look up an entity by any of its identifiers without scanning. */
+export async function fetchEntityByIdClaim(
+  program: Program<Chaintrust>,
+  idClaimPdaAddr: PublicKey,
+): Promise<PublicKey | null> {
+  const claim = await program.account.idClaim.fetchNullable(idClaimPdaAddr);
+  return claim ? claim.entity : null;
 }
 
 export async function fetchEntitiesByOfficialWallet(
@@ -481,32 +465,115 @@ export async function reviewIssuerTier(
     .rpc();
 }
 
+export type AdditionalIdentifierInput = {
+  country: string;
+  idType: string;
+  idValue: string; // already normalized (uppercase alphanumeric)
+};
+
+/**
+ * Create an Entity from a primary identifier and (optionally) attach
+ * additional identifiers in the same transaction.
+ *
+ * The transaction layout is:
+ *   ix[0] = create_entity(country, id_type, id_value, metadata_uri)
+ *   ix[1..N] = register_additional_id(country, id_type, id_value)  [for extras]
+ *
+ * Solana processes instructions in order within a single transaction, so
+ * `register_additional_id` sees the freshly-initialized Entity. Bundling
+ * everything into one signature keeps the multi-ID UX a single click.
+ */
 export async function createEntity(
   program: Program<Chaintrust>,
   signer: PublicKey,
   params: {
-    entityId: number[];
-    legalNameHash: number[];
-    registryIdHash: number[];
-    jurisdiction: string;
+    primary: AdditionalIdentifierInput;
+    primaryIdHash: number[]; // 32-byte sha256 of "country|id_type|id_value"
+    additional: { input: AdditionalIdentifierInput; idHash: number[] }[];
     metadataUri: string;
+    entityId: number[]; // 5-byte derived id (== primaryIdHash[0..5])
   },
 ): Promise<string> {
   const [entity] = entityPda(params.entityId);
   const [creatorProfile] = userProfilePda(signer);
-  return program.methods
+  const { idClaimPda } = await import("./pdas");
+  const [primaryIdClaim] = idClaimPda(params.primaryIdHash);
+
+  let txBuilder = program.methods
     .createEntity(
-      params.entityId,
-      params.legalNameHash,
-      params.registryIdHash,
-      params.jurisdiction,
+      params.primary.country,
+      params.primary.idType,
+      params.primary.idValue,
       params.metadataUri,
     )
     .accountsPartial({
       entity,
+      primaryIdClaim,
       creatorProfile,
       signer,
       systemProgram: SystemProgram.programId,
+    });
+
+  for (const extra of params.additional) {
+    const [claimAddr] = idClaimPda(extra.idHash);
+    txBuilder = txBuilder.postInstructions([
+      await program.methods
+        .registerAdditionalId(
+          extra.input.country,
+          extra.input.idType,
+          extra.input.idValue,
+        )
+        .accountsPartial({
+          entity,
+          idClaim: claimAddr,
+          signer,
+          systemProgram: SystemProgram.programId,
+        })
+        .instruction(),
+    ]);
+  }
+
+  return txBuilder.rpc();
+}
+
+/** Add an identifier to an already-created Entity. Pre-claim only the
+ *  creator can call; post-claim only the official_wallet. */
+export async function registerAdditionalId(
+  program: Program<Chaintrust>,
+  signer: PublicKey,
+  params: {
+    entity: PublicKey;
+    country: string;
+    idType: string;
+    idValue: string;
+    idHash: number[];
+  },
+): Promise<string> {
+  const { idClaimPda } = await import("./pdas");
+  const [idClaim] = idClaimPda(params.idHash);
+  return program.methods
+    .registerAdditionalId(params.country, params.idType, params.idValue)
+    .accountsPartial({
+      entity: params.entity,
+      idClaim,
+      signer,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+/** Repoint an Entity's metadata_uri at a new IPFS CID. Pre-claim only the
+ *  creator may update; post-claim only the official_wallet. */
+export async function updateEntityMetadataUri(
+  program: Program<Chaintrust>,
+  signer: PublicKey,
+  params: { entity: PublicKey; metadataUri: string },
+): Promise<string> {
+  return program.methods
+    .updateEntityMetadataUri(params.metadataUri)
+    .accountsPartial({
+      entity: params.entity,
+      signer,
     })
     .rpc();
 }

@@ -43,8 +43,6 @@ export type IssuerTierRequest = {
 export type Entity = {
   entityId: number[];
   createdBy: PublicKey;
-  legalNameHash: number[];
-  registryIdHash: number[];
   jurisdiction: string;
   status: number;
   isClaimed: boolean;
@@ -53,8 +51,15 @@ export type Entity = {
   projectCount: number;
   relationshipCount: number;
   commentCount: number;
+  identifierCount: number;
   createdAt: BN;
   claimedAt: BN;
+  bump: number;
+};
+
+export type IdClaim = {
+  entity: PublicKey;
+  createdAt: BN;
   bump: number;
 };
 
@@ -128,22 +133,47 @@ export type NullifierRecord = {
 export type FilerRole = "first-party" | "third-party";
 
 /**
+ * EntityIdentifier — one row in the identifiers array.
+ *
+ * `type` is the canonical machine code (e.g. "EIN", "CIK", "UEN"). When
+ * `custom === true`, `typeLabel` carries the user-supplied display name for
+ * a type that's not in the predefined catalog; otherwise `typeLabel` mirrors
+ * the catalog's human label.
+ *
+ * `value` is the **raw** identifier as the user typed it — preserved for
+ * display. The on-chain hash uses `normalizedValue` (uppercase, separators
+ * stripped); both are stored so consumers can render the original string
+ * but verify against the on-chain IdClaim PDA without re-asking the user.
+ */
+export type EntityIdentifier = {
+  type: string;
+  typeLabel: string;
+  value: string;
+  normalizedValue: string;
+  primary: boolean;
+  custom: boolean;
+};
+
+/**
  * EntityMetadata — public, plaintext IPFS payload.
  *
  * Privacy contract:
  *   - This object is uploaded to PUBLIC IPFS. Anyone with the metadataUri
  *     CID can read every field. Treat as published.
- *   - The raw registry ID is INTENTIONALLY NOT INCLUDED. Only the hex of
- *     SHA-256("{countryCode}:{registryId}") is exposed, matching the on-chain
- *     `registry_id_hash`. The plaintext registry ID never leaves the user's
- *     browser.
- *   - For sensitive fields (UBO docs, audit work papers, internal compliance
- *     evidence), use EvidenceMetadata + sensitivity="sensitive" instead.
+ *   - There is no privacy hash layer. legal_name and identifiers are stored
+ *     plaintext; the on-chain `entity_id` is a deterministic 5-byte slice of
+ *     SHA-256(country | id_type | normalized_value) of the *primary*
+ *     identifier, and each identifier has a corresponding IdClaim PDA for
+ *     global uniqueness. Both the chain layer and IPFS expose the same
+ *     truth — there is no "raw value stays local" pretense.
+ *   - For genuinely sensitive evidence (UBO docs, audit work papers, internal
+ *     compliance), use EvidenceMetadata + sensitivity="sensitive" instead;
+ *     that path is what the Lit-encrypted slot is reserved for.
  */
 export type EntityMetadata = {
   legalName: string;
   tradeName?: string;
-  registryIdHashHex: string; // hex of sha256(`${countryCode}:${rawRegistryId}`); raw never stored
+  identifiers: EntityIdentifier[];
   countryCode: string;
   countryLabel: string;
   // Subdivision of registration (US state, CA province, AU state/territory,
@@ -330,26 +360,193 @@ export const COMMENT_RELATION_LABELS: Record<number, string> = {
 export type CountryOption = {
   code: string;
   label: string;
-  idLabel: string;
-  idFormat: string;
 };
 
 export const COUNTRIES: CountryOption[] = [
-  { code: "SG", label: "Singapore", idLabel: "UEN", idFormat: "9–10 alphanumeric" },
-  { code: "HK", label: "Hong Kong SAR", idLabel: "Business Registration No.", idFormat: "8 digits" },
-  { code: "US", label: "United States", idLabel: "EIN", idFormat: "9 digits, e.g. 12-3456789" },
-  { code: "CN", label: "China", idLabel: "Unified Social Credit Code", idFormat: "18 chars, letters + digits" },
-  { code: "GB", label: "United Kingdom", idLabel: "Company Number", idFormat: "8 alphanumeric" },
-  { code: "JP", label: "Japan", idLabel: "Corporate Number", idFormat: "13 digits" },
-  { code: "KR", label: "South Korea", idLabel: "Business Registration No.", idFormat: "10 digits" },
-  { code: "CA", label: "Canada", idLabel: "BN / CRA", idFormat: "9 digits" },
-  { code: "AU", label: "Australia", idLabel: "ABN", idFormat: "11 digits" },
-  { code: "DE", label: "Germany", idLabel: "Handelsregisternummer", idFormat: "alphanumeric" },
-  { code: "KY", label: "Cayman Islands", idLabel: "Registration No.", idFormat: "any identifier" },
-  { code: "BVI", label: "British Virgin Islands", idLabel: "Registration No.", idFormat: "any identifier" },
-  { code: "CH", label: "Switzerland", idLabel: "CHE / UID", idFormat: "CHE-XXX.XXX.XXX" },
-  { code: "OTHER", label: "Other", idLabel: "Registration ID", idFormat: "any identifier" },
+  { code: "SG", label: "Singapore" },
+  { code: "HK", label: "Hong Kong SAR" },
+  { code: "US", label: "United States" },
+  { code: "CN", label: "China" },
+  { code: "GB", label: "United Kingdom" },
+  { code: "JP", label: "Japan" },
+  { code: "KR", label: "South Korea" },
+  { code: "CA", label: "Canada" },
+  { code: "AU", label: "Australia" },
+  { code: "DE", label: "Germany" },
+  { code: "KY", label: "Cayman Islands" },
+  { code: "BVI", label: "British Virgin Islands" },
+  { code: "CH", label: "Switzerland" },
+  { code: "OTHER", label: "Other" },
 ];
+
+// ---- Identifier catalog (per-country ID types for Step 1 dropdown) -------
+//
+// Each country exposes one or more ID *types* the filer can pick. The first
+// entry in each list is the recommended default (and what the UI marks as
+// `primary` when added first). Filers can also pick "CUSTOM" to enter any
+// type label (e.g. a state-level filing number not in this list); custom
+// entries store both `value` and the user-supplied `typeLabel`.
+//
+// `format` is shown as the input placeholder. `validate` is a lightweight
+// per-type sanity check applied in addition to the global
+// uppercase-alphanumeric normalization rule. Returning a string aborts the
+// step; returning null lets the value through.
+export type IdTypeOption = {
+  code: string;
+  label: string;
+  format: string;
+  // Hint for what the ID identifies, shown under the input.
+  description?: string;
+};
+
+export const ID_TYPES_BY_COUNTRY: Record<string, IdTypeOption[]> = {
+  US: [
+    {
+      code: "EIN",
+      label: "EIN",
+      format: "9 digits, e.g. 12-3456789",
+      description: "Employer Identification Number issued by the IRS.",
+    },
+    {
+      code: "CIK",
+      label: "SEC CIK",
+      format: "up to 10 digits, e.g. 0001234567",
+      description: "Central Index Key assigned by the SEC for filings.",
+    },
+  ],
+  SG: [
+    {
+      code: "UEN",
+      label: "UEN",
+      format: "9–10 alphanumeric",
+      description: "Unique Entity Number issued by ACRA.",
+    },
+  ],
+  HK: [
+    {
+      code: "BR",
+      label: "Business Registration No.",
+      format: "8 digits",
+      description: "Issued by the Inland Revenue Department.",
+    },
+    {
+      code: "CR",
+      label: "Companies Registry No.",
+      format: "alphanumeric",
+      description: "Issued by the Companies Registry.",
+    },
+  ],
+  CN: [
+    {
+      code: "USCC",
+      label: "Unified Social Credit Code",
+      format: "18 chars, letters + digits",
+      description: "统一社会信用代码 — primary registry ID.",
+    },
+    {
+      code: "ICR",
+      label: "工商注册号 (legacy)",
+      format: "15 digits",
+      description: "Pre-2015 industrial & commercial registration number.",
+    },
+  ],
+  GB: [
+    {
+      code: "CH",
+      label: "Companies House No.",
+      format: "8 alphanumeric",
+      description: "Issued by Companies House.",
+    },
+  ],
+  JP: [
+    {
+      code: "CORP",
+      label: "法人番号 (Corporate Number)",
+      format: "13 digits",
+      description: "National Tax Agency 法人番号.",
+    },
+    {
+      code: "REG",
+      label: "商業登記番号",
+      format: "12 digits",
+      description: "Commercial registry number.",
+    },
+  ],
+  KR: [
+    {
+      code: "BRN",
+      label: "Business Registration No.",
+      format: "10 digits",
+      description: "사업자등록번호.",
+    },
+  ],
+  CA: [
+    {
+      code: "BN",
+      label: "Business Number / CRA",
+      format: "9 digits",
+      description: "CRA-assigned Business Number.",
+    },
+  ],
+  AU: [
+    {
+      code: "ABN",
+      label: "ABN",
+      format: "11 digits",
+      description: "Australian Business Number.",
+    },
+  ],
+  DE: [
+    {
+      code: "HRB",
+      label: "Handelsregisternummer",
+      format: "alphanumeric",
+      description: "Commercial register entry number.",
+    },
+  ],
+  KY: [
+    {
+      code: "REG",
+      label: "Registration No.",
+      format: "any identifier",
+    },
+  ],
+  BVI: [
+    {
+      code: "REG",
+      label: "Registration No.",
+      format: "any identifier",
+    },
+  ],
+  CH: [
+    {
+      code: "UID",
+      label: "CHE / UID",
+      format: "CHE-XXX.XXX.XXX",
+      description: "Unique Enterprise Identifier (Bundesamt für Statistik).",
+    },
+  ],
+  OTHER: [
+    {
+      code: "REG",
+      label: "Registration No.",
+      format: "any identifier",
+    },
+  ],
+};
+
+export const ID_TYPE_CUSTOM_CODE = "CUSTOM";
+
+/** Look up an ID type definition for a given country + code. Returns null
+ *  for the synthetic `CUSTOM` code; callers fall back to the user-supplied
+ *  typeLabel in that case. */
+export function findIdType(
+  countryCode: string,
+  typeCode: string,
+): IdTypeOption | null {
+  const list = ID_TYPES_BY_COUNTRY[countryCode] ?? [];
+  return list.find((t) => t.code === typeCode) ?? null;
+}
 
 // ---- Subdivisions (state / province / region of registration) ------------
 //

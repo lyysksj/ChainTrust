@@ -23,7 +23,7 @@ export function AttestationSample() {
       </div>
 
       <div className="r-top">
-        <span className="r-ct">CT-9X4F-7QM2</span>
+        <span className="r-ct">CT-1A2B-3CDEF7</span>
         <span>PDA · 7vA2…kRp9</span>
       </div>
 
@@ -37,7 +37,7 @@ export function AttestationSample() {
           <span className="sep">·</span>
           <span>INC 2024-06-11</span>
           <span className="sep">·</span>
-          <span>Reg # 8392041</span>
+          <span>EIN · 00-0000000</span>
         </div>
       </div>
 

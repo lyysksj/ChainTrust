@@ -51,13 +51,28 @@ pub struct IssuerTierRequest {
     pub bump: u8,
 }
 
+/// Entity — the on-chain identity anchor for a real-world legal entity.
+///
+/// `entity_id` is **deterministically derived** from the primary identifier
+/// (country | id_type | normalized id_value), not random. This means:
+///   - The CT-Number is a 1:1 encoding of `entity_id` (no truncation, no
+///     dead bytes), which is itself a stable function of (country, id_type,
+///     id_value). The same primary identifier always produces the same CT.
+///   - Anchor's `init` constraint on `[ENTITY_SEED, &entity_id]` is what
+///     enforces global uniqueness for the primary identifier.
+///   - Legal name and other descriptive fields live in IPFS metadata (mutable
+///     by `official_wallet` post-claim) so a company rename does NOT change
+///     the CT-Number.
+///
+/// The previous `legal_name_hash` / `registry_id_hash` fields have been
+/// removed. They were a privacy theater (legal name was already plaintext on
+/// IPFS; registry IDs have a search space small enough to brute-force). The
+/// authoritative copies of those values now live in the public IPFS metadata.
 #[account]
 #[derive(InitSpace)]
 pub struct Entity {
-    pub entity_id: [u8; 8],
+    pub entity_id: [u8; 5],
     pub created_by: Pubkey,
-    pub legal_name_hash: [u8; 32],
-    pub registry_id_hash: [u8; 32],
     #[max_len(MAX_JURISDICTION_LEN)]
     pub jurisdiction: String,
     pub status: u8,
@@ -68,8 +83,29 @@ pub struct Entity {
     pub project_count: u32,
     pub relationship_count: u32,
     pub comment_count: u32,
+    pub identifier_count: u8,
     pub created_at: i64,
     pub claimed_at: i64,
+    pub bump: u8,
+}
+
+/// IdClaim — global unique reservation for a single (country, id_type,
+/// id_value) tuple, pointing back at the Entity that owns it.
+///
+/// One Entity may have multiple identifiers (e.g. a US company with both
+/// EIN and SEC CIK). Each identifier gets its own IdClaim PDA. The PDA seed
+/// hashes the normalized inputs so:
+///   - Anchor's `init` enforces global uniqueness for that identifier.
+///   - Third parties can compute the PDA address from public inputs and
+///     resolve `(country, id_type, id_value) → Entity` in O(1).
+///
+/// The account stores only the entity pointer and a creation timestamp; the
+/// human-readable identifiers live in the Entity's IPFS metadata.
+#[account]
+#[derive(InitSpace)]
+pub struct IdClaim {
+    pub entity: Pubkey,
+    pub created_at: i64,
     pub bump: u8,
 }
 

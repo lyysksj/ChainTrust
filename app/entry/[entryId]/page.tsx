@@ -44,9 +44,10 @@ type Params = { entryId: string };
 type Tab = "graph" | "rels" | "projects" | "signals" | "raw";
 
 function hexToBytes(hex: string): number[] | null {
-  if (hex.length !== 16) return null;
-  const out = new Array<number>(8);
-  for (let i = 0; i < 8; i++) {
+  // Entity IDs are 5 bytes after the deterministic-derivation redesign.
+  if (hex.length !== 10) return null;
+  const out = new Array<number>(5);
+  for (let i = 0; i < 5; i++) {
     const b = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
     if (Number.isNaN(b)) return null;
     out[i] = b;
@@ -255,10 +256,25 @@ export default function EntityPage({ params }: { params: Params }) {
           <div className="entity-meta-grid">
             <div className="entity-meta-cell">
               <div className="label">{t("entry.head.label.registryId")}</div>
-              <div className="v">
-                {meta?.registryIdHashHex
-                  ? `0x${meta.registryIdHashHex.slice(0, 12)}…`
-                  : "—"}
+              <div className="v" style={{ fontFamily: "var(--mono)", fontSize: 12 }}>
+                {(() => {
+                  const ids = meta?.identifiers ?? [];
+                  if (ids.length === 0) return "—";
+                  const primary = ids.find((id) => id.primary) ?? ids[0];
+                  const others = ids.filter((id) => id !== primary);
+                  return (
+                    <>
+                      <div>
+                        <strong>{primary.typeLabel}</strong> · {primary.value}
+                      </div>
+                      {others.map((id, i) => (
+                        <div key={i} style={{ color: "var(--ink-3)" }}>
+                          {id.typeLabel} · {id.value}
+                        </div>
+                      ))}
+                    </>
+                  );
+                })()}
               </div>
             </div>
             <div className="entity-meta-cell">
@@ -706,8 +722,6 @@ export default function EntityPage({ params }: { params: Params }) {
   "ct_number":         "${ctNumber}",
   "entity_id":         "${bytesHex(entity.entityId)}",
   "created_by":        "${entity.createdBy.toBase58()}",
-  "legal_name_hash":   "0x${shortHash(entity.legalNameHash, 8)}",
-  "registry_id_hash":  "0x${shortHash(entity.registryIdHash, 8)}",
   "jurisdiction":      "${entity.jurisdiction}",
   "status":            ${entity.status},
   "is_claimed":        ${entity.isClaimed},
@@ -715,6 +729,7 @@ export default function EntityPage({ params }: { params: Params }) {
     entity.isClaimed ? `"${entity.officialWallet.toBase58()}"` : "null"
   },
   "metadata_uri":      "${entity.metadataUri}",
+  "identifier_count":  ${entity.identifierCount},
   "project_count":     ${entity.projectCount},
   "comment_count":     ${entity.commentCount},
   "relationship_count":${entity.relationshipCount},

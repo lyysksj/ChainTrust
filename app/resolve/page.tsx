@@ -6,15 +6,21 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { useProgram } from "@/lib/anchor/hooks";
 import {
+  fetchAllEntities,
   fetchAllIssuers,
-  fetchEntitiesByIdPrefix,
   fetchEntityByPda,
   fetchRelationshipsForEntity,
   fetchRelationshipsForTargetHash,
   fetchRelationshipsForTargetWallet,
 } from "@/lib/anchor/client";
+import { entityPda, idClaimPda } from "@/lib/anchor/pdas";
 import { sha256Bytes } from "@/lib/utils/hash";
-import { ctNumberToPrefixBytes, entityIdToCtNumber } from "@/lib/utils/ct-number";
+import {
+  CT_NUMBER_PATTERN,
+  ctNumberToEntityId,
+  entityIdToCtNumber,
+  idHashBytes,
+} from "@/lib/utils/ct-number";
 import { bytesHex, formatTimestamp, shortKey } from "@/lib/utils/format";
 import { Stamp, StatusPill } from "@/components/registry-bits";
 import { RelRowCompact } from "@/components/rel-row";
@@ -61,6 +67,34 @@ type ResolveResult = {
   rels: { publicKey: PublicKey; account: Relationship }[];
 } | null;
 
+type FuzzyMatch = {
+  pda: PublicKey;
+  entity: Entity;
+  meta: EntityMetadata;
+  ctNumber: string;
+  entityIdHex: string;
+};
+
+// Match a `COUNTRY:TYPE:VALUE` string. Country = 2–8 chars (ISO codes are 2,
+// but we also accept "BVI" / "OTHER"). Type = 1–32 alnum + underscore + dash.
+// Value = anything (can contain dashes/spaces/dots; gets normalized later).
+const LEGAL_ID_PATTERN =
+  /^([A-Z][A-Z0-9]{1,7}):([A-Z][A-Z0-9_-]{0,31}):(.+)$/i;
+
+function parseLegalIdQuery(
+  q: string,
+): { country: string; idType: string; idValue: string } | null {
+  const m = LEGAL_ID_PATTERN.exec(q.trim());
+  if (!m) return null;
+  const value = m[3].trim();
+  if (!value) return null;
+  return {
+    country: m[1].toUpperCase(),
+    idType: m[2].toUpperCase(),
+    idValue: value,
+  };
+}
+
 function ResolvePage() {
   const program = useProgram();
   const router = useRouter();
@@ -74,6 +108,7 @@ function ResolvePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ResolveResult>(null);
+  const [fuzzyMatches, setFuzzyMatches] = useState<FuzzyMatch[]>([]);
   const [issuers, setIssuers] = useState<Map<string, Issuer>>(new Map());
   const [sasRecords, setSasRecords] = useState<SasAttestationRecord[]>([]);
   const { connection } = useConnection();
@@ -96,6 +131,7 @@ function ResolvePage() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setFuzzyMatches([]);
     (async () => {
       try {
         const q = submitted.trim();
@@ -109,12 +145,12 @@ function ResolvePage() {
         }
         if (alive) setIssuers(issuerMap);
 
-        // 1) match by CT-Number directly. The CT-Number is derived from the
-        // first 5 bytes of entity_id, so we narrow with a 5-byte memcmp filter
-        // on entity_id before enumerating — bounded RPC payload regardless of
-        // how many entities exist on chain.
+        // 1) match by CT-Number directly. With deterministic entity_id
+        // derivation, CT ↔ entity_id is 1:1 — decode the 5 bytes from the
+        // CT, derive the PDA, and fetch a single account. No memcmp scan,
+        // no candidate iteration.
         const upperQ = q.toUpperCase();
-        const ctMatch = /^CT-[0-9A-Z]{4}-[0-9A-Z]{4}$/.test(upperQ);
+        const ctMatch = CT_NUMBER_PATTERN.test(upperQ);
         let byCt:
           | {
               publicKey: PublicKey;
@@ -122,21 +158,18 @@ function ResolvePage() {
             }
           | null = null;
         if (ctMatch) {
-          let prefix: number[];
           try {
-            prefix = ctNumberToPrefixBytes(upperQ);
-          } catch {
-            prefix = [];
-          }
-          if (prefix.length === 5) {
-            const candidates = await fetchEntitiesByIdPrefix(program, prefix);
-            for (const e of candidates) {
-              const acc = e.account as unknown as Entity;
-              if (entityIdToCtNumber(acc.entityId).toUpperCase() === upperQ) {
-                byCt = { publicKey: e.publicKey, account: acc };
-                break;
-              }
+            const entityId = ctNumberToEntityId(upperQ);
+            const [pda] = entityPda(entityId);
+            const fetched = await fetchEntityByPda(program, pda);
+            if (fetched) {
+              byCt = {
+                publicKey: pda,
+                account: fetched as unknown as Entity,
+              };
             }
+          } catch {
+            // bad CT format / check digit mismatch — fall through
           }
         }
         if (byCt) {
@@ -163,7 +196,54 @@ function ResolvePage() {
           return;
         }
 
-        // 2) try as a base58 pubkey -> wallet / project / entity match
+        // 2) try as a structured Legal ID `COUNTRY:TYPE:VALUE`. Cheaper than
+        // pubkey lookup (no relationship scan) and unambiguous — the double
+        // colon makes false positives impossible. We hash inputs the same
+        // way the on-chain handler does, derive the IdClaim PDA, and follow
+        // the `entity` pointer in O(1).
+        const legalId = parseLegalIdQuery(q);
+        if (legalId) {
+          const idHash = Array.from(
+            idHashBytes(legalId.country, legalId.idType, legalId.idValue),
+          );
+          const [claimPdaAddr] = idClaimPda(idHash);
+          const claim = await program.account.idClaim.fetchNullable(
+            claimPdaAddr,
+          );
+          if (claim) {
+            const entityAccount = (await fetchEntityByPda(
+              program,
+              claim.entity,
+            )) as Entity | null;
+            if (entityAccount) {
+              const allRelsRaw = await fetchRelationshipsForEntity(
+                program,
+                claim.entity,
+              );
+              const meta = await loadMeta(entityAccount.metadataUri);
+              if (!alive) return;
+              setResult({
+                matchType: `${t("resolve.match.kind.legalId")} · ${legalId.country}:${legalId.idType}`,
+                entity: entityAccount,
+                pda: claim.entity,
+                meta,
+                ctNumber: entityIdToCtNumber(entityAccount.entityId),
+                entityIdHex: bytesHex(entityAccount.entityId),
+                hits: [],
+                rels: allRelsRaw.map((r) => ({
+                  publicKey: r.publicKey,
+                  account: r.account as unknown as Relationship,
+                })),
+              });
+              return;
+            }
+          }
+          // Looked structurally like a Legal ID but not registered — keep
+          // falling through to other branches in case the user typed
+          // something else with two colons.
+        }
+
+        // 3) try as a base58 pubkey -> wallet / project / entity match
         let pk: PublicKey | null = null;
         try {
           pk = new PublicKey(q);
@@ -271,6 +351,47 @@ function ResolvePage() {
           }
         }
 
+        // 5) fuzzy fallback — case-insensitive substring match against
+        // metadata.legalName / tradeName. Costs O(n) entities × 1 IPFS
+        // round-trip each, so OK at MVP scale; not viable at registry scale.
+        // Returns multiple candidates; the UI renders a list and lets the
+        // user pick one. Skipped for inputs shorter than 2 chars to avoid
+        // returning every entity.
+        if (q.length >= 2) {
+          const allEntities = await fetchAllEntities(program);
+          if (!alive) return;
+          const lowerQ = q.toLowerCase();
+          const metas = await Promise.all(
+            allEntities.map(async (e) => {
+              const acc = e.account as unknown as Entity;
+              const meta = await loadMeta(acc.metadataUri);
+              return { pda: e.publicKey, account: acc, meta };
+            }),
+          );
+          if (!alive) return;
+          const matches: FuzzyMatch[] = [];
+          for (const { pda, account, meta } of metas) {
+            if (!meta) continue;
+            const name = meta.legalName?.toLowerCase() ?? "";
+            const trade = meta.tradeName?.toLowerCase() ?? "";
+            if (name.includes(lowerQ) || trade.includes(lowerQ)) {
+              matches.push({
+                pda,
+                entity: account,
+                meta,
+                ctNumber: entityIdToCtNumber(account.entityId),
+                entityIdHex: bytesHex(account.entityId),
+              });
+              if (matches.length >= 10) break;
+            }
+          }
+          if (matches.length > 0) {
+            if (!alive) return;
+            setFuzzyMatches(matches);
+            return;
+          }
+        }
+
         if (!alive) return;
         setResult(null);
       } catch (err) {
@@ -331,7 +452,9 @@ function ResolvePage() {
   }
 
   const samples = [
-    { label: t("resolve.sample.ctNumber"), value: "CT-XXXX-XXXX" },
+    { label: t("resolve.sample.ctNumber"), value: "CT-1XXX-XXXXXC" },
+    { label: t("resolve.sample.legalId"), value: t("resolve.sample.legalIdVal") },
+    { label: t("resolve.sample.companyName"), value: t("resolve.sample.companyNameVal") },
     { label: t("resolve.sample.wallet"), value: t("resolve.sample.walletVal") },
     { label: t("resolve.sample.domain"), value: "example.com" },
   ];
@@ -406,13 +529,119 @@ function ResolvePage() {
         </div>
       )}
 
-      {!loading && !error && submitted && !result && program && (
-        <div className="no-result">
-          {t("resolve.noMatch.lead")}
-          <br />
-          <span style={{ color: "var(--ink-4)" }}>
-            {t("resolve.noMatch.note")}
-          </span>
+      {!loading &&
+        !error &&
+        submitted &&
+        !result &&
+        fuzzyMatches.length === 0 &&
+        program && (
+          <div className="no-result">
+            {t("resolve.noMatch.lead")}
+            <br />
+            <span style={{ color: "var(--ink-4)" }}>
+              {t("resolve.noMatch.note")}
+            </span>
+          </div>
+        )}
+
+      {!loading && !error && fuzzyMatches.length > 0 && (
+        <div
+          className="doc-card"
+          style={{ marginBottom: 24, padding: "20px 22px" }}
+        >
+          <div
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 10,
+              letterSpacing: "0.16em",
+              color: "var(--stamp-deep)",
+              fontWeight: 700,
+              marginBottom: 12,
+            }}
+          >
+            {t("resolve.fuzzy.heading")} · {fuzzyMatches.length}{" "}
+            {t("resolve.fuzzy.matches")}
+          </div>
+          <div className="hint" style={{ marginBottom: 16 }}>
+            {t("resolve.fuzzy.hint")}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {fuzzyMatches.map((m) => {
+              const primary = m.meta.identifiers?.find((id) => id.primary);
+              return (
+                <button
+                  key={m.pda.toBase58()}
+                  type="button"
+                  onClick={() => router.push(`/entry/${m.entityIdHex}`)}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "auto 1fr auto",
+                    gap: 16,
+                    padding: "12px 14px",
+                    background: "var(--paper-2)",
+                    border: "1px solid var(--rule)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    alignItems: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--mono)",
+                      fontSize: 13,
+                      color: "var(--stamp-deep)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {m.ctNumber}
+                  </span>
+                  <span>
+                    <div
+                      style={{
+                        fontFamily: "var(--serif)",
+                        fontSize: 15,
+                        fontWeight: 600,
+                        color: "var(--ink)",
+                      }}
+                    >
+                      {m.meta.legalName}
+                      {m.meta.tradeName && (
+                        <span style={{ color: "var(--ink-3)" }}>
+                          {" "}
+                          · {m.meta.tradeName}
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "var(--mono)",
+                        fontSize: 11,
+                        color: "var(--ink-3)",
+                        marginTop: 2,
+                      }}
+                    >
+                      {primary
+                        ? `${primary.typeLabel} · ${primary.value}`
+                        : "—"}{" "}
+                      ·{" "}
+                      {COUNTRIES.find((c) => c.code === m.entity.jurisdiction)
+                        ?.label ?? m.entity.jurisdiction}
+                    </div>
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "var(--mono)",
+                      fontSize: 10,
+                      color: "var(--ink-3)",
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    OPEN →
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -441,9 +670,15 @@ function ResolvePage() {
                 <div className="ct-line">{result.ctNumber}</div>
                 <h2>{result.meta?.legalName ?? t("resolve.match.metaPending")}</h2>
                 <div className="meta-line">
-                  {result.meta?.registryIdHashHex
-                    ? `id·0x${result.meta.registryIdHashHex.slice(0, 8)}…`
-                    : "—"}{" "}
+                  {(() => {
+                    const primary = result.meta?.identifiers?.find(
+                      (id) => id.primary,
+                    );
+                    if (primary) {
+                      return `${primary.typeLabel}·${primary.value}`;
+                    }
+                    return "—";
+                  })()}{" "}
                   ·{" "}
                   {(country?.label ?? result.entity.jurisdiction).toUpperCase()}{" "}
                   · {t("resolve.match.filed")} {formatTimestamp(result.entity.createdAt)}
