@@ -15,11 +15,12 @@ The current codebase is a Next.js 14 dApp backed by an Anchor program on Solana.
 
 ## What it does
 
-- File on-chain `Entity` records and derive a stable, citable `CT-XXXX-XXXX` short code from each 8-byte entity ID.
+- File on-chain `Entity` records keyed by a **deterministic** 5-byte `entity_id` derived from `(country, id_type, id_value)`. The CT-Number — formatted `CT-1XXX-XXXXXC` (version + 8 Crockford-base32 chars + mod-37 check char) — is a 1:1 encoding of `entity_id`, so the same primary identifier always yields the same Entity PDA, computable client-side from public inputs alone.
+- Attach **multiple identifiers** to one Entity via `IdClaim` PDAs (e.g. EIN + SEC CIK + state filing — up to 5). Each IdClaim is a global uniqueness reservation that resolves `(country, id_type, id_value) → Entity` in O(1).
 - Register `Issuer` accounts with a public 3-tier trust level (1 = platform, 2 = known third party, 3 = community / self).
 - Create `Project` records under an entity.
 - Attest signed `Relationship` edges between entities, wallets, domains, projects, officers, UBOs, auditors, and parent / subsidiary entities.
-- Resolve any CT-Number, wallet, or domain back to the entity that owns it and inspect the full evidence trail.
+- Resolve any CT-Number, registry identifier, wallet, or domain back to the entity that owns it and inspect the full evidence trail.
 - Allow community comments, threaded replies, likes, and append-only official responses.
 - Gate user registration with an on-chain proof-of-personhood PDA backed by World ID.
 - Optionally dual-write relationship attestations to the Solana Attestation Service (SAS).
@@ -81,7 +82,8 @@ The current codebase is a Next.js 14 dApp backed by an Anchor program on Solana.
 | `NullifierRecord`    | Companion of `HumanProof`, indexed by World ID nullifier                 | `["nullifier", nullifier_hash]`                 |
 | `Issuer`             | Attestor authority: kind, trust tier, name hash, metadata URI            | `["issuer", authority]`                         |
 | `IssuerTierRequest`  | Pending / approved / rejected tier-upgrade request                       | `["issuer_tier_request", issuer, requested_tier]` |
-| `Entity`             | Legal-entity anchor for the registry                                     | `["entity", entity_id]` (8-byte id)             |
+| `Entity`             | Legal-entity anchor; carries the 5-byte deterministic `entity_id`        | `["entity", entity_id]` (5-byte id)             |
+| `IdClaim`            | Global uniqueness reservation for one `(country, id_type, id_value)` tuple, pointing at the Entity. Up to 5 per Entity. | `["id-claim", sha256(country\|id_type\|normalize(id_value))]` |
 | `Project`            | A project filed under an entity                                          | `["project", entity, project_id]`               |
 | `Relationship`       | Signed edge from entity to wallet / domain / project / entity / person   | `["rel", entity, kind, target_ref, issuer]`     |
 | `CommentRecord`      | Top-level community signal or threaded reply (max depth 2)               | `["comment", entity, commenter, comment_index]` |
@@ -90,19 +92,47 @@ The current codebase is a Next.js 14 dApp backed by an Anchor program on Solana.
 ### Instructions
 
 ```
+initialize_registry_config   update_registry_admin
+
 register_user                update_user_metadata_uri
 attest_human_proof           (admin only — anti-sybil gate)
-initialize_registry_config   update_registry_admin
 
 register_issuer              request_issuer_tier   review_issuer_tier (admin)
 
-create_entity                create_project        claim_entity
+create_entity                register_additional_id   update_entity_metadata_uri
+create_project               claim_entity
 attest_relationship          revoke_relationship
 
 submit_comment               submit_reply
 like_comment                 unlike_comment
 add_official_response
 ```
+
+### Deterministic CT-Number
+
+The CT-Number is **not allocated**, it is **computed**:
+
+```
+primary_id = (country, id_type, normalize(id_value))
+hash       = SHA-256(`${country}|${id_type}|${normalized}`)
+entity_id  = hash[0..5]                       // 5 bytes
+payload    = base32Crockford(entity_id)       // 8 chars
+check      = mod37CheckChar(entity_id)        // 1 char
+ct         = `CT-1<3 payload>-<5 payload><check>`   // e.g. CT-1ABC-DEFGHK
+```
+
+The leading `1` is a version letter so the encoding can be widened later without breaking historical CTs. The trailing check char catches ~95% of single-character typos and adjacent transpositions when the CT is dictated, photographed, or re-typed. Older `CT-XXXX-XXXX` strings (no version, no check) from the prior random-id design are explicitly rejected by the parser. See [`lib/utils/ct-number.ts`](lib/utils/ct-number.ts) for the reference implementation.
+
+### Multi-identifier filing
+
+`create_entity` atomically creates an `Entity` PDA and the **primary** `IdClaim` PDA for the identifier you filed it under. Additional identifiers (e.g. a US company that wants to publish both EIN and SEC CIK) go through `register_additional_id`:
+
+- Pre-claim, only the original `created_by` wallet can attach more identifiers.
+- Post-claim, only the `official_wallet` can — the legal entity now controls its own identity record.
+- Hard cap of 5 identifiers per Entity (`MAX_IDENTIFIERS_PER_ENTITY`).
+- Each new identifier gets its own `IdClaim` PDA, so it's both globally unique (Anchor `init` rejects duplicates) and individually resolvable in O(1).
+
+Legal name and the human-readable identifier values are intentionally stored only in IPFS metadata — see [Storage modes](#storage-modes) and the `On-chain vs Off-chain Split` section of [`ChainTrust_Product_Design_2.md`](ChainTrust_Product_Design_2.md) for the rationale.
 
 ### Relationship kinds
 
@@ -150,11 +180,14 @@ This is what unlocks `add_official_response` for community comments.
 
 ### Invariants
 
-- No delete path for `Relationship`, `CommentRecord`, or `LikeRecord` once liked-then-unliked (the like record gets closed; the comment stays).
+- No delete path for `Relationship`, `CommentRecord`, `Entity`, `IdClaim`, `Issuer`, or `Project`. `LikeRecord` is the only account that can be closed (via `unlike_comment`); the parent comment stays.
 - Revocation only writes `Relationship.revoked_at`; history is never erased.
 - `add_official_response` only appends a URI; the original comment body and hash are immutable.
 - Top-level comments allow at most one official response.
 - Reply depth is hard-capped at 2.
+- `entity_id` is a deterministic function of the primary identifier — there is no `entity_id` argument that callers can supply. Anchor `init` on the Entity PDA + the primary IdClaim PDA atomically rejects duplicate filings of the same `(country, id_type, id_value)`.
+- `register_additional_id` is hard-capped at 5 identifiers per Entity. Pre-claim, only `Entity.created_by` can extend; post-claim, only `Entity.official_wallet` can.
+- `update_entity_metadata_uri` rotates the IPFS pointer only — the CT-Number, the `entity_id`, and every IdClaim attached to the Entity are immutable.
 
 ---
 
@@ -263,12 +296,13 @@ npm run dev   # http://localhost:3000
 ### Suggested demo flow
 
 1. Connect a wallet, go to `/register`, pass the World ID + signature gate, then `register_user`.
-2. File an `Entity` from `/create`.
-3. Self-register the same wallet as a Tier 3 issuer at `/issuer/register`.
-4. From `/attest`, sign an `OPERATES_PROJECT` or `HAS_DOMAIN` attestation.
-5. From `/resolve`, search by CT-Number / wallet / domain — you should land on the entity page.
-6. Open the entity page: identity graph, relationships, projects, comments, raw view.
-7. (Optional) From the entity page, leave a comment; if claimed, post an official response.
+2. File an `Entity` from `/create` — pick a country + identifier type + identifier value (e.g. `US` / `EIN` / `94-2404110`). The CT-Number previewed in the form is computed locally before the tx, and will be the same for anyone else who files the same identifier.
+3. (Optional) On the entity page, attach a second identifier (e.g. `US` / `SEC_CIK` / `0000320193`) — both identifiers will resolve to the same Entity.
+4. Self-register the same wallet as a Tier 3 issuer at `/issuer/register`.
+5. From `/attest`, sign an `OPERATES_PROJECT` or `HAS_DOMAIN` attestation.
+6. From `/resolve`, search by CT-Number, by `country:id_type:id_value`, by wallet, or by domain — you should land on the entity page in every case.
+7. Open the entity page: identity graph, relationships, projects, comments, raw view.
+8. (Optional) From the entity page, leave a comment; if claimed, post an official response.
 
 ---
 
