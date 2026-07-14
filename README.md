@@ -7,7 +7,9 @@ ChainTrust links legal entities, wallets, projects, domains, officers, and issue
 The current codebase is a Next.js 14 dApp backed by an Anchor program on Solana. Community comments, replies, likes, and append-only official responses are still part of the surface, but the core product is the entity / relationship graph — not a review-first app.
 
 > **Hackathon submission for Solana Colosseum.**
-> Program is live on **devnet**: [`HBxcCBx4ZPVnhGazehwZjF72J3neJsz5HyvGoPMTzUPt`](https://explorer.solana.com/address/HBxcCBx4ZPVnhGazehwZjF72J3neJsz5HyvGoPMTzUPt?cluster=devnet)
+> Program is live on **devnet**: [`4RXkYhxr3xJ4YitCibcwA1CRpNpY7YgX6m3rv2uxPfBg`](https://explorer.solana.com/address/4RXkYhxr3xJ4YitCibcwA1CRpNpY7YgX6m3rv2uxPfBg?cluster=devnet)
+> (The earlier v4.1 deployment `HBxcCBx4ZPVnhGazehwZjF72J3neJsz5HyvGoPMTzUPt` is retired — the governance/attestor split changed the `RegistryConfig` layout, so the new build deploys under a fresh id. New versions are currently being built under a private repo. )
+> -- https://chaintrust-staging.vercel.app/ --This is the latest prject website. (chaintrust-web3.vercel.app was the old version)
 
 [中文版 README](./README_CN.md)
 
